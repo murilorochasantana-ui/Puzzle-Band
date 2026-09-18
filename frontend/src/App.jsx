@@ -1,49 +1,66 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import { CHILDREN, ACTIVITY_LABELS } from './data/children';
 import StatTile from './components/StatTile';
-import StressBadge from './components/StressBadge';
+import RiskBadge from './components/RiskBadge';
 import BpmChart from './components/BpmChart';
-import SimulationControls from './components/SimulationControls';
+import ManualControls from './components/ManualControls';
 import AlertBanner from './components/AlertBanner';
+import { generateReading, GYRO_ACTIONS } from './model/simulate';
+import { computeFeatures, predictCrisisProbability, riskTierFromProbability, MIN_HISTORY_REQUIRED } from './model/predict';
 
-const WINDOW_SIZE = 60; // seconds shown on the chart
-const TICK_MS = 250; // base playback tick
+const TICK_MS = 1000; // 1 "segundo simulado" por tick, como um sensor real a 1Hz
+const CHART_WINDOW = 60; // segundos exibidos no grafico
+const MAX_BUFFER = 300; // limite de memoria (5 min de historico)
 
 function App() {
-  const [childId, setChildId] = useState(CHILDREN[0].id);
-  const child = useMemo(() => CHILDREN.find((c) => c.id === childId), [childId]);
-  const readings = child.readings;
+  const [bpmTarget, setBpmTarget] = useState(78);
+  const [edaTarget, setEdaTarget] = useState(4);
+  const [gyroAction, setGyroAction] = useState('repouso');
+  const [idade, setIdade] = useState(8);
 
-  const [cursor, setCursor] = useState(WINDOW_SIZE);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [speed, setSpeed] = useState(4);
-  const intervalRef = useRef(null);
+  const [isRunning, setIsRunning] = useState(true);
+  const [speed, setSpeed] = useState(1);
+  const [buffer, setBuffer] = useState([]);
 
-  useEffect(() => {
-    setCursor(WINDOW_SIZE);
-    setIsPlaying(true);
-  }, [childId]);
+  const controlsRef = useRef({ bpmTarget, edaTarget, gyroAction, idade });
+  controlsRef.current = { bpmTarget, edaTarget, gyroAction, idade };
 
   useEffect(() => {
-    if (!isPlaying) return undefined;
+    if (!isRunning) return undefined;
 
-    intervalRef.current = setInterval(() => {
-      setCursor((c) => {
-        const next = c + speed;
-        return next >= readings.length ? WINDOW_SIZE : next;
+    const interval = setInterval(() => {
+      setBuffer((prev) => {
+        const next = [...prev];
+        for (let i = 0; i < speed; i += 1) {
+          next.push(
+            generateReading({
+              ...controlsRef.current,
+              timestamp: new Date().toISOString(),
+            }),
+          );
+        }
+        return next.length > MAX_BUFFER ? next.slice(next.length - MAX_BUFFER) : next;
       });
     }, TICK_MS);
 
-    return () => clearInterval(intervalRef.current);
-  }, [isPlaying, speed, readings.length]);
+    return () => clearInterval(interval);
+  }, [isRunning, speed]);
 
-  const current = readings[Math.min(cursor, readings.length - 1)];
-  const windowPoints = readings.slice(Math.max(0, cursor - WINDOW_SIZE), cursor);
+  const current = buffer[buffer.length - 1];
+  const chartPoints = buffer.slice(-CHART_WINDOW);
+  const statHistory = buffer.slice(-30);
 
-  const bpmHistory = windowPoints.map((p) => p.bpm);
-  const edaHistory = windowPoints.map((p) => p.eda_uS);
-  const gyroHistory = windowPoints.map((p) => p.gyro_mag_dps);
+  let tier = 'baixo_risco';
+  let probability = null;
+  if (buffer.length >= MIN_HISTORY_REQUIRED) {
+    const features = computeFeatures(buffer.slice(-MIN_HISTORY_REQUIRED));
+    if (features) {
+      probability = predictCrisisProbability(features);
+      tier = riskTierFromProbability(probability);
+    }
+  }
+
+  const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
 
   return (
     <div className="dashboard" data-theme="light">
@@ -51,77 +68,78 @@ function App() {
         <div>
           <h1>Puzzle Band</h1>
           <p className="dashboard__subtitle">
-            Painel do cuidador · dados sintéticos em reprodução simulada
+            Simulador manual · teste o modelo com cenários que você define, fora do dataset
           </p>
         </div>
-
-        <label className="child-select">
-          <span>Criança</span>
-          <select value={childId} onChange={(e) => setChildId(e.target.value)}>
-            {CHILDREN.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.label} · {c.idade} anos
-              </option>
-            ))}
-          </select>
-        </label>
       </header>
 
-      <AlertBanner level={current.nivel_estresse} childLabel={child.label} />
+      <AlertBanner tier={tier} probability={probability} childLabel="Criança simulada" />
 
       <section className="dashboard__status">
-        <StressBadge level={current.nivel_estresse} />
+        <div className="dashboard__status-col">
+          <span className="dashboard__status-label">Previsão do modelo (IA)</span>
+          <RiskBadge tier={tier} probability={probability} />
+        </div>
         <span className="dashboard__activity">
-          Atividade atual: <strong>{ACTIVITY_LABELS[current.atividade] ?? current.atividade}</strong>
+          Ação simulada: <strong>{gyroLabel}</strong>
         </span>
-        <span className="dashboard__timestamp">
-          {new Date(current.timestamp).toLocaleString('pt-BR')}
-        </span>
+        {current && (
+          <span className="dashboard__timestamp">
+            {new Date(current.timestamp).toLocaleTimeString('pt-BR')}
+          </span>
+        )}
       </section>
 
       <section className="dashboard__tiles">
         <StatTile
           label="Frequência cardíaca"
-          value={current.bpm}
+          value={current ? current.bpm : '—'}
           unit="bpm"
           color="var(--series-1)"
-          history={bpmHistory}
+          history={statHistory.map((p) => p.bpm)}
         />
         <StatTile
           label="Atividade eletrodérmica (GSR)"
-          value={current.eda_uS.toFixed(2)}
+          value={current ? current.eda_uS.toFixed(2) : '—'}
           unit="µS"
           color="var(--series-3)"
-          history={edaHistory}
+          history={statHistory.map((p) => p.eda_uS)}
         />
         <StatTile
           label="Movimento (giroscópio)"
-          value={current.gyro_mag_dps.toFixed(1)}
+          value={current ? current.gyro_mag_dps.toFixed(1) : '—'}
           unit="dps"
           color="var(--series-7)"
-          history={gyroHistory}
+          history={statHistory.map((p) => p.gyro_mag_dps)}
         />
       </section>
 
       <section className="dashboard__chart-card">
-        <h2>Frequência cardíaca — últimos {WINDOW_SIZE}s</h2>
-        <BpmChart points={windowPoints} />
-        <p className="dashboard__chart-note">
-          Área sombreada indica trechos rotulados como episódio de estresse no dataset.
-        </p>
+        <h2>Frequência cardíaca — últimos {CHART_WINDOW}s da simulação</h2>
+        {chartPoints.length >= 2 ? (
+          <BpmChart points={chartPoints} />
+        ) : (
+          <p className="dashboard__chart-note">Aguardando leituras da simulação...</p>
+        )}
       </section>
 
       <section className="dashboard__sim-card">
-        <h2>Simulação de dados</h2>
-        <SimulationControls
-          isPlaying={isPlaying}
-          onTogglePlay={() => setIsPlaying((p) => !p)}
+        <h2>Controle manual</h2>
+        <ManualControls
+          bpmTarget={bpmTarget}
+          onChangeBpm={setBpmTarget}
+          edaTarget={edaTarget}
+          onChangeEda={setEdaTarget}
+          gyroAction={gyroAction}
+          onChangeGyroAction={setGyroAction}
+          idade={idade}
+          onChangeIdade={setIdade}
+          isRunning={isRunning}
+          onToggleRunning={() => setIsRunning((r) => !r)}
+          onReset={() => setBuffer([])}
           speed={speed}
           onChangeSpeed={setSpeed}
-          progress={cursor}
-          total={readings.length}
-          onScrub={(v) => setCursor(Math.max(WINDOW_SIZE, v))}
-          onReset={() => setCursor(WINDOW_SIZE)}
+          bufferLength={buffer.length}
         />
       </section>
     </div>
