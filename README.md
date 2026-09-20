@@ -135,13 +135,3 @@ git commit -m "Puzzle Band"
 git push -u origin main
 ```
 
-O `.gitignore` já está configurado pra não subir `node_modules/`, `dist/`
-e `__pycache__/`.
-
-Se o `git push` for rejeitado com "fetch first" (o repositório remoto já
-tem algum commit, ex.: um README criado pela interface do GitHub):
-
-```bash
-git pull origin main --allow-unrelated-histories
-git push -u origin main
-```
