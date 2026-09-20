@@ -1,0 +1,9 @@
+[
+  {
+    "timestamp": "2026-09-19T02:42:50.345212+00:00",
+    "dataset": "data/raw/dataset_pulseira_TEA_estresse_v4.xlsx",
+    "amostras": 107640,
+    "arvores_adicionadas": 80,
+    "total_arvores_apos": 80
+  }
+]

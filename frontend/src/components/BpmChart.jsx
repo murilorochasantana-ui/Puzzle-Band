@@ -10,9 +10,9 @@ export default function BpmChart({ points }) {
   const svgRef = useRef(null);
   const [hoverIndex, setHoverIndex] = useState(null);
 
-  const { path, areaPath, yTicks, scaleX, scaleY, stressBands } = useMemo(() => {
+  const { path, areaPath, yTicks, scaleX, scaleY } = useMemo(() => {
     if (points.length < 2) {
-      return { path: '', areaPath: '', yTicks: [], scaleX: () => 0, scaleY: () => 0, stressBands: [] };
+      return { path: '', areaPath: '', yTicks: [], scaleX: () => 0, scaleY: () => 0 };
     }
 
     const values = points.map((p) => p.bpm);
@@ -36,25 +36,12 @@ export default function BpmChart({ points }) {
 
     const ticks = [yMin, Math.round((yMin + yMax) / 2), yMax];
 
-    // contiguous ranges where estresse === 1, for the background wash
-    const bands = [];
-    let start = null;
-    points.forEach((p, i) => {
-      if (p.estresse === 1 && start === null) start = i;
-      if (p.estresse !== 1 && start !== null) {
-        bands.push([start, i - 1]);
-        start = null;
-      }
-    });
-    if (start !== null) bands.push([start, points.length - 1]);
-
     return {
       path: `M ${linePoints.join(' L ')}`,
       areaPath: `M ${areaPoints.join(' L ')} Z`,
       yTicks: ticks,
       scaleX: sx,
       scaleY: sy,
-      stressBands: bands,
     };
   }, [points]);
 
@@ -94,18 +81,6 @@ export default function BpmChart({ points }) {
               {t}
             </text>
           </g>
-        ))}
-
-        {stressBands.map(([s, e], i) => (
-          <rect
-            key={i}
-            x={scaleX(s)}
-            y={PAD_TOP}
-            width={Math.max(2, scaleX(e) - scaleX(s))}
-            height={HEIGHT - PAD_TOP - PAD_BOTTOM}
-            fill="var(--status-serious)"
-            opacity="0.12"
-          />
         ))}
 
         <path d={areaPath} fill="var(--series-1)" opacity="0.1" stroke="none" />

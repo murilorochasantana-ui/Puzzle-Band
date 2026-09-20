@@ -16,14 +16,21 @@ function App() {
   const [bpmTarget, setBpmTarget] = useState(78);
   const [edaTarget, setEdaTarget] = useState(4);
   const [gyroAction, setGyroAction] = useState('repouso');
+  const [hrvTarget, setHrvTarget] = useState(55);
+  const [movimentoRepetitivo, setMovimentoRepetitivo] = useState(false);
+  const [luzTarget, setLuzTarget] = useState(300);
+  const [ruidoTarget, setRuidoTarget] = useState(45);
   const [idade, setIdade] = useState(8);
 
   const [isRunning, setIsRunning] = useState(true);
   const [speed, setSpeed] = useState(1);
   const [buffer, setBuffer] = useState([]);
 
-  const controlsRef = useRef({ bpmTarget, edaTarget, gyroAction, idade });
-  controlsRef.current = { bpmTarget, edaTarget, gyroAction, idade };
+  const controlsRef = useRef();
+  controlsRef.current = {
+    bpmTarget, edaTarget, gyroAction, idade,
+    hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
+  };
 
   useEffect(() => {
     if (!isRunning) return undefined;
@@ -82,6 +89,7 @@ function App() {
         </div>
         <span className="dashboard__activity">
           Ação simulada: <strong>{gyroLabel}</strong>
+          {movimentoRepetitivo && ' · movimento repetitivo'}
         </span>
         {current && (
           <span className="dashboard__timestamp">
@@ -112,6 +120,34 @@ function App() {
           color="var(--series-7)"
           history={statHistory.map((p) => p.gyro_mag_dps)}
         />
+        <StatTile
+          label="HRV (variabilidade cardíaca)"
+          value={current ? current.hrv_ms.toFixed(1) : '—'}
+          unit="ms"
+          color="var(--series-1)"
+          history={statHistory.map((p) => p.hrv_ms)}
+        />
+        <StatTile
+          label="Regularidade do movimento"
+          value={current ? current.regularidade.toFixed(2) : '—'}
+          unit=""
+          color="var(--series-7)"
+          history={statHistory.map((p) => p.regularidade)}
+        />
+        <StatTile
+          label="Luminosidade"
+          value={current ? current.luz_lux : '—'}
+          unit="lux"
+          color="var(--series-3)"
+          history={statHistory.map((p) => p.luz_lux)}
+        />
+        <StatTile
+          label="Ruído ambiente"
+          value={current ? current.ruido_db.toFixed(1) : '—'}
+          unit="dB"
+          color="var(--series-3)"
+          history={statHistory.map((p) => p.ruido_db)}
+        />
       </section>
 
       <section className="dashboard__chart-card">
@@ -132,6 +168,14 @@ function App() {
           onChangeEda={setEdaTarget}
           gyroAction={gyroAction}
           onChangeGyroAction={setGyroAction}
+          hrvTarget={hrvTarget}
+          onChangeHrv={setHrvTarget}
+          movimentoRepetitivo={movimentoRepetitivo}
+          onToggleMovimentoRepetitivo={setMovimentoRepetitivo}
+          luzTarget={luzTarget}
+          onChangeLuz={setLuzTarget}
+          ruidoTarget={ruidoTarget}
+          onChangeRuido={setRuidoTarget}
           idade={idade}
           onChangeIdade={setIdade}
           isRunning={isRunning}

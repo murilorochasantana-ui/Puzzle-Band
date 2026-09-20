@@ -276,6 +276,44 @@
   color: white;
 }
 
+.manual-controls__group-label {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+  margin: 20px 0 10px;
+}
+
+.manual-controls__group-label:first-of-type {
+  margin-top: 4px;
+}
+
+.manual-controls__toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.manual-controls__toggle-btn {
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--page-plane);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.manual-controls__toggle-btn.is-active {
+  background: var(--series-3);
+  border-color: var(--series-3);
+  color: white;
+}
+
 .alert-banner {
   display: flex;
   gap: 12px;

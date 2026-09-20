@@ -7,6 +7,14 @@ export default function ManualControls({
   onChangeEda,
   gyroAction,
   onChangeGyroAction,
+  hrvTarget,
+  onChangeHrv,
+  movimentoRepetitivo,
+  onToggleMovimentoRepetitivo,
+  luzTarget,
+  onChangeLuz,
+  ruidoTarget,
+  onChangeRuido,
   idade,
   onChangeIdade,
   isRunning,
@@ -43,6 +51,7 @@ export default function ManualControls({
         </span>
       </div>
 
+      <div className="manual-controls__group-label">Sensores fisiológicos</div>
       <div className="manual-controls__grid">
         <label className="manual-controls__field">
           <span>Batimento cardíaco: <strong>{bpmTarget} bpm</strong></span>
@@ -70,6 +79,18 @@ export default function ManualControls({
         </label>
 
         <label className="manual-controls__field">
+          <span>HRV (variabilidade cardíaca): <strong>{hrvTarget} ms</strong></span>
+          <input
+            className="manual-controls__hrv-range"
+            type="range"
+            min={10}
+            max={90}
+            value={hrvTarget}
+            onChange={(e) => onChangeHrv(Number(e.target.value))}
+          />
+        </label>
+
+        <label className="manual-controls__field">
           <span>Idade da criança: <strong>{idade} anos</strong></span>
           <input
             type="range"
@@ -81,8 +102,9 @@ export default function ManualControls({
         </label>
       </div>
 
+      <div className="manual-controls__group-label">Movimento (giroscópio + acelerômetro)</div>
       <div className="manual-controls__gyro">
-        <span className="manual-controls__gyro-label">Giroscópio — ação da criança</span>
+        <span className="manual-controls__gyro-label">Intensidade — ação da criança</span>
         <div className="manual-controls__gyro-options">
           {GYRO_ACTIONS.map((action) => (
             <button
@@ -95,6 +117,49 @@ export default function ManualControls({
             </button>
           ))}
         </div>
+      </div>
+      <div className="manual-controls__toggle-row">
+        <span className="manual-controls__gyro-label">Padrão do movimento</span>
+        <button
+          type="button"
+          className={`manual-controls__toggle-btn ${!movimentoRepetitivo ? 'is-active' : ''}`}
+          onClick={() => onToggleMovimentoRepetitivo(false)}
+        >
+          Livre / errático (ex.: correr)
+        </button>
+        <button
+          type="button"
+          className={`manual-controls__toggle-btn ${movimentoRepetitivo ? 'is-active' : ''}`}
+          onClick={() => onToggleMovimentoRepetitivo(true)}
+        >
+          Repetitivo (estereotipia)
+        </button>
+      </div>
+
+      <div className="manual-controls__group-label">Sensores ambientais</div>
+      <div className="manual-controls__grid">
+        <label className="manual-controls__field">
+          <span>Luminosidade: <strong>{luzTarget} lux</strong></span>
+          <input
+            type="range"
+            min={0}
+            max={1000}
+            step={10}
+            value={luzTarget}
+            onChange={(e) => onChangeLuz(Number(e.target.value))}
+          />
+        </label>
+
+        <label className="manual-controls__field">
+          <span>Ruído ambiente: <strong>{ruidoTarget} dB</strong></span>
+          <input
+            type="range"
+            min={20}
+            max={100}
+            value={ruidoTarget}
+            onChange={(e) => onChangeRuido(Number(e.target.value))}
+          />
+        </label>
       </div>
     </div>
   );

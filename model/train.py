@@ -26,7 +26,7 @@ from sklearn.metrics import classification_report, roc_auc_score, confusion_matr
 sys.path.insert(0, str(Path(__file__).parent))
 from features import build_features, FEATURE_COLUMNS  # noqa: E402
 
-DATASET = Path(__file__).parent.parent / 'data/raw/dataset_pulseira_TEA_estresse_v3.xlsx'
+DATASET = Path(__file__).parent.parent / 'data/raw/dataset_pulseira_TEA_estresse_v4.xlsx'
 OUT_JSON = Path(__file__).parent.parent / 'frontend/src/model/forest.json'
 
 N_ESTIMATORS = 60
