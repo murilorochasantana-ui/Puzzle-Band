@@ -123,18 +123,6 @@ terminal: `model/README.md`.
 dashboard já estava rodando (`npm run dev`), dê um refresh (F5) na página
 pra carregar o modelo novo.
 
-## Datasets disponíveis
-
-| Arquivo | Crianças | Descrição |
-|---|---|---|
-| `dataset_pulseira_TEA_estresse.xlsx` | 12 | Original |
-| `dataset_pulseira_TEA_estresse_v2.xlsx` | 12 | Cobertura de severidade corrigida |
-| `dataset_pulseira_TEA_estresse_v3.xlsx` | 12 | + dinâmica de onset súbito/gradual |
-| **`dataset_pulseira_TEA_estresse_v4.xlsx`** | 12 | **+ HRV, acelerômetro, sensores ambientais (recomendado)** |
-
-Detalhes de cada versão, metodologia de geração e métricas de validação:
-`model/README.md` e `docs/avaliacao_dataset.md`.
-
 ## Subindo pro Git
 
 ```bash
