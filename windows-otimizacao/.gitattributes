@@ -1,0 +1,4 @@
+# Mantém CRLF e o BOM UTF-8 exatamente como estão: o Windows PowerShell 5.1 precisa do BOM
+# para ler os acentos, e o .bat precisa de CRLF.
+*.ps1 -text
+*.bat -text
