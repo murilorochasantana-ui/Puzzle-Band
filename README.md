@@ -123,10 +123,13 @@ terminal: `model/README.md`.
 dashboard já estava rodando (`npm run dev`), dê um refresh (F5) na página
 pra carregar o modelo novo.
 
+```bash
 npm start -- --cenario calmo
 npm start -- --cenario exercicio
 npm start -- --cenario estereotipia
 npm start -- --cenario crise_sem_gatilho
+```
+
 ## Subindo pro Git
 
 ```bash
