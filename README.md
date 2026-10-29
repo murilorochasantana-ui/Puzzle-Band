@@ -124,11 +124,11 @@ dashboard já estava rodando (`npm run dev`), dê um refresh (F5) na página
 pra carregar o modelo novo.
 
 ```bash
-npm start -- --cenario calmo
-npm start -- --cenario exercicio
-npm start -- --cenario estereotipia
-npm start -- --cenario crise_sem_gatilho
-npm start -- --cenario crise_ruido
+npm start -- --cenario calmo              	  Criança em repouso, todos os sinais estáveis
+npm start -- --cenario exercicio              Atividade física: BPM, EDA e movimento sobem juntos, com movimento irregular
+npm start -- --cenario estereotipia           Movimento repetitivo e regular (ex.: balançar o corpo), com sinais de estresse
+npm start -- --cenario crise_sem_gatilho      Crise sem causa externa: os sinais fisiológicos sobem, mas luz e ruído ficam normais
+npm start -- --cenario crise_ruido            Crise com gatilho ambiental: o ruído sobe e depois BPM e EDA sobem e a HRV cai
 ```
 
 ## Subindo pro Git
