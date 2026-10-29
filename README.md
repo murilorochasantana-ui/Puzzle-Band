@@ -128,6 +128,7 @@ npm start -- --cenario calmo
 npm start -- --cenario exercicio
 npm start -- --cenario estereotipia
 npm start -- --cenario crise_sem_gatilho
+npm start -- --cenario crise_ruido
 ```
 
 ## Subindo pro Git
