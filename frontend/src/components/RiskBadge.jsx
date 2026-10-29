@@ -15,7 +15,7 @@ export default function RiskBadge({ tier, probability }) {
       <span className="stress-badge__label">
         {info.label}
         {probability !== null && (
-          <span className="stress-badge__proba"> · {Math.round(probability * 100)}%</span>
+          <span className="stress-badge__proba"> · prob. {Math.round(probability * 100)}%</span>
         )}
       </span>
     </div>

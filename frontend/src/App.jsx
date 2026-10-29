@@ -5,6 +5,8 @@ import RiskBadge from './components/RiskBadge';
 import BpmChart from './components/BpmChart';
 import ManualControls from './components/ManualControls';
 import AlertBanner from './components/AlertBanner';
+import ConnectionStatus from './components/ConnectionStatus';
+import useMqttReadings from './hooks/useMqttReadings';
 import { generateReading, GYRO_ACTIONS } from './model/simulate';
 import { computeFeatures, predictCrisisProbability, riskTierFromProbability, MIN_HISTORY_REQUIRED } from './model/predict';
 
@@ -24,16 +26,31 @@ function App() {
 
   const [isRunning, setIsRunning] = useState(true);
   const [speed, setSpeed] = useState(1);
-  const [buffer, setBuffer] = useState([]);
+  const [simBuffer, setBuffer] = useState([]);
 
-  const controlsRef = useRef();
-  controlsRef.current = {
-    bpmTarget, edaTarget, gyroAction, idade,
-    hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
+  // Fonte dos dados: 'manual' (simulador no navegador) ou 'mqtt' (pulseira via broker)
+  const [source, setSource] = useState('manual');
+  const mqttMode = source === 'mqtt';
+  const link = useMqttReadings({ enabled: mqttMode, maxBuffer: MAX_BUFFER });
+  const { publishAlert } = link;
+  const buffer = mqttMode ? link.readings : simBuffer;
+
+  const changeSource = (next) => {
+    if (next === source) return;
+    setSource(next);
+    setBuffer([]); // o buffer do MQTT e zerado pelo proprio hook ao ligar/desligar
   };
 
+  const controlsRef = useRef();
   useEffect(() => {
-    if (!isRunning) return undefined;
+    controlsRef.current = {
+      bpmTarget, edaTarget, gyroAction, idade,
+      hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
+    };
+  });
+
+  useEffect(() => {
+    if (!isRunning || mqttMode) return undefined;
 
     const interval = setInterval(() => {
       setBuffer((prev) => {
@@ -51,7 +68,7 @@ function App() {
     }, TICK_MS);
 
     return () => clearInterval(interval);
-  }, [isRunning, speed]);
+  }, [isRunning, speed, mqttMode]);
 
   const current = buffer[buffer.length - 1];
   const chartPoints = buffer.slice(-CHART_WINDOW);
@@ -67,6 +84,21 @@ function App() {
     }
   }
 
+  // Publica em puzzleband/<id>/alertas so quando o nivel MUDA para atencao/alto_risco
+  const prevTierRef = useRef('baixo_risco');
+  useEffect(() => {
+    if (tier === prevTierRef.current) return;
+    prevTierRef.current = tier;
+    if (!mqttMode || (tier !== 'atencao' && tier !== 'alto_risco')) return;
+    if (probability === null || !current) return;
+    publishAlert({
+      timestamp: new Date().toISOString(),
+      nivel: tier,
+      probabilidade: Number(probability.toFixed(3)),
+      leituras: current,
+    });
+  }, [tier, probability, current, mqttMode, publishAlert]);
+
   const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
 
   return (
@@ -75,10 +107,41 @@ function App() {
         <div>
           <h1>Puzzle Band</h1>
           <p className="dashboard__subtitle">
-            Simulador manual · teste o modelo com cenários que você define, fora do dataset
+            {mqttMode
+              ? `Pulseira (MQTT) · leituras recebidas do broker, criança ${link.childId ?? '—'}`
+              : 'Simulador manual · teste o modelo com cenários que você define, fora do dataset'}
           </p>
         </div>
+        <div className="source-select" role="group" aria-label="Fonte dos dados">
+          <span className="source-select__label">Fonte dos dados</span>
+          <div className="source-select__options">
+            <button
+              type="button"
+              className={`manual-controls__toggle-btn ${!mqttMode ? 'is-active' : ''}`}
+              aria-pressed={!mqttMode}
+              onClick={() => changeSource('manual')}
+            >
+              Simulador manual
+            </button>
+            <button
+              type="button"
+              className={`manual-controls__toggle-btn ${mqttMode ? 'is-active' : ''}`}
+              aria-pressed={mqttMode}
+              onClick={() => changeSource('mqtt')}
+            >
+              Pulseira (MQTT)
+            </button>
+          </div>
+        </div>
       </header>
+
+      {mqttMode && (
+        <ConnectionStatus
+          brokerStatus={link.brokerStatus}
+          bandStatus={link.bandStatus}
+          error={link.error}
+        />
+      )}
 
       <AlertBanner tier={tier} probability={probability} childLabel="Criança simulada" />
 
@@ -87,10 +150,12 @@ function App() {
           <span className="dashboard__status-label">Previsão do modelo (IA)</span>
           <RiskBadge tier={tier} probability={probability} />
         </div>
-        <span className="dashboard__activity">
-          Ação simulada: <strong>{gyroLabel}</strong>
-          {movimentoRepetitivo && ' · movimento repetitivo'}
-        </span>
+        {!mqttMode && (
+          <span className="dashboard__activity">
+            Ação simulada: <strong>{gyroLabel}</strong>
+            {movimentoRepetitivo && ' · movimento repetitivo'}
+          </span>
+        )}
         {current && (
           <span className="dashboard__timestamp">
             {new Date(current.timestamp).toLocaleTimeString('pt-BR')}
@@ -151,41 +216,50 @@ function App() {
       </section>
 
       <section className="dashboard__chart-card">
-        <h2>Frequência cardíaca — últimos {CHART_WINDOW}s da simulação</h2>
+        <h2>Frequência cardíaca — últimos {CHART_WINDOW}s {mqttMode ? 'recebidos da pulseira' : 'da simulação'}</h2>
         {chartPoints.length >= 2 ? (
           <BpmChart points={chartPoints} />
         ) : (
-          <p className="dashboard__chart-note">Aguardando leituras da simulação...</p>
+          <p className="dashboard__chart-note">
+            {mqttMode ? 'Aguardando leituras da pulseira...' : 'Aguardando leituras da simulação...'}
+          </p>
         )}
       </section>
 
-      <section className="dashboard__sim-card">
-        <h2>Controle manual</h2>
-        <ManualControls
-          bpmTarget={bpmTarget}
-          onChangeBpm={setBpmTarget}
-          edaTarget={edaTarget}
-          onChangeEda={setEdaTarget}
-          gyroAction={gyroAction}
-          onChangeGyroAction={setGyroAction}
-          hrvTarget={hrvTarget}
-          onChangeHrv={setHrvTarget}
-          movimentoRepetitivo={movimentoRepetitivo}
-          onToggleMovimentoRepetitivo={setMovimentoRepetitivo}
-          luzTarget={luzTarget}
-          onChangeLuz={setLuzTarget}
-          ruidoTarget={ruidoTarget}
-          onChangeRuido={setRuidoTarget}
-          idade={idade}
-          onChangeIdade={setIdade}
-          isRunning={isRunning}
-          onToggleRunning={() => setIsRunning((r) => !r)}
-          onReset={() => setBuffer([])}
-          speed={speed}
-          onChangeSpeed={setSpeed}
-          bufferLength={buffer.length}
-        />
-      </section>
+      {!mqttMode && (
+        <section className="dashboard__sim-card">
+          <h2>Controle manual</h2>
+          <ManualControls
+            bpmTarget={bpmTarget}
+            onChangeBpm={setBpmTarget}
+            edaTarget={edaTarget}
+            onChangeEda={setEdaTarget}
+            gyroAction={gyroAction}
+            onChangeGyroAction={setGyroAction}
+            hrvTarget={hrvTarget}
+            onChangeHrv={setHrvTarget}
+            movimentoRepetitivo={movimentoRepetitivo}
+            onToggleMovimentoRepetitivo={setMovimentoRepetitivo}
+            luzTarget={luzTarget}
+            onChangeLuz={setLuzTarget}
+            ruidoTarget={ruidoTarget}
+            onChangeRuido={setRuidoTarget}
+            idade={idade}
+            onChangeIdade={setIdade}
+            isRunning={isRunning}
+            onToggleRunning={() => setIsRunning((r) => !r)}
+            onReset={() => setBuffer([])}
+            speed={speed}
+            onChangeSpeed={setSpeed}
+            bufferLength={buffer.length}
+          />
+        </section>
+      )}
+
+      <footer className="dashboard__footer">
+        Protótipo acadêmico (TCC). Este sistema não tem finalidade médica ou diagnóstica: as
+        indicações são apenas um apoio ao cuidador e não substituem avaliação profissional.
+      </footer>
     </div>
   );
 }

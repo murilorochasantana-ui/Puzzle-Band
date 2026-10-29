@@ -22,20 +22,26 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 // INDEPENDENTE da intensidade do giroscopio - da pra simular tanto
 // "correr com amigos" (movimento intenso, IRREGULAR) quanto uma
 // estereotipia motora (intensidade qualquer, mas bem REGULAR/periodica).
+//
+// `gyroBase` e `regularidadeBase` sao sobrescritas OPCIONAIS (numericas) de
+// gyroAction / movimentoRepetitivo, usadas pelo simulador de linha de comando
+// (simulator/) pra fazer rampas graduais entre cenarios. O dashboard nao
+// passa nenhuma das duas, entao seu comportamento nao muda.
 export function generateReading({
   bpmTarget, edaTarget, gyroAction, idade, timestamp,
   hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
+  gyroBase: gyroBaseOverride, regularidadeBase,
 }) {
   const bpm = Math.round(clamp(bpmTarget + (Math.random() - 0.5) * 4, 40, 200));
   const eda_uS = Number(clamp(edaTarget + (Math.random() - 0.5) * 0.6, 1, 20).toFixed(2));
 
-  const gyroBase = gyroBaseFor(gyroAction);
+  const gyroBase = gyroBaseOverride ?? gyroBaseFor(gyroAction);
   const gyro_mag_dps = Number(clamp(gyroBase * (0.4 + Math.random() * 1.3), 0.05, 950).toFixed(2));
 
   const hrv_ms = Number(clamp(hrvTarget + (Math.random() - 0.5) * 4, 8, 120).toFixed(1));
 
   const accel_mag_g = Number(clamp(gyro_mag_dps * 0.55 * (0.5 + Math.random() * 1.1), 0.02, 20).toFixed(2));
-  const regBase = movimentoRepetitivo ? 0.8 : 0.08;
+  const regBase = regularidadeBase ?? (movimentoRepetitivo ? 0.8 : 0.08);
   const regularidade = Number(clamp(regBase + (Math.random() - 0.5) * 0.2, 0, 1).toFixed(2));
 
   const luz_lux = Number(clamp(luzTarget + (Math.random() - 0.5) * 30, 5, 2000).toFixed(0));

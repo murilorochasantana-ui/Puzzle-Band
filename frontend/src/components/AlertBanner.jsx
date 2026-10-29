@@ -10,11 +10,14 @@ export default function AlertBanner({ tier, probability, childLabel }) {
       <div>
         <strong>
           {isCritical ? 'Modelo detectou possível crise' : 'Modelo identificou sinais de atenção'}
-          {pct !== null && ` (${pct}% de confiança)`}
+          {pct !== null && ` (probabilidade estimada: ${pct}%)`}
         </strong>
         <p>
           {childLabel}: o cruzamento de batimento cardíaco, suor (EDA) e movimento sugere possível
           sobrecarga sensorial. Verifique o ambiente ao redor.
+        </p>
+        <p className="alert-banner__disclaimer">
+          Indicação de apoio ao cuidador, sem valor diagnóstico.
         </p>
       </div>
     </div>

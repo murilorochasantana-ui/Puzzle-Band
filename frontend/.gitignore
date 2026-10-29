@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Variaveis de ambiente (contem senha do broker)
+.env
+.env.*
+!.env.example
