@@ -4,7 +4,7 @@ Engenharia de features para o modelo preditivo do Puzzle Band.
 Historico (dataset v3): testamos uma feature de INCLINACAO curta vs longa
 do batimento ("bpm_jerk") pra distinguir subida subita (estresse) de
 subida gradual (exercicio). A feature existe e funciona no instante exato
-do inicio de um episodio (ver model/README.md), mas tem peso agregado
+do inicio de um episodio (ver docs/modelo.md), mas tem peso agregado
 baixo porque esse instante e uma fatia pequena do total de segundos
 rotulados como estresse.
 

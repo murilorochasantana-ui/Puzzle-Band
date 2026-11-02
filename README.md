@@ -53,12 +53,13 @@ puzzle-band/
 │   ├── train.py            # treino do zero + validação (GroupKFold) — gera o forest.json OFICIAL
 │   ├── train_incremental.py # treino incremental (experimental)
 │   ├── state/               # estado do treino incremental (floresta separada, não é a do dashboard)
-│   ├── eda/                 # geradores de dataset + análises exploratórias
-│   └── README.md            # decisões de design do modelo, métricas detalhadas
-├── docs/
-│   ├── avaliacao_dataset.md # avaliação do dataset sintético
-│   ├── gatilho.md           # indicação de gatilho provável (algoritmo, limites, testes)
-│   └── historico.md         # histórico de episódios (campos, CSV, privacidade)
+│   └── eda/                 # geradores de dataset + análises exploratórias
+├── docs/                   # documentação detalhada (ver "Documentação" abaixo)
+├── simulator/              # simulador da pulseira (ESP32) via MQTT
+│   ├── index.js             # publica leituras e status no broker
+│   ├── scenarios.js         # cenários (linha do tempo de cada sinal)
+│   ├── verificar.js         # confere os cenários com o modelo e o gatilho, sem broker
+│   └── .env.example         # modelo do simulator/.env (broker, usuário, CHILD_ID)
 └── frontend/
     ├── src/
     │   ├── App.jsx           # dashboard principal
@@ -142,8 +143,8 @@ dataset, edite a constante `DATASET` no topo de `model/train.py`.
 
 > O `forest.json` oficial vem da Opção A. A Opção B substitui o modelo do
 > dashboard por uma floresta experimental; pra voltar, rode
-> `python model/train.py`. Ver "Qual modelo está em produção" no
-> `model/README.md`.
+> `python model/train.py`. Ver "Qual modelo está em produção" em
+> [docs/modelo.md](docs/modelo.md#qual-modelo-está-em-produção).
 
 Treina somando árvores novas à floresta já existente, sem esquecer
 datasets treinados em rodadas anteriores (usa o `warm_start` do
@@ -163,7 +164,7 @@ python model/train_incremental.py --dataset caminho.xlsx --add-trees 60 --reset
 ```
 
 Detalhes de cada opção, limitações e como interpretar o AUC impresso no
-terminal: `model/README.md`.
+terminal: [docs/modelo.md](docs/modelo.md).
 
 **Depois de treinar (qualquer uma das opções):** o arquivo
 `frontend/src/model/forest.json` é sobrescrito automaticamente. Se o
@@ -173,18 +174,71 @@ uso (ex.: "Modelo: 60 árvores, treinado em 02/11/2026 (model/train.py)").
 
 ## Simulador da pulseira (MQTT)
 
-Cenários do simulador de linha de comando (pasta `simulator/`), que publica
-leituras no broker para o modo "Pulseira (MQTT)" do dashboard:
+A pasta `simulator/` faz o papel do ESP32: publica 1 leitura por segundo no
+broker (`puzzleband/<CHILD_ID>/leituras`, QoS 0) e o status da pulseira
+(`puzzleband/<CHILD_ID>/status`: `online` retido ao conectar, `offline` ao
+sair com Ctrl+C ou como Last Will se o processo cair). As leituras vêm do
+mesmo gerador do simulador manual (`frontend/src/model/simulate.js`).
+
+Configuração (uma vez), dentro de `simulator/`:
 
 ```bash
-npm start -- --cenario calmo              	  Criança em repouso, todos os sinais estáveis
-npm start -- --cenario exercicio              Atividade física: BPM, EDA e movimento sobem juntos, com movimento irregular
-npm start -- --cenario estereotipia           Movimento repetitivo e regular (ex.: balançar o corpo), com sinais de estresse
-npm start -- --cenario crise_sem_gatilho      Crise sem causa externa: os sinais fisiológicos sobem, mas luz e ruído ficam normais
-npm start -- --cenario crise_ruido            Crise com gatilho ambiental: o ruído sobe e depois BPM e EDA sobem e a HRV cai
+cd simulator
+npm install
+copy .env.example .env      # Windows (Linux/macOS: cp .env.example .env)
 ```
 
+Depois preencha `MQTT_USER` e `MQTT_PASS` no `simulator/.env` com o usuário
+da pulseira no EMQX Cloud. O `CHILD_ID` precisa ser igual ao `VITE_CHILD_ID`
+do `frontend/.env`. O `.env` não vai para o Git.
+
+Rodando (no dashboard, escolha a fonte "Pulseira (MQTT)"):
+
+```bash
+npm start -- --cenario crise_ruido                 # ou o atalho: npm run crise-ruido
+npm run crise-ruido -- --duracao 300 --idade 10    # para sozinho após 300 s; idade de 5 a 12
+npm run demo                                       # sequência da apresentação (10,5 min)
+```
+
+| Cenário | Atalho | O que acontece | Roteiro |
+|---|---|---|---|
+| `calmo` | `npm run calmo` | Repouso: todos os sinais estáveis | 300 s (sempre calmo) |
+| `exercicio` | `npm run exercicio` | Atividade física: BPM, EDA e movimento sobem juntos, movimento irregular | 410 s |
+| `estereotipia` | `npm run estereotipia` | Movimento repetitivo e regular (balançar o corpo) com sinais de estresse; ambiente estável | 410 s |
+| `crise_ruido` | `npm run crise-ruido` | Ruído sobe (45 → 88 dB) ~12 s antes da fisiologia; depois BPM e EDA sobem e a HRV cai | 357 s |
+| `crise_luz` | `npm run crise-luz` | Luz sobe forte (300 → 1200 lux) ~12 s antes da fisiologia | 357 s |
+| `crise_sem_gatilho` | `npm run crise-sem-gatilho` | A fisiologia sobe; luz e ruído ficam na linha de base | 357 s |
+| `crise_ruido_e_luz` | `npm run crise-ruido-e-luz` | Ruído e luz sobem juntos ~12 s antes da fisiologia | 357 s |
+| `barulho_sem_crise` | `npm run barulho-sem-crise` | Ruído alto (~85 dB) e luz forte (~1200 lux) por 3 min, mas a criança continua calma | 450 s |
+| `ruido_depois_da_crise` | `npm run ruido-depois-da-crise` | A fisiologia sobe primeiro; o ruído só sobe ~30 s depois (criança gritando) | 357 s |
+| `crise_e_recuperacao` | `npm run crise-e-recuperacao` | Calmo → crise com ruído (~2 min) → volta gradual e ≥ 90 s calmo (o episódio fecha) | 417 s |
+| `demo` | `npm run demo` | Apresentação: calmo → exercício → calmo → crise com ruído → recuperação → crise sem gatilho → recuperação | 630 s |
+
+Os cenários isolados começam com **2 minutos calmos** (linha de base da regra
+de gatilho); a `demo` começa com 60 s. As transições são rampas de 20 a 40 s.
+A linha do tempo e a duração do roteiro aparecem no início da execução, e cada
+leitura é impressa com a fase atual. Depois do roteiro, tudo fica calmo até
+o Ctrl+C (ou use `--duracao`).
+
 Com `crise_ruido`, o alerta do dashboard deve indicar "Provável gatilho:
-ruído"; com `crise_sem_gatilho`, "Sem gatilho ambiental aparente". Os dois
-episódios aparecem no histórico, abaixo do gráfico.
+ruído"; com `crise_luz`, "luminosidade"; com `crise_sem_gatilho`, "Sem
+gatilho ambiental aparente". Os episódios aparecem no histórico, abaixo do
+gráfico.
+
+Para conferir os cenários contra o modelo e a regra de gatilho **sem broker**
+(roda em segundos): `npm run verificar` (ou
+`node verificar.js --cenario demo --sementes 50`). Resultados esperados ×
+obtidos e o roteiro da apresentação: [docs/testes.md](docs/testes.md).
+
+## Documentação
+
+Este é o único README do projeto; os detalhes ficam em `docs/`:
+
+| Documento | Conteúdo |
+|---|---|
+| [docs/modelo.md](docs/modelo.md) | Modelo preditivo: decisões de design, validação, ablação, importância das features e qual modelo está em produção |
+| [docs/gatilho.md](docs/gatilho.md) | Indicação de gatilho provável: algoritmo, limites e por quê, testes e limitações |
+| [docs/historico.md](docs/historico.md) | Histórico de episódios: campos, avaliação do cuidador, CSV e privacidade (LGPD) |
+| [docs/testes.md](docs/testes.md) | Cenários do simulador × resultado esperado × obtido e roteiro da apresentação |
+| [docs/avaliacao_dataset.md](docs/avaliacao_dataset.md) | Avaliação do dataset sintético |
 

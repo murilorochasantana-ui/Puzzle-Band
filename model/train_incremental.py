@@ -27,7 +27,7 @@ COMPLETA (todas as arvores acumuladas ate agora) - o dashboard sempre usa
 o conhecimento de todos os datasets ja treinados.
 
 ATENCAO: este script e EXPERIMENTAL. O forest.json oficial vem do
-model/train.py (validacao GroupKFold, metricas do model/README.md). Depois
+model/train.py (validacao GroupKFold, metricas do docs/modelo.md). Depois
 de experimentar aqui, rode python model/train.py para voltar ao modelo
 oficial. O campo "meta" do forest.json (e o rodape do dashboard) mostra
 qual script gerou o modelo em uso.

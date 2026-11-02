@@ -183,11 +183,27 @@ mudança de luz e antes de a fisiologia subir. O modelo também usa features de
 luz e ruído. Nesse caso a referência é o alerta e o texto diz "4 s antes do
 alerta do modelo". A classificação continuou correta.
 
-O simulador de linha de comando (`simulator/`, citado no README) **não está
-neste repositório** e por isso não foi rodado. Os dois cenários acima com o
-mesmo nome reproduzem o que o README descreve para ele. Quando o
-`simulator/` estiver disponível, ele pode importar `trigger.js` e
-`episodes.js` diretamente (são módulos ES sem dependências).
+Esses cenários usam transições rápidas (3 a 8 s) de propósito, para testar a
+regra. Os do simulador da pulseira, abaixo, usam rampas graduais.
+
+### Cenários do simulador da pulseira (`simulator/`)
+
+Os 11 cenários do simulador (`simulator/scenarios.js`, com fase calma inicial
+e rampas de 20 a 40 s) são validados offline por
+`cd simulator && npm run verificar`. A tabela completa (esperado × obtido,
+50 sementes por cenário) e a análise dos casos que não batem estão em
+[testes.md](testes.md). Em resumo, para a regra do gatilho:
+
+- `crise_ruido`, `crise_luz`, `crise_ruido_e_luz`, `crise_sem_gatilho` e
+  `crise_e_recuperacao` identificam o gatilho esperado em 50/50 execuções,
+  com antecedência mediana de 12 s;
+- `ruido_depois_da_crise` marca o ruído como `possivel_consequencia` (≈30 s
+  depois da fisiologia) em 50/50, sem apontá-lo como gatilho;
+- a regra só aponta gatilho quando o **modelo** alerta. Em
+  `barulho_sem_crise` o modelo dá "atenção" curta só por causa da luz forte
+  em 23 de 50 execuções, e a regra então indica ruído e luz. O mesmo vale para
+  o `exercicio`, em que o modelo às vezes chega a "possível crise". Ver
+  [testes.md](testes.md#casos-que-não-batem).
 
 ## Limitações
 

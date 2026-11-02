@@ -1,28 +1,38 @@
-# Modelo preditivo — Puzzle Band
+# Modelo preditivo
+
+Como rodar o treino: seção "Treinando o modelo" do [README](../README.md).
 
 ## Arquivos
 
-- `features.py` — engenharia de features (compartilhado entre treino e avaliação)
-- `train.py` — treina o classificador **do zero** com um único dataset e exporta `frontend/src/model/forest.json`
-- `train_incremental.py` — treina **mantendo o conhecimento de rodadas anteriores** (ver seção abaixo)
-- `eda/` — scripts de análise exploratória e geradores de dataset sintético (histórico)
-- `state/` — estado do treino incremental (`forest_state.pkl` + `training_history.json`)
+- `model/features.py` — engenharia de features (compartilhado entre treino e avaliação)
+- `model/train.py` — treina o classificador **do zero** com um único dataset e exporta `frontend/src/model/forest.json`
+- `model/train_incremental.py` — treina **mantendo o conhecimento de rodadas anteriores** (experimental, ver abaixo)
+- `model/eda/` — scripts de análise exploratória e geradores de dataset sintético (histórico)
+- `model/state/` — estado do treino incremental (`forest_state.pkl` + `training_history.json`)
 
 ## Qual modelo está em produção
 
 O `frontend/src/model/forest.json` oficial (o que o dashboard usa) é gerado
-pelo **`train.py`**: 60 árvores, profundidade máxima 6, dataset v4, com
+pelo **`model/train.py`**: 60 árvores, profundidade máxima 6, dataset v4, com
 validação GroupKFold por criança. As métricas desta página vêm dele.
 
-O **`train_incremental.py` é experimental.** A pasta `model/state/` guarda
-uma floresta **separada**, de 80 árvores (uma rodada com o dataset v4,
-registrada em `state/training_history.json` em 19/09/2026 02:42 UTC), que
-**não corresponde** ao `forest.json` atual.
+O **`model/train_incremental.py` é experimental.** A pasta `model/state/` é
+usada só por ele:
+
+- `forest_state.pkl` — a floresta acumulada (objeto do scikit-learn),
+  necessária para continuar treinando em rodadas futuras. **Não apague** se
+  quiser continuar os experimentos; o dashboard não usa esse arquivo.
+- `training_history.json` — uma entrada por rodada (dataset, amostras,
+  árvores).
+
+Essa floresta é **separada** do modelo do dashboard: tem 80 árvores (uma
+rodada com o dataset v4, registrada em 19/09/2026 02:42 UTC) e **não
+corresponde** ao `forest.json` atual.
 
 Como a inconsistência 60 × 80 aconteceu: o `train_incremental.py` rodou
 (80 árvores) e sobrescreveu o `forest.json`; depois o `train.py` rodou e o
 sobrescreveu de novo com 60 árvores. Foi essa versão que entrou no commit
-`4b7a837`, enquanto o `state/` continuou com a de 80. Conferido em
+`4b7a837`, enquanto o `model/state/` continuou com a de 80. Conferido em
 02/11/2026: rodar `python model/train.py` gera um `forest.json` com as **60
 árvores idênticas** às que estavam versionadas, e o `forest_state.pkl` tem
 80 árvores.
@@ -35,15 +45,13 @@ Para não confundir de novo:
   (model/train.py)";
 - rodar o `train_incremental.py` **substitui** o modelo do dashboard pelo
   experimental (o script avisa no fim). Para voltar ao oficial:
-  `python model/train.py`;
-- não apague `state/forest_state.pkl` se quiser continuar os experimentos
-  incrementais. Ele não é usado pelo dashboard.
+  `python model/train.py`.
 
-## Rodar o treino do zero
+## Treino do zero (`train.py`)
 
 ```bash
 pip install pandas scikit-learn openpyxl numpy
-python3 model/train.py
+python model/train.py
 ```
 
 Isso reescreve `frontend/src/model/forest.json`, consumido pelo dashboard
@@ -65,15 +73,15 @@ as árvores acumuladas.
 
 ```bash
 # primeira rodada — cria o modelo do zero com este dataset
-python3 model/train_incremental.py --dataset data/raw/dataset_pulseira_TEA_estresse_v3.xlsx --add-trees 60
+python model/train_incremental.py --dataset data/raw/dataset_pulseira_TEA_estresse_v3.xlsx --add-trees 60
 
 # segunda rodada — mantém as árvores da rodada anterior, soma mais árvores treinadas no dataset novo
-python3 model/train_incremental.py --dataset data/raw/massive --add-trees 60
+python model/train_incremental.py --dataset data/raw/massive --add-trees 60
 
 # aceita .xlsx (aba 'Dados'), .csv com features já calculadas, ou uma PASTA com vários .csv (concatena todos)
 
 # pra descartar tudo e recomeçar do zero:
-python3 model/train_incremental.py --dataset caminho.xlsx --add-trees 60 --reset
+python model/train_incremental.py --dataset caminho.xlsx --add-trees 60 --reset
 ```
 
 Cada rodada:
@@ -117,7 +125,7 @@ platô/recuperação, onde EDA/giroscópio já resolvem sozinhos). Ou seja: a
 dinâmica de subida é uma pista real, disponível e correta, só que
 estatisticamente pequena diante do volume de dados — mais relevante pra um
 sistema de alerta PRECOCE (pegar a subida assim que ela começa) do que pra
-classificar a média de uma janela de 30s already-elevada.
+classificar a média de uma janela de 30s já elevada.
 
 O que domina a decisão do modelo (e resolve o problema principal — não
 confundir exercício com estresse) é outra pista, mais robusta

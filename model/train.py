@@ -6,7 +6,7 @@ sendo avaliado - simula o uso em uma crianca nova).
 Alvo binario (estresse: sim/nao), com probabilidade de saida - o dashboard
 usa essa probabilidade para classificar em faixas de risco (nenhum /
 atencao / alerta / crise), em vez de tentar prever os 4 rotulos originais
-diretamente (testamos multiclasse - ver README do model/ - e a fronteira
+diretamente (testamos multiclasse - ver docs/modelo.md - e a fronteira
 entre "leve" e "nenhum" e ruidosa demais pra ser confiavel; o binario com
 probabilidade calibrada e uma base muito mais solida pra um alerta que vai
 para um cuidador real).
@@ -15,7 +15,7 @@ Roda: python3 model/train.py
 
 Este e o script OFICIAL do frontend/src/model/forest.json (o modelo que o
 dashboard usa). O train_incremental.py e experimental - ver "Qual modelo
-esta em producao" no model/README.md.
+esta em producao" no docs/modelo.md.
 """
 import json
 import sys
