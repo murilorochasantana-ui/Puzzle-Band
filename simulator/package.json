@@ -1,0 +1,30 @@
+{
+  "name": "puzzleband-simulator",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Simulador da pulseira Puzzle Band (ESP32): publica leituras sintéticas no broker MQTT",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "calmo": "node index.js --cenario calmo",
+    "exercicio": "node index.js --cenario exercicio",
+    "estereotipia": "node index.js --cenario estereotipia",
+    "crise-ruido": "node index.js --cenario crise_ruido",
+    "crise-luz": "node index.js --cenario crise_luz",
+    "crise-sem-gatilho": "node index.js --cenario crise_sem_gatilho",
+    "crise-ruido-e-luz": "node index.js --cenario crise_ruido_e_luz",
+    "barulho-sem-crise": "node index.js --cenario barulho_sem_crise",
+    "ruido-depois-da-crise": "node index.js --cenario ruido_depois_da_crise",
+    "crise-e-recuperacao": "node index.js --cenario crise_e_recuperacao",
+    "demo": "node index.js --cenario demo",
+    "verificar": "node verificar.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8",
+    "mqtt": "^5.16.1"
+  },
+  "engines": {
+    "node": ">=20.10"
+  }
+}
