@@ -8,6 +8,37 @@
 - `eda/` — scripts de análise exploratória e geradores de dataset sintético (histórico)
 - `state/` — estado do treino incremental (`forest_state.pkl` + `training_history.json`)
 
+## Qual modelo está em produção
+
+O `frontend/src/model/forest.json` oficial (o que o dashboard usa) é gerado
+pelo **`train.py`**: 60 árvores, profundidade máxima 6, dataset v4, com
+validação GroupKFold por criança. As métricas desta página vêm dele.
+
+O **`train_incremental.py` é experimental.** A pasta `model/state/` guarda
+uma floresta **separada**, de 80 árvores (uma rodada com o dataset v4,
+registrada em `state/training_history.json` em 19/09/2026 02:42 UTC), que
+**não corresponde** ao `forest.json` atual.
+
+Como a inconsistência 60 × 80 aconteceu: o `train_incremental.py` rodou
+(80 árvores) e sobrescreveu o `forest.json`; depois o `train.py` rodou e o
+sobrescreveu de novo com 60 árvores. Foi essa versão que entrou no commit
+`4b7a837`, enquanto o `state/` continuou com a de 80. Conferido em
+02/11/2026: rodar `python model/train.py` gera um `forest.json` com as **60
+árvores idênticas** às que estavam versionadas, e o `forest_state.pkl` tem
+80 árvores.
+
+Para não confundir de novo:
+
+- os dois scripts gravam no `forest.json` um campo `meta` (script de origem,
+  dataset, número de árvores, data do treino). O `predict.js` ignora esse
+  campo, e o rodapé do dashboard mostra "Modelo: 60 árvores, treinado em …
+  (model/train.py)";
+- rodar o `train_incremental.py` **substitui** o modelo do dashboard pelo
+  experimental (o script avisa no fim). Para voltar ao oficial:
+  `python model/train.py`;
+- não apague `state/forest_state.pkl` se quiser continuar os experimentos
+  incrementais. Ele não é usado pelo dashboard.
+
 ## Rodar o treino do zero
 
 ```bash
@@ -19,7 +50,10 @@ Isso reescreve `frontend/src/model/forest.json`, consumido pelo dashboard
 (`frontend/src/model/predict.js`) — sem precisar de backend, a inferência
 roda inteira no navegador.
 
-## Treino incremental — treinar com vários datasets sem esquecer os anteriores
+## Treino incremental (experimental) — treinar com vários datasets sem esquecer os anteriores
+
+> Experimental: não é a fonte oficial do `forest.json` (ver "Qual modelo
+> está em produção" acima).
 
 `RandomForestClassifier` não tem uma forma nativa de "continuar" um treino
 como uma rede neural — cada `.fit()` normalmente recria o modelo do zero.
@@ -104,8 +138,9 @@ gerador ficam "congelados" no nível de fundo).
 | v3 | 12 | 0.952 | mais difícil de propósito — sobreposição real entre exercício intenso e estresse leve |
 | **v4 (atual)** | **24** | **0.960** | mesma dificuldade do v3 + 4 grupos de sinais novos (ver abaixo) |
 
-Recall ~0.87-0.96, precisão varia bastante por criança (0.23-0.92 entre
-folds) — o modelo erra mais pro lado de alertar demais do que deixar
+Recall 0.85-0.96, precisão varia bastante por criança (0.27-0.93 entre
+folds, v4; valores conferidos no retreino de 02/11/2026) — o modelo erra
+mais pro lado de alertar demais do que deixar
 passar uma crise real, que é a troca certa pra esse tipo de sistema, mas
 é uma limitação real a citar no TCC (a fronteira "leve vs. atividade
 física intensa" continua sendo a mais difícil de acertar com precisão).

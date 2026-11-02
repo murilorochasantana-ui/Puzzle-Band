@@ -1,4 +1,7 @@
-import forest from './forest.json';
+// "with { type: 'json' }" permite importar este arquivo tambem no Node (testes,
+// simulador). Do forest.json so sao lidos featureColumns, shortWindow,
+// longWindow e trees; o campo "meta" (origem do treino) e ignorado aqui.
+import forest from './forest.json' with { type: 'json' };
 
 const SHORT_WINDOW = forest.shortWindow; // 5s
 const LONG_WINDOW = forest.longWindow; // 30s

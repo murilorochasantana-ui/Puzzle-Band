@@ -1,4 +1,5 @@
-export default function AlertBanner({ tier, probability, childLabel }) {
+// `trigger`: objeto de model/trigger.js do episodio em andamento (ou null)
+export default function AlertBanner({ tier, probability, childLabel, trigger }) {
   if (tier !== 'atencao' && tier !== 'alto_risco') return null;
 
   const isCritical = tier === 'alto_risco';
@@ -16,6 +17,7 @@ export default function AlertBanner({ tier, probability, childLabel }) {
           {childLabel}: o cruzamento de batimento cardíaco, suor (EDA) e movimento sugere possível
           sobrecarga sensorial. Verifique o ambiente ao redor.
         </p>
+        {trigger?.texto && <p className="alert-banner__trigger">{trigger.texto}</p>}
         <p className="alert-banner__disclaimer">
           Indicação de apoio ao cuidador, sem valor diagnóstico.
         </p>

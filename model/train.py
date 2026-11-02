@@ -12,9 +12,14 @@ probabilidade calibrada e uma base muito mais solida pra um alerta que vai
 para um cuidador real).
 
 Roda: python3 model/train.py
+
+Este e o script OFICIAL do frontend/src/model/forest.json (o modelo que o
+dashboard usa). O train_incremental.py e experimental - ver "Qual modelo
+esta em producao" no model/README.md.
 """
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -26,8 +31,9 @@ from sklearn.metrics import classification_report, roc_auc_score, confusion_matr
 sys.path.insert(0, str(Path(__file__).parent))
 from features import build_features, FEATURE_COLUMNS  # noqa: E402
 
-DATASET = Path(__file__).parent.parent / 'data/raw/dataset_pulseira_TEA_estresse_v4.xlsx'
-OUT_JSON = Path(__file__).parent.parent / 'frontend/src/model/forest.json'
+ROOT = Path(__file__).resolve().parent.parent
+DATASET = ROOT / 'data/raw/dataset_pulseira_TEA_estresse_v4.xlsx'
+OUT_JSON = ROOT / 'frontend/src/model/forest.json'
 
 N_ESTIMATORS = 60
 MAX_DEPTH = 6
@@ -108,6 +114,13 @@ def main():
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT_JSON, 'w') as f:
         json.dump({
+            # origem do modelo (mostrada no rodape do dashboard; predict.js ignora)
+            'meta': {
+                'script': 'model/train.py',
+                'dataset': DATASET.relative_to(ROOT).as_posix(),
+                'n_arvores': len(trees),
+                'treinado_em': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+            },
             'featureColumns': FEATURE_COLUMNS,
             'shortWindow': 5,
             'longWindow': 30,

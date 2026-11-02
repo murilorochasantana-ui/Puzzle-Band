@@ -6,9 +6,12 @@ import BpmChart from './components/BpmChart';
 import ManualControls from './components/ManualControls';
 import AlertBanner from './components/AlertBanner';
 import ConnectionStatus from './components/ConnectionStatus';
+import EpisodeHistory from './components/EpisodeHistory';
 import useMqttReadings from './hooks/useMqttReadings';
+import useEpisodeMonitor from './hooks/useEpisodeMonitor';
 import { generateReading, GYRO_ACTIONS } from './model/simulate';
 import { computeFeatures, predictCrisisProbability, riskTierFromProbability, MIN_HISTORY_REQUIRED } from './model/predict';
+import { describeModel } from './model/modelInfo';
 
 const TICK_MS = 1000; // 1 "segundo simulado" por tick, como um sensor real a 1Hz
 const CHART_WINDOW = 60; // segundos exibidos no grafico
@@ -84,20 +87,16 @@ function App() {
     }
   }
 
-  // Publica em puzzleband/<id>/alertas so quando o nivel MUDA para atencao/alto_risco
-  const prevTierRef = useRef('baixo_risco');
-  useEffect(() => {
-    if (tier === prevTierRef.current) return;
-    prevTierRef.current = tier;
-    if (!mqttMode || (tier !== 'atencao' && tier !== 'alto_risco')) return;
-    if (probability === null || !current) return;
-    publishAlert({
-      timestamp: new Date().toISOString(),
-      nivel: tier,
-      probabilidade: Number(probability.toFixed(3)),
-      leituras: current,
-    });
-  }, [tier, probability, current, mqttMode, publishAlert]);
+  // Episodios + provavel gatilho + historico. Tambem publica em
+  // puzzleband/<id>/alertas (so no modo MQTT) quando o nivel MUDA para
+  // atencao/alto_risco, agora com o objeto do gatilho junto.
+  const childId = mqttMode ? (link.childId || 'desconhecida') : 'simulada';
+  const monitor = useEpisodeMonitor({
+    readings: buffer,
+    source,
+    childId,
+    onAlert: mqttMode ? publishAlert : null,
+  });
 
   const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
 
@@ -143,7 +142,12 @@ function App() {
         />
       )}
 
-      <AlertBanner tier={tier} probability={probability} childLabel="Criança simulada" />
+      <AlertBanner
+        tier={tier}
+        probability={probability}
+        childLabel={mqttMode ? `Criança ${childId}` : 'Criança simulada'}
+        trigger={monitor.openEpisode?.gatilho}
+      />
 
       <section className="dashboard__status">
         <div className="dashboard__status-col">
@@ -226,6 +230,14 @@ function App() {
         )}
       </section>
 
+      <EpisodeHistory
+        episodes={monitor.episodes}
+        storageOk={monitor.storageOk}
+        onEvaluate={monitor.evaluate}
+        onObservation={monitor.setObservation}
+        onClear={monitor.clearHistory}
+      />
+
       {!mqttMode && (
         <section className="dashboard__sim-card">
           <h2>Controle manual</h2>
@@ -257,8 +269,11 @@ function App() {
       )}
 
       <footer className="dashboard__footer">
-        Protótipo acadêmico (TCC). Este sistema não tem finalidade médica ou diagnóstica: as
-        indicações são apenas um apoio ao cuidador e não substituem avaliação profissional.
+        <p>
+          Protótipo acadêmico (TCC). Este sistema não tem finalidade médica ou diagnóstica: as
+          indicações são apenas um apoio ao cuidador e não substituem avaliação profissional.
+        </p>
+        <p className="dashboard__model-info">{describeModel()}</p>
       </footer>
     </div>
   );

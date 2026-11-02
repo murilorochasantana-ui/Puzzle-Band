@@ -26,6 +26,12 @@ Cada rodada sobrescreve frontend/src/model/forest.json com a floresta
 COMPLETA (todas as arvores acumuladas ate agora) - o dashboard sempre usa
 o conhecimento de todos os datasets ja treinados.
 
+ATENCAO: este script e EXPERIMENTAL. O forest.json oficial vem do
+model/train.py (validacao GroupKFold, metricas do model/README.md). Depois
+de experimentar aqui, rode python model/train.py para voltar ao modelo
+oficial. O campo "meta" do forest.json (e o rodape do dashboard) mostra
+qual script gerou o modelo em uso.
+
 O estado do modelo (o objeto RandomForestClassifier em si, necessario pra
 continuar treinando depois) fica salvo em model/state/forest_state.pkl -
 nao apague esse arquivo se quiser treinar mais rodadas depois.
@@ -169,16 +175,6 @@ def main():
     with open(STATE_PATH, 'wb') as f:
         pickle.dump(clf, f)
 
-    trees = [export_tree(est) for est in clf.estimators_]
-    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
-    with open(OUT_JSON, 'w') as f:
-        json.dump({
-            'featureColumns': FEATURE_COLUMNS,
-            'shortWindow': 5,
-            'longWindow': 30,
-            'trees': trees,
-        }, f)
-
     history.append({
         'timestamp': datetime.now(timezone.utc).isoformat(),
         'dataset': str(args.dataset),
@@ -186,6 +182,26 @@ def main():
         'arvores_adicionadas': args.add_trees,
         'total_arvores_apos': clf.n_estimators,
     })
+
+    trees = [export_tree(est) for est in clf.estimators_]
+    OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
+    with open(OUT_JSON, 'w') as f:
+        json.dump({
+            # origem do modelo (mostrada no rodape do dashboard; predict.js ignora)
+            'meta': {
+                'script': 'model/train_incremental.py',
+                'experimental': True,
+                'dataset': ' + '.join(dict.fromkeys(h['dataset'] for h in history)),
+                'n_arvores': len(trees),
+                'rodadas': len(history),
+                'treinado_em': datetime.now(timezone.utc).isoformat(timespec='seconds'),
+            },
+            'featureColumns': FEATURE_COLUMNS,
+            'shortWindow': 5,
+            'longWindow': 30,
+            'trees': trees,
+        }, f)
+
     save_history(history)
 
     size_kb = OUT_JSON.stat().st_size / 1024
@@ -198,6 +214,9 @@ def main():
     print('nao e uma metrica de generalizacao real. Pra validacao de verdade')
     print('(GroupKFold por crianca, held-out), use model/train.py num dataset')
     print('especifico.')
+    print()
+    print('ATENCAO: o forest.json do dashboard agora e o modelo EXPERIMENTAL')
+    print(f'({clf.n_estimators} arvores). Para voltar ao modelo oficial: python model/train.py')
 
 
 if __name__ == '__main__':
