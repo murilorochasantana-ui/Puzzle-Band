@@ -89,9 +89,12 @@ Onde aparece:
 - **Alerta** (`AlertBanner`): o texto aparece abaixo da mensagem principal.
 - **Histórico** (`EpisodeHistory`): o texto aparece em cada episódio, com
   botões para o cuidador confirmar ou descartar.
-- **MQTT**: os alertas publicados em `puzzleband/<id>/alertas` passam a
-  levar `gatilho` (o objeto completo) e `episodio_id`, além dos campos de
-  antes (`timestamp`, `nivel`, `probabilidade`, `leituras`).
+- **MQTT**: os alertas publicados em `puzzleband/<id>/alertas` (nos dois
+  modos) levam `gatilho` (o objeto completo), `episodio_id` e
+  `nivel_anterior`, além de `timestamp`, `nivel`, `probabilidade`,
+  `leituras`, `origem`, `fonte` e `crianca`. O estado ao vivo e o histórico
+  levam o gatilho resumido (`tipo` + `texto`). Formatos em
+  [mqtt.md](mqtt.md).
 
 ## Limites usados e por quê
 

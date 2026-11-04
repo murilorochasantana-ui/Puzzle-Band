@@ -152,6 +152,11 @@ resultado (20 sementes cada).
 
 ## Roteiro de demonstração
 
+> Com o app do cuidador no celular (notificação, "Estou ciente" e avaliação
+> pelo app), siga o roteiro em 4 passos do
+> [README](../README.md#roteiro-de-demonstração-site--app). Durante o `demo`
+> abaixo, o app aberto recebe o mesmo estado, os alertas e o histórico.
+
 O cenário `demo` roda sozinho por **10,5 minutos** (630 s), com o nome da fase
 em cada linha do log:
 

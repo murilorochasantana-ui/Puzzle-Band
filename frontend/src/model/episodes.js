@@ -158,6 +158,7 @@ export function ingestReadings(monitor, lastReading, readings, classify) {
     if (change && ALERT_TIERS.has(change.para) && Number.isFinite(probability)) {
       const open = current.open?.episode;
       alerts.push({
+        nivel_anterior: change.de,
         nivel: change.para,
         probabilidade: Number(probability.toFixed(3)),
         leituras: reading,
@@ -174,14 +175,26 @@ export function ingestReadings(monitor, lastReading, readings, classify) {
 // Lista de episodios (mais recente primeiro)
 // ---------------------------------------------------------------------------
 
-// Insere ou atualiza. A avaliacao e a observacao do cuidador sempre vem da
-// lista (o rastreador nao conhece o que o cuidador digitou).
+// Campos que so o cuidador altera (no site ou pelo app via MQTT): o
+// rastreador nao os conhece, entao numa atualizacao eles sempre vem da lista.
+//   avaliacao_origem         'site' | 'app' (quem avaliou por ultimo)
+//   avaliacao_em             quando avaliou (ISO)
+//   visto_pelo_cuidador_em   quando o cuidador tocou "Estou ciente" no app (ISO)
+export const CAREGIVER_FIELDS = [
+  'avaliacao_cuidador', 'observacao', 'avaliacao_origem', 'avaliacao_em', 'visto_pelo_cuidador_em',
+];
+
+// Insere ou atualiza, preservando os campos do cuidador.
 export function upsertEpisode(list, episode, limit = HISTORY_LIMIT) {
   const idx = list.findIndex((e) => e.id === episode.id);
   if (idx === -1) return [episode, ...list].slice(0, limit);
   const existing = list[idx];
   const next = [...list];
-  next[idx] = { ...episode, avaliacao_cuidador: existing.avaliacao_cuidador, observacao: existing.observacao };
+  const merged = { ...episode };
+  for (const field of CAREGIVER_FIELDS) {
+    if (field in existing) merged[field] = existing[field];
+  }
+  next[idx] = merged;
   return next;
 }
 

@@ -4,3 +4,6 @@ __pycache__/
 *.pyc
 .env
 *.log
+
+# Senha do broker do app Flutter (ver mobile/env.example.json)
+mobile/env.json

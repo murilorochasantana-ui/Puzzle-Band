@@ -9,6 +9,8 @@ import ConnectionStatus from './components/ConnectionStatus';
 import EpisodeHistory from './components/EpisodeHistory';
 import useMqttReadings from './hooks/useMqttReadings';
 import useEpisodeMonitor from './hooks/useEpisodeMonitor';
+import useCaregiverSync from './hooks/useCaregiverSync';
+import { buildAlertMessage } from './hooks/buildMessages';
 import { generateReading, GYRO_ACTIONS } from './model/simulate';
 import { computeFeatures, predictCrisisProbability, riskTierFromProbability, MIN_HISTORY_REQUIRED } from './model/predict';
 import { describeModel } from './model/modelInfo';
@@ -31,10 +33,12 @@ function App() {
   const [speed, setSpeed] = useState(1);
   const [simBuffer, setBuffer] = useState([]);
 
-  // Fonte dos dados: 'manual' (simulador no navegador) ou 'mqtt' (pulseira via broker)
+  // Fonte dos dados: 'manual' (simulador no navegador) ou 'mqtt' (pulseira via broker).
+  // O broker fica conectado nos dois modos: o site publica o estado para o app
+  // do cuidador; as leituras da pulseira so entram no buffer no modo 'mqtt'.
   const [source, setSource] = useState('manual');
   const mqttMode = source === 'mqtt';
-  const link = useMqttReadings({ enabled: mqttMode, maxBuffer: MAX_BUFFER });
+  const link = useMqttReadings({ readingsEnabled: mqttMode, maxBuffer: MAX_BUFFER });
   const { publishAlert } = link;
   const buffer = mqttMode ? link.readings : simBuffer;
 
@@ -88,15 +92,18 @@ function App() {
   }
 
   // Episodios + provavel gatilho + historico. Tambem publica em
-  // puzzleband/<id>/alertas (so no modo MQTT) quando o nivel MUDA para
-  // atencao/alto_risco, agora com o objeto do gatilho junto.
+  // puzzleband/<id>/alertas (nos dois modos, com o broker conectado) quando o
+  // nivel MUDA para atencao/alto_risco, com o objeto do gatilho junto.
   const childId = mqttMode ? (link.childId || 'desconhecida') : 'simulada';
   const monitor = useEpisodeMonitor({
     readings: buffer,
     source,
     childId,
-    onAlert: mqttMode ? publishAlert : null,
+    onAlert: (alert) => publishAlert(buildAlertMessage(alert, { source, childId: link.childId })),
   });
+
+  // Estado (1x/s) e historico para o app; avaliacao e "Estou ciente" do app
+  useCaregiverSync({ link, monitor, source, tier, probability, readings: buffer });
 
   const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
 
@@ -134,19 +141,19 @@ function App() {
         </div>
       </header>
 
-      {mqttMode && (
-        <ConnectionStatus
-          brokerStatus={link.brokerStatus}
-          bandStatus={link.bandStatus}
-          error={link.error}
-        />
-      )}
+      <ConnectionStatus
+        brokerStatus={link.brokerStatus}
+        bandStatus={link.bandStatus}
+        appStatus={link.appStatus}
+        error={link.error}
+      />
 
       <AlertBanner
         tier={tier}
         probability={probability}
         childLabel={mqttMode ? `Criança ${childId}` : 'Criança simulada'}
         trigger={monitor.openEpisode?.gatilho}
+        seenAt={monitor.openEpisode?.visto_pelo_cuidador_em}
       />
 
       <section className="dashboard__status">

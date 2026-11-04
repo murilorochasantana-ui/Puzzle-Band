@@ -108,6 +108,24 @@ test('atualizacao do rastreador preserva avaliacao e observacao do cuidador', ()
   assert.equal(list[0].probabilidade_maxima, 0.6);
 });
 
+test('atualizacao do rastreador preserva avaliacao pelo app e "visto pelo cuidador"', () => {
+  const first = run([['baixo_risco', 40], ['alto_risco', 5]]);
+  const id = first.list[0].id;
+  let list = updateEpisode(first.list, id, {
+    avaliacao_cuidador: 'descartado',
+    avaliacao_origem: 'app',
+    avaliacao_em: '2026-11-02T13:01:00Z',
+    visto_pelo_cuidador_em: '2026-11-02T13:00:50Z',
+  });
+  const step = stepMonitor(first.monitor, { reading: reading(45), tier: 'alto_risco', probability: 0.9 });
+  list = upsertEpisode(list, step.episode);
+  assert.equal(list[0].avaliacao_cuidador, 'descartado');
+  assert.equal(list[0].avaliacao_origem, 'app');
+  assert.equal(list[0].avaliacao_em, '2026-11-02T13:01:00Z');
+  assert.equal(list[0].visto_pelo_cuidador_em, '2026-11-02T13:00:50Z');
+  assert.equal(list[0].probabilidade_maxima, 0.9);
+});
+
 test('avaliacao invalida vira "pendente" e observacao e limitada', () => {
   const list = [{ id: 'a', inicio: reading(0).timestamp }];
   assert.equal(updateEpisode(list, 'a', { avaliacao_cuidador: 'talvez' })[0].avaliacao_cuidador, 'pendente');
@@ -229,6 +247,8 @@ test('ingestReadings: lotes de 1, 4 ou tudo de uma vez dao o mesmo resultado', (
     assert.equal(r.list[0].fonte, 'mqtt');
     assert.equal(r.alerts.length, 1);
     assert.equal(r.alerts[0].episodio_id, r.list[0].id);
+    assert.equal(r.alerts[0].nivel_anterior, 'baixo_risco');
+    assert.equal(r.alerts[0].nivel, 'atencao');
     assert.ok(r.alerts[0].gatilho);
     assert.equal(r.monitor.nextT, 200);
   }

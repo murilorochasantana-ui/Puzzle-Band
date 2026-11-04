@@ -54,13 +54,24 @@ export default function useEpisodeMonitor({ readings, source, childId, onAlert }
     monitorRef.current = result.monitor;
     lastReadingRef.current = result.lastReading;
     applyEpisodes(result.changed);
-    // puzzleband/<id>/alertas: mesmo formato de antes + episodio_id e gatilho
+    // puzzleband/<id>/alertas (formato final em hooks/buildMessages.js)
     const publish = onAlertRef.current;
     if (publish) result.alerts.forEach((alert) => publish({ timestamp: new Date().toISOString(), ...alert }));
   }, [readings, applyEpisodes]);
 
-  const evaluate = useCallback((id, avaliacao) => {
-    store.update((prev) => updateEpisode(prev, id, { avaliacao_cuidador: avaliacao }));
+  // Mesma funcao para os botoes do site e para a avaliacao recebida do app
+  // (puzzleband/<id>/avaliacao): `origem` diz quem avaliou ('site' | 'app').
+  const evaluate = useCallback((id, avaliacao, { origem = 'site', em } = {}) => {
+    store.update((prev) => updateEpisode(prev, id, {
+      avaliacao_cuidador: avaliacao,
+      avaliacao_origem: origem,
+      avaliacao_em: em ?? new Date().toISOString(),
+    }));
+  }, [store]);
+
+  // "Estou ciente" no app (puzzleband/<id>/ack)
+  const markSeen = useCallback((id, timestamp) => {
+    store.update((prev) => updateEpisode(prev, id, { visto_pelo_cuidador_em: timestamp ?? new Date().toISOString() }));
   }, [store]);
 
   const setObservation = useCallback((id, observacao) => {
@@ -79,6 +90,7 @@ export default function useEpisodeMonitor({ readings, source, childId, onAlert }
     storageOk,
     evaluate,
     setObservation,
+    markSeen,
     clearHistory,
   };
 }

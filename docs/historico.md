@@ -42,6 +42,13 @@ premissa do modelo). Nas velocidades 2x e 4x do simulador manual, a duração
 | `gatilho` | Objeto completo da regra de gatilho (tipo, texto, linha de base, detalhes por sinal) |
 | `avaliacao_cuidador` | `pendente`, `confirmado` ou `descartado` |
 | `observacao` | Texto livre opcional (até 200 caracteres) |
+| `avaliacao_origem` | Quem avaliou por último: `site` ou `app` (app do cuidador, via MQTT) |
+| `avaliacao_em` | Quando avaliou (ISO 8601) |
+| `visto_pelo_cuidador_em` | Quando o cuidador tocou "Estou ciente" no app (ISO 8601) |
+
+Os três últimos campos, assim como a avaliação e a observação, só mudam por
+ação do cuidador. Quando o rastreador atualiza um episódio em andamento, eles
+são preservados (`CAREGIVER_FIELDS` em `model/episodes.js`).
 
 ## Avaliação do cuidador
 
@@ -54,6 +61,13 @@ um campo curto de observação (ex.: "sirene da escola tocou antes").
   usam `aria-pressed`.
 - O cuidador pode avaliar um episódio ainda em andamento; a avaliação é
   preservada enquanto o episódio continua sendo atualizado.
+- **Pelo app do cuidador**: os mesmos botões existem na tela Histórico do
+  app. A avaliação chega em `puzzleband/<id>/avaliacao` e o site aplica com a
+  mesma função dos botões. O episódio mostra a etiqueta "avaliado pelo app
+  às HH:MM" e o histórico é republicado para o app. Quando o cuidador toca
+  "Estou ciente" no app (`puzzleband/<id>/ack`), o episódio e o banner de
+  alerta mostram "Alerta visto pelo cuidador às HH:MM". Ver
+  [mqtt.md](mqtt.md).
 
 A avaliação não altera o modelo nem a regra: é um registro para o cuidador
 (e para o TCC) de quantas indicações fizeram sentido na prática. É a base
@@ -108,9 +122,14 @@ andamento, e não pode ser desfeito. Exporte o CSV antes se quiser guardar.
 
 ## Privacidade (LGPD)
 
-- **Os dados ficam só no navegador.** O histórico não é enviado a nenhum
-  servidor. Ele existe apenas no `localStorage` do computador ou celular
-  em que o dashboard foi aberto.
+- **Onde os dados ficam.** O histórico completo (até 200 episódios) fica
+  no `localStorage` do navegador em que o dashboard foi aberto. Os **50 mais
+  recentes**, resumidos (sem as leituras brutas e com o gatilho reduzido a
+  tipo + texto), são publicados no broker MQTT em `puzzleband/<id>/historico`
+  com *retain*, para o app do cuidador. Ficam então também no broker (até a
+  próxima publicação) e no celular do cuidador (`shared_preferences`). O
+  acesso ao tópico é controlado por usuário e senha e pela ACL do broker (ver
+  [mqtt.md](mqtt.md#acl-sugerida-menor-privilégio)).
 - **Minimização** (LGPD, art. 6º, III – princípio da necessidade): o
   histórico guarda só o resumo de cada episódio (horários, nível,
   probabilidade, gatilho e avaliação), não as leituras brutas dos sensores.
@@ -124,6 +143,10 @@ andamento, e não pode ser desfeito. Exporte o CSV antes se quiser guardar.
   acesso ao mesmo navegador e usuário do sistema operacional consegue ver os
   dados, então evite computadores compartilhados. O CSV exportado vira um
   arquivo comum e deve ser guardado com o mesmo cuidado.
-- **Alertas MQTT**: no modo Pulseira, cada alerta publicado no broker (como
-  já acontecia antes) passa a levar também o objeto do gatilho. É o mesmo
-  canal dos alertas existentes; o histórico em si continua só no navegador.
+- **MQTT**: nos dois modos (Simulador manual e Pulseira), com o broker
+  conectado, o site publica o estado ao vivo, os alertas (com o objeto do
+  gatilho) e o histórico resumido. A conexão é sempre com TLS (`wss://` no
+  site, `mqtts://` no app). Detalhes e ACL: [mqtt.md](mqtt.md).
+- **"Limpar histórico"** apaga o navegador e republica a lista vazia no
+  broker. A cópia salva no celular é substituída quando o app recebe a nova
+  lista.

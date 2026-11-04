@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { episodesToCsv, summarizeByChild, OBSERVATION_MAX_LENGTH } from '../model/episodes';
+import { HISTORY_TOPIC_LIMIT } from '../hooks/buildMessages';
+import { formatClock } from './formatTime';
 
 const LEVEL_INFO = {
   atencao: { color: 'var(--status-warning)', icon: '▲', label: 'Atenção' },
@@ -94,6 +96,10 @@ function EpisodeItem({ episode, onEvaluate, onObservation }) {
   const obsId = `obs-${episode.id}`;
   const toggle = (value) => onEvaluate(episode.id, episode.avaliacao_cuidador === value ? 'pendente' : value);
   const trigger = episode.gatilho;
+  // Avaliacao feita no app do cuidador (puzzleband/<id>/avaliacao)
+  const byApp = episode.avaliacao_origem === 'app' && episode.avaliacao_cuidador !== 'pendente';
+  const byAppClock = byApp ? formatClock(episode.avaliacao_em) : null;
+  const seenClock = formatClock(episode.visto_pelo_cuidador_em);
 
   return (
     <li className="episode">
@@ -129,6 +135,12 @@ function EpisodeItem({ episode, onEvaluate, onObservation }) {
       {/* o texto ja comeca com a classificacao ("Provavel gatilho: ..." / "Sem gatilho ...") */}
       <p className="episode__trigger">{trigger?.texto ?? 'Gatilho não calculado.'}</p>
 
+      {seenClock && (
+        <p className="episode__seen">
+          <span aria-hidden="true">✓ </span>Alerta visto pelo cuidador às {seenClock}
+        </p>
+      )}
+
       <div className="episode__actions">
         <button
           type="button"
@@ -150,6 +162,11 @@ function EpisodeItem({ episode, onEvaluate, onObservation }) {
         </button>
         <span className="episode__evaluation">
           Avaliação: <span aria-hidden="true">{evaluation.icon}</span> {evaluation.label}
+          {byApp && (
+            <span className="episode__tag episode__tag--app">
+              avaliado pelo app{byAppClock && ` às ${byAppClock}`}
+            </span>
+          )}
         </span>
       </div>
 
@@ -198,7 +215,7 @@ export default function EpisodeHistory({ episodes, storageOk, onEvaluate, onObse
           <h2 id="episode-history-title" ref={headingRef} tabIndex={-1}>Histórico de episódios</h2>
           <p className="episode-history__hint">
             Um episódio começa quando o nível sai de “Sem sinais de crise” e termina após 30 s de volta ao normal.
-            Salvo só neste navegador.
+            Salvo neste navegador; os {HISTORY_TOPIC_LIMIT} mais recentes também vão para o app do cuidador (MQTT).
           </p>
         </div>
         <div className="episode-history__tools">

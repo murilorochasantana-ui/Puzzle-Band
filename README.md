@@ -4,16 +4,32 @@ Sistema *wearable* de monitoramento sensorial e auxílio na identificação de
 gatilhos de estresse no Transtorno do Espectro Autista (TEA) — TCC
 (Bacharelado em Ciências da Computação, modalidade Empreendedor).
 
-O projeto tem duas partes:
+O projeto tem quatro partes, ligadas por um broker MQTT na nuvem (EMQX
+Cloud):
 
-- **Dashboard** (`frontend/`) — painel do cuidador em React, com duas
-  fontes de dados: um simulador manual (sem depender de dataset) onde você
-  controla BPM, EDA, giroscópio/acelerômetro, HRV e sensores ambientais pra
-  testar o modelo em tempo real, e a pulseira via MQTT.
+- **Site / painel de controle** (`frontend/`) — dashboard em React e
+  "servidor" do sistema. Tem duas fontes de dados: um simulador manual (sem
+  depender de dataset) onde você controla BPM, EDA, giroscópio/acelerômetro,
+  HRV e sensores ambientais pra testar o modelo em tempo real, e a pulseira
+  via MQTT. Roda o modelo, a regra de gatilho e o histórico, e publica o
+  resultado processado para o app.
+- **App do cuidador** (`mobile/`) — app Android em Flutter: estado ao vivo,
+  notificação com som nos alertas, botão "Estou ciente" e histórico com
+  avaliação do gatilho, que volta para o site.
+- **Simulador da pulseira** (`simulator/`) — faz o papel do ESP32 e publica
+  as leituras no broker.
 - **Modelo preditivo** (`model/`) — classificador em Python (Random
   Forest) que cruza os sinais e estima a probabilidade de uma possível
   crise. É treinado em Python e exportado como JSON; a inferência roda
-  inteira em JavaScript no navegador, sem precisar de backend.
+  inteira em JavaScript no navegador.
+
+```
+simulador ──leituras──▶ broker ──▶ site (roda o modelo) ──estado/alertas/historico──▶ broker ──▶ app
+                                     ▲                                                          │
+                                     └──────────── avaliacao / ack / app/status ◀───────────────┘
+```
+
+Tópicos, formatos, QoS e ACL: [docs/mqtt.md](docs/mqtt.md).
 
 ## Funcionalidades do dashboard
 
@@ -32,12 +48,19 @@ O projeto tem duas partes:
   gatilho e anotar uma observação. Há um resumo de padrões por criança e
   exportação em CSV. Detalhes e privacidade (LGPD):
   [docs/historico.md](docs/historico.md).
-- **Modo Pulseira (MQTT)** — recebe as leituras do broker e publica os
-  alertas em `puzzleband/<id>/alertas`, agora com o objeto do gatilho.
+- **Modo Pulseira (MQTT)** — recebe as leituras da pulseira pelo broker.
+- **Sincronia com o app do cuidador** (nos dois modos, com o broker
+  conectado) — o site publica o estado ao vivo 1×/s
+  (`puzzleband/<id>/estado`), os alertas na mudança de nível
+  (`puzzleband/<id>/alertas`, com o objeto do gatilho) e os 50 últimos
+  episódios (`puzzleband/<id>/historico`). Ele recebe do app o "Estou
+  ciente" e a avaliação do gatilho. O cabeçalho mostra "App do cuidador:
+  conectado/desconectado".
 
 ## Pré-requisitos
 
-- **Node.js** (inclui o `npm`) — para rodar o dashboard
+- **Node.js** (inclui o `npm`) — para rodar o dashboard e o simulador
+- **Flutter** + **Android Studio** — para o app do cuidador (`mobile/`)
 - **Python 3** (inclui o `pip`) — só necessário se for treinar/retreinar o modelo
 
 No Windows, teste antes com `python --version` e `node --version` no
@@ -60,11 +83,23 @@ puzzle-band/
 │   ├── scenarios.js         # cenários (linha do tempo de cada sinal)
 │   ├── verificar.js         # confere os cenários com o modelo e o gatilho, sem broker
 │   └── .env.example         # modelo do simulator/.env (broker, usuário, CHILD_ID)
+├── tools/
+│   └── verificar-app.mjs    # faz o papel do app pelo terminal: confere site ⇄ app (npm run verificar-app)
+├── mobile/                 # app do cuidador (Flutter, Android) — ver docs/app.md
+│   ├── lib/
+│   │   ├── services/mqtt_service.dart   # serviço MQTT único (TLS, Last Will, reconexão)
+│   │   ├── services/notification_service.dart
+│   │   ├── models/           # parse validado das mensagens do site
+│   │   └── screens/          # login, home, gráficos, histórico, configurações
+│   ├── test/                 # flutter test
+│   └── env.example.json      # modelo do mobile/env.json (broker, usuário app, CHILD_ID)
 └── frontend/
     ├── src/
     │   ├── App.jsx           # dashboard principal
     │   ├── components/       # UI (controles, gráfico, alerta, histórico, etc.)
-    │   ├── hooks/            # MQTT e monitor de episódios
+    │   ├── hooks/            # MQTT (useMqttReadings), sincronia com o app
+    │   │                     # (useCaregiverSync), mensagens (parse/buildMessages)
+    │   │                     # e monitor de episódios
     │   └── model/
     │       ├── forest.json    # modelo treinado (gerado pelo Python)
     │       ├── predict.js     # inferência (roda no navegador)
@@ -83,8 +118,13 @@ Todo comando abaixo roda dentro da pasta `frontend/` — é onde fica o
 ```bash
 cd frontend
 npm install
+copy .env.example .env      # só na primeira vez (Linux/macOS: cp .env.example .env)
 npm run dev
 ```
+
+No `frontend/.env`, preencha `VITE_MQTT_PASS` com a senha do usuário
+`dashboard` do EMQX Cloud. Sem ele, o simulador manual funciona, mas o site
+não conecta ao broker (nem pulseira, nem app do cuidador).
 
 Isso abre um servidor local (o terminal mostra o endereço, normalmente algo como
 `http://localhost:5173`). Abra esse endereço no navegador.
@@ -230,9 +270,70 @@ Para conferir os cenários contra o modelo e a regra de gatilho **sem broker**
 `node verificar.js --cenario demo --sementes 50`). Resultados esperados ×
 obtidos e o roteiro da apresentação: [docs/testes.md](docs/testes.md).
 
+## App do cuidador (celular)
+
+A pasta `mobile/` é um app Flutter para Android. Configuração (uma vez),
+dentro de `mobile/`:
+
+```bash
+cd mobile
+flutter pub get
+copy env.example.json env.json     # Windows (Linux/macOS: cp env.example.json env.json)
+```
+
+Preencha `MQTT_PASS` no `mobile/env.json` com a senha do usuário `app` do
+EMQX Cloud. O `CHILD_ID` precisa ser o mesmo do site. O `env.json` está no
+`.gitignore`.
+
+- **Android Studio:** abra a pasta `mobile/` → **Run → Edit
+  Configurations…** → configuração Flutter `main.dart` → **Additional run
+  args**: `--dart-define-from-file=env.json` → **OK** → escolha o emulador
+  ou o celular → **Run ▶**.
+- **Terminal:** `flutter run --dart-define-from-file=env.json`
+
+Emulador, celular físico (depuração USB), telas, notificações e limitações:
+[docs/app.md](docs/app.md).
+
+## Roteiro de demonstração (site + app)
+
+Antes: `frontend/.env` e `mobile/env.json` preenchidos, internet no
+computador e no celular, e notificações do app permitidas.
+
+Para conferir a troca de mensagens sem o celular, use
+`npm run verificar-app` em `simulator/`. Ele faz o papel do app pelo
+terminal (ver [docs/mqtt.md](docs/mqtt.md#verificar-pelo-terminal-verificar-app)).
+
+1. **Site no modo manual + app aberto no celular.** `npm run dev` em
+   `frontend/`, abra o site e deixe em **Simulador manual**. No celular,
+   abra o app e toque em **Entrar**. O site mostra "App do cuidador:
+   conectado", e o app mostra "Broker: conectado" e "Painel: ao vivo", com
+   **Calmo** e o BPM dos controles. Mexa no BPM no site e o número muda no
+   celular em ~1 s.
+2. **Crise pelos controles → notificação → "Estou ciente".** Deixe tudo
+   calmo por **~2 min**: a regra de gatilho precisa de 60 s de linha de base
+   antes da janela de análise de 60 s. Suba o **ruído** para ~90 dB e, uns 10
+   s depois, suba **BPM** (~140) e **EDA** (~12 µS) e baixe a **HRV** (~20
+   ms). O site mostra o alerta "Provável gatilho: ruído". No celular chega a
+   notificação **Possível crise** com esse texto, e a Home mostra o card do
+   alerta. Toque em **Estou ciente**: o banner do site passa a mostrar
+   "Alerta visto pelo cuidador às HH:MM". Esse roteiro foi conferido com o
+   modelo real: 10 de 10 sementes deram gatilho "ruído" com linha de base
+   confiável. Durante a crise o nível oscila entre atenção e possível crise,
+   mas o app notifica uma vez só.
+3. **Confirmar o gatilho no app → histórico do site atualiza.** Volte os
+   controles ao normal e espere 30 s para o episódio fechar. No app, abra
+   **Histórico**, escreva uma observação e toque em **Confirmar gatilho**. No
+   site, o episódio passa a "✓ confirmado pelo cuidador", com a etiqueta
+   "avaliado pelo app às HH:MM" e a observação.
+4. **Simulador com `crise_ruido`.** No site, escolha **Pulseira (MQTT)**. Em
+   outro terminal: `cd simulator` e `npm run crise-ruido`. Os indicadores
+   ficam "Pulseira: online" no site e no app. Depois de ~2 min calmos, o
+   ruído sobe, o modelo alerta e o celular notifica com "Provável gatilho:
+   ruído (45 → 88 dB, …)". Ctrl+C no simulador: "Pulseira: offline" nos dois.
+
 ## Documentação
 
-Este é o único README do projeto; os detalhes ficam em `docs/`:
+Este é o README principal do projeto; os detalhes ficam em `docs/`:
 
 | Documento | Conteúdo |
 |---|---|
@@ -241,4 +342,13 @@ Este é o único README do projeto; os detalhes ficam em `docs/`:
 | [docs/historico.md](docs/historico.md) | Histórico de episódios: campos, avaliação do cuidador, CSV e privacidade (LGPD) |
 | [docs/testes.md](docs/testes.md) | Cenários do simulador × resultado esperado × obtido e roteiro da apresentação |
 | [docs/avaliacao_dataset.md](docs/avaliacao_dataset.md) | Avaliação do dataset sintético |
+| [docs/mqtt.md](docs/mqtt.md) | Diagrama, tópicos (quem publica/assina, QoS, retain), formatos das mensagens e ACL sugerida |
+| [docs/app.md](docs/app.md) | App do cuidador: telas, `env.json`, como rodar (emulador e celular) e limitações |
+
+## Créditos
+
+As telas do app do cuidador (login, home, gráficos e configurações) vieram do
+repositório [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
+(pasta `frontend/`, Flutter). Aqui o visual foi mantido e os dados fixos
+foram trocados pelos dados recebidos do site via MQTT.
 

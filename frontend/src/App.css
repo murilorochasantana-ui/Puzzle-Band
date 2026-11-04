@@ -408,6 +408,23 @@
   color: var(--status-critical);
 }
 
+.alert-banner p.alert-banner__seen,
+.episode__seen {
+  margin: 8px 0 0;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.alert-banner__seen span,
+.episode__seen span {
+  color: var(--status-good);
+}
+
+.episode__seen {
+  margin: 0;
+  font-size: 13px;
+}
+
 .alert-banner p.alert-banner__trigger {
   margin-top: 8px;
   padding: 8px 10px;
@@ -638,6 +655,13 @@
 .episode__tag--running {
   border-style: solid;
   border-color: var(--series-1);
+  color: var(--text-primary);
+}
+
+.episode__tag--app {
+  margin-left: 8px;
+  border-style: solid;
+  border-color: var(--status-good);
   color: var(--text-primary);
 }
 
