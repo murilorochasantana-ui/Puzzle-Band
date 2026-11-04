@@ -4,34 +4,52 @@
 // espera. As leituras vem do MESMO gerador do simulador manual do dashboard
 // (frontend/src/model/simulate.js); os cenarios ficam em scenarios.js.
 //
-//   node index.js --cenario crise_ruido [--idade 8] [--duracao 300]
+// Por padrao o cenario roda em LOOP (ciclo -> pausa calma -> ciclo ...) ate
+// o Ctrl+C; o 1o ciclo e o roteiro nominal e os seguintes variam um pouco.
 //
-// Configuracao em simulator/.env (ver .env.example).
+//   node index.js --cenario crise_ruido [--ciclos 3] [--pausa 120] [--seed 42]
+//   node index.js --cenario crise_ruido --uma-vez          # roteiro nominal e encerra
+//   node index.js --cenario eventos_aleatorios --ciclos 20 --seed 42
+//
+// Cada evento/ciclo vira uma linha do gabarito em logs/eventos_<data-hora>.csv
+// (e .json). Configuracao em simulator/.env (ver .env.example).
 
+import { randomInt } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import dotenv from 'dotenv';
 import mqtt from 'mqtt';
 import { generateReading } from '../frontend/src/model/simulate.js';
-import { SCENARIOS, SCENARIO_NAMES, describeTimeline, scenarioAt } from './scenarios.js';
+import {
+  EVENTOS_ALEATORIOS, INTENSIDADES, PAUSA_MIN_S, PAUSA_PADRAO_S, SCENARIOS, SCENARIO_NAMES, TIPOS_DE_EVENTO, VARIACAO_LIMITES,
+  cycleBanner, cycleDetails, describeTimeline, nominalScenario, programTicks, scenarioDescription, seeded, withRandom,
+} from './scenarios.js';
+import { createGabaritoWriter, gabaritoEntry } from './gabarito.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(HERE, '.env');
+const LOGS_DIR = join(HERE, 'logs');
 const IDADE_MIN = 5;
 const IDADE_MAX = 12; // mesma faixa do controle de idade do dashboard
+const SEED_MAX = 4294967295;
 
-const USAGE = `Uso: node index.js --cenario <nome> [--idade <anos>] [--duracao <segundos>]
-     npm start -- --cenario <nome> ...      (ou um atalho: npm run crise-ruido -- --duracao 300)
+const USAGE = `Uso: node index.js --cenario <nome> [opções]
+     npm start -- --cenario <nome> ...      (ou um atalho: npm run crise-ruido -- --ciclos 3)
 
   --cenario   um dos cenários abaixo (padrão: calmo)
   --idade     idade da criança, ${IDADE_MIN} a ${IDADE_MAX} anos (padrão: 8)
-  --duracao   para depois de N segundos (padrão: sem fim, até Ctrl+C)`;
+  --uma-vez   só o roteiro nominal, uma vez, e encerra (comportamento antigo)
+  --ciclos    roda N ciclos (no eventos_aleatorios, N eventos) e encerra (padrão: loop até Ctrl+C)
+  --pausa     segundos de pausa calma entre ciclos (padrão: ${PAUSA_PADRAO_S}; mínimo ${PAUSA_MIN_S});
+              no eventos_aleatorios a pausa é sorteada entre S e 2×S (padrão: ${PAUSA_PADRAO_S}–${2 * PAUSA_PADRAO_S} s)
+  --seed      semente do sorteio e do ruído dos sensores (mesma seed = mesma sequência)
+  --duracao   para depois de N segundos, em qualquer modo`;
 
 function scenarioList() {
   const width = Math.max(...SCENARIO_NAMES.map((n) => n.length));
-  return SCENARIO_NAMES.map((n) => `  ${n.padEnd(width)}  ${SCENARIOS[n].descricao}`).join('\n');
+  return SCENARIO_NAMES.map((n) => `  ${n.padEnd(width)}  ${scenarioDescription(n)}`).join('\n');
 }
 
 function fail(message, { showUsage = false, showScenarios = false } = {}) {
@@ -53,6 +71,10 @@ function parseCli() {
         cenario: { type: 'string', default: 'calmo' },
         idade: { type: 'string', default: '8' },
         duracao: { type: 'string' },
+        'uma-vez': { type: 'boolean', default: false },
+        ciclos: { type: 'string' },
+        pausa: { type: 'string' },
+        seed: { type: 'string' },
         ajuda: { type: 'boolean', short: 'h' },
         help: { type: 'boolean' },
       },
@@ -74,21 +96,51 @@ function parseCli() {
   }
 
   const cenario = values.cenario.trim();
-  if (!SCENARIOS[cenario]) fail(`cenário inválido: "${cenario}".`, { showScenarios: true });
+  if (!SCENARIO_NAMES.includes(cenario)) fail(`cenário inválido: "${cenario}".`, { showScenarios: true });
 
   const idade = Number(values.idade);
   if (!Number.isInteger(idade) || idade < IDADE_MIN || idade > IDADE_MAX) {
     fail(`--idade deve ser um número inteiro de ${IDADE_MIN} a ${IDADE_MAX} (recebido: "${values.idade}").`);
   }
 
-  let duracao = Infinity;
-  if (values.duracao !== undefined) {
-    duracao = Number(values.duracao);
-    if (!Number.isInteger(duracao) || duracao <= 0) {
-      fail(`--duracao deve ser um número inteiro de segundos maior que zero (recebido: "${values.duracao}").`);
+  const positiveInt = (name, raw, what) => {
+    const n = Number(raw);
+    if (!Number.isInteger(n) || n <= 0) fail(`--${name} deve ser ${what} (recebido: "${raw}").`);
+    return n;
+  };
+
+  const duracao = values.duracao === undefined ? Infinity : positiveInt('duracao', values.duracao, 'um número inteiro de segundos maior que zero');
+
+  let umaVez = values['uma-vez'];
+  if (umaVez && values.ciclos !== undefined) fail('use --uma-vez OU --ciclos, não os dois.');
+  let ciclos = values.ciclos === undefined ? Infinity : positiveInt('ciclos', values.ciclos, 'um número inteiro maior que zero');
+  if (umaVez && cenario === EVENTOS_ALEATORIOS) {
+    // nao ha roteiro nominal: --uma-vez = um evento sorteado (+ pausa final)
+    umaVez = false;
+    ciclos = 1;
+  }
+
+  let pausa = PAUSA_PADRAO_S;
+  if (values.pausa !== undefined) {
+    pausa = positiveInt('pausa', values.pausa, 'um número inteiro de segundos');
+    if (umaVez && cenario !== EVENTOS_ALEATORIOS) console.warn('Aviso: --pausa não se aplica com --uma-vez (não há segundo ciclo).');
+    if (pausa < PAUSA_MIN_S) {
+      console.warn(`Aviso: --pausa ${pausa} é menor que o mínimo de ${PAUSA_MIN_S} s (30 s para o episódio anterior fechar no site`
+        + ` + 60 s de linha de base calma para o gatilho). Usando ${PAUSA_MIN_S} s.`);
+      pausa = PAUSA_MIN_S;
     }
   }
-  return { cenario, idade, duracao };
+
+  let seed;
+  if (values.seed === undefined) {
+    seed = randomInt(1, 1000000); // sorteada, mas impressa no inicio e gravada no gabarito
+  } else {
+    seed = Number(values.seed);
+    if (!Number.isInteger(seed) || seed < 0 || seed > SEED_MAX) {
+      fail(`--seed deve ser um número inteiro de 0 a ${SEED_MAX} (recebido: "${values.seed}").`);
+    }
+  }
+  return { cenario, idade, duracao, umaVez, ciclos, pausa, seed, seedInformada: values.seed !== undefined };
 }
 
 // ---------------------------------------------------------------------------
@@ -184,22 +236,73 @@ function describeError(err) {
   return NETWORK_HINTS[code] ? `${NETWORK_HINTS[code]} — ${detail}` : detail;
 }
 
+const pct = (x) => `${Math.round(x * 100)}%`;
+const fmtFactor = (x) => String(x).replace('.', ',');
+
+// "pico ±15%, fases ±20%, antecedência do ambiente 8–15 s"
+function variationText() {
+  const L = VARIACAO_LIMITES;
+  return `pico ±${pct(L.pico[1] - 1)}, fases ±${pct(L.duracao[1] - 1)}, antecedência do ambiente ${L.antecedencia[0]}–${L.antecedencia[1]} s`;
+}
+
+function modeLines({ cenario, umaVez, ciclos, pausa }) {
+  const aleatorio = cenario === EVENTOS_ALEATORIOS;
+  const unit = `${aleatorio ? 'evento' : 'ciclo'}${ciclos === 1 ? '' : 's'}`;
+  if (umaVez && !aleatorio) {
+    return [`Modo: uma vez — roteiro nominal de ${nominalScenario(cenario).duracao} s e encerra`];
+  }
+  const howLong = Number.isFinite(ciclos) ? `${ciclos} ${unit} e encerra` : `loop sem fim (Ctrl+C para parar)`;
+  if (aleatorio) {
+    const levels = Object.entries(INTENSIDADES).map(([n, f]) => `${n} ×${fmtFactor(f)}`).join(', ');
+    const longer = Object.entries(TIPOS_DE_EVENTO)
+      .filter(([, nome]) => (SCENARIOS[nome].pausaMinima ?? 0) > 2 * pausa)
+      .map(([tipo, nome]) => `${SCENARIOS[nome].pausaMinima} s depois de ${tipo}`);
+    return [
+      `Modo: ${howLong} · pausa calma sorteada de ${pausa}–${2 * pausa} s entre eventos${longer.length ? ` (${longer.join(', ')}: linha de base de 5 min do gatilho)` : ''}`,
+      `Tipos sorteados: ${describeTimeline(cenario)}`,
+      `Intensidade das crises: ${levels} · variação: ${variationText()}`,
+    ];
+  }
+  const minPause = SCENARIOS[cenario].pausaMinima ?? 0;
+  const pauseText = minPause > pausa
+    ? `${minPause} s (mínimo deste cenário: a linha de base de 5 min do gatilho precisa voltar ao ambiente calmo)`
+    : `${pausa} s`;
+  return [
+    `Modo: ${howLong} · pausa calma de ${pauseText} entre ciclos${Number.isFinite(ciclos) ? ' (e no final)' : ''}`,
+    `1º ciclo = roteiro nominal; a partir do 2º: ${variationText()}`,
+  ];
+}
+
 function main() {
-  const { cenario, idade, duracao } = parseCli();
+  const options = parseCli();
+  const { cenario, idade, duracao, umaVez, ciclos, pausa, seed } = options;
   const config = loadConfig();
+  const aleatorio = cenario === EVENTOS_ALEATORIOS;
 
   const base = `puzzleband/${config.childId}`;
   const topicReadings = `${base}/leituras`;
   const topicStatus = `${base}/status`;
 
+  const gabarito = createGabaritoWriter(LOGS_DIR, {
+    cenario, seed, pausa_s: pausa, ciclos: Number.isFinite(ciclos) ? ciclos : null, uma_vez: umaVez, idade, crianca: config.childId,
+  });
+
   console.log('Puzzle Band — simulador da pulseira (ESP32)');
-  console.log(`Cenário: ${cenario} — ${SCENARIOS[cenario].descricao}`);
-  console.log(`Linha do tempo: ${describeTimeline(cenario)}`);
-  console.log(`Roteiro: ${SCENARIOS[cenario].duracao} s (depois tudo fica calmo; --duracao ${SCENARIOS[cenario].duracao} para parar sozinho)`);
-  console.log(`Criança: ${config.childId} · idade ${idade} · duração: ${Number.isFinite(duracao) ? `${duracao} s` : 'sem fim (Ctrl+C para parar)'}`);
+  console.log(`Cenário: ${cenario} — ${scenarioDescription(cenario)}`);
+  if (!aleatorio) console.log(`Linha do tempo (roteiro nominal): ${describeTimeline(cenario)}`);
+  for (const line of modeLines(options)) console.log(line);
+  console.log(`Seed: ${seed}${options.seedInformada ? '' : ' (sorteada)'} — para repetir a mesma sequência: --seed ${seed}`);
+  console.log(`Gabarito: ${relative(process.cwd(), gabarito.csvPath) || gabarito.csvPath} (e .json), uma linha por ${aleatorio ? 'evento' : 'ciclo'}`);
+  console.log(`Criança: ${config.childId} · idade ${idade}${Number.isFinite(duracao) ? ` · para em ${duracao} s (--duracao)` : ''}`);
   console.log(`Broker: ${config.url} (usuário ${config.username})`);
   console.log(`Tópicos: ${topicReadings} (QoS 0) · ${topicStatus} (retain)`);
   console.log('Conectando...');
+
+  const ticks = programTicks({ cenario, umaVez, ciclos, pausa, seed, idade });
+  const sensorRandom = seeded(seed); // ruido dos sensores (generateReading usa Math.random)
+  let current = null; // evento em andamento: { ciclo, inicio, fisiologia }
+  let lastTime = null;
+  let ticksDone = 0;
 
   const client = mqtt.connect(config.url, {
     username: config.username,
@@ -213,10 +316,16 @@ function main() {
     will: { topic: topicStatus, payload: 'offline', qos: 1, retain: true },
   });
 
-  let t = 0;
   let timer = null;
   let stopping = false;
   let wasConnected = false;
+
+  // Evento interrompido (Ctrl+C, --duracao): grava o que se sabe
+  function flushCurrent(reason) {
+    if (!current) return;
+    gabarito.add(gabaritoEntry(current.ciclo, { ...current, fim: lastTime, observacao: `interrompido (${reason})` }));
+    current = null;
+  }
 
   async function shutdown(reason, exitCode = 0) {
     if (stopping) {
@@ -225,7 +334,9 @@ function main() {
     }
     stopping = true;
     clearInterval(timer);
+    flushCurrent(reason);
     console.log(`\nEncerrando (${reason})...`);
+    console.log(`Gabarito: ${gabarito.csvPath}`);
     const forceExit = setTimeout(() => {
       console.error('O broker não respondeu a tempo; saindo mesmo assim (o Last Will publica "offline").');
       process.exit(exitCode || 1);
@@ -250,13 +361,39 @@ function main() {
 
   function tick() {
     if (stopping) return;
-    const { alvos, fase } = scenarioAt(cenario, t, { idade });
-    const reading = generateReading({ ...alvos, timestamp: new Date().toISOString() });
+    const step = ticks.next();
+    if (step.done) {
+      shutdown('roteiro concluído');
+      return;
+    }
+    const s = step.value;
+    const now = new Date();
+    lastTime = now;
+
+    if (s.inicioCiclo) {
+      console.log(`\n${cycleBanner(s.ciclo, aleatorio)}`);
+      console.log(`    ${cycleDetails(s.ciclo)}`);
+    }
+    if (s.inicioEvento) current = { ciclo: s.ciclo, inicio: now, fisiologia: null };
+    if (current && s.t === current.ciclo.tFisiologia) current.fisiologia = now;
+
+    const reading = withRandom(sensorRandom, () => generateReading({ ...s.alvos, timestamp: now.toISOString() }));
     const sent = client.connected;
     if (sent) client.publish(topicReadings, JSON.stringify(reading), { qos: 0 });
-    console.log(formatReading(t, reading, fase, sent));
-    t += 1;
-    if (t >= duracao) shutdown(`duração de ${duracao} s atingida`);
+    console.log(formatReading(s.t, reading, s.fase, sent));
+
+    if (s.fimEvento && current) {
+      gabarito.add(gabaritoEntry(current.ciclo, { ...current, fim: now }));
+      current = null;
+    }
+    ticksDone += 1;
+    if (s.ultimo) {
+      const unit = aleatorio ? 'evento' : 'ciclo';
+      const n = s.ciclo.numero;
+      shutdown(umaVez && !aleatorio ? 'roteiro concluído (--uma-vez)' : `${n} ${unit}${n === 1 ? '' : 's'} concluído${n === 1 ? '' : 's'}`);
+    } else if (ticksDone >= duracao) {
+      shutdown(`duração de ${duracao} s atingida`);
+    }
   }
 
   client.on('connect', () => {

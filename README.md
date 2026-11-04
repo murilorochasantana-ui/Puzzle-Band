@@ -79,9 +79,11 @@ puzzle-band/
 │   └── eda/                 # geradores de dataset + análises exploratórias
 ├── docs/                   # documentação detalhada (ver "Documentação" abaixo)
 ├── simulator/              # simulador da pulseira (ESP32) via MQTT
-│   ├── index.js             # publica leituras e status no broker
-│   ├── scenarios.js         # cenários (linha do tempo de cada sinal)
-│   ├── verificar.js         # confere os cenários com o modelo e o gatilho, sem broker
+│   ├── index.js             # publica leituras e status no broker (loop, --ciclos, --seed)
+│   ├── scenarios.js         # cenários, variação entre ciclos e eventos_aleatorios
+│   ├── gabarito.js          # gabarito dos testes: logs/eventos_<data-hora>.csv e .json
+│   ├── verificar.js         # confere os cenários (em loop) com o modelo e o gatilho, sem broker
+│   ├── logs/                # gabaritos gravados pelo simulador (locais, fora do Git)
 │   └── .env.example         # modelo do simulator/.env (broker, usuário, CHILD_ID)
 ├── tools/
 │   └── verificar-app.mjs    # faz o papel do app pelo terminal: confere site ⇄ app (npm run verificar-app)
@@ -235,12 +237,64 @@ do `frontend/.env`. O `.env` não vai para o Git.
 Rodando (no dashboard, escolha a fonte "Pulseira (MQTT)"):
 
 ```bash
-npm start -- --cenario crise_ruido                 # ou o atalho: npm run crise-ruido
-npm run crise-ruido -- --duracao 300 --idade 10    # para sozinho após 300 s; idade de 5 a 12
-npm run demo                                       # sequência da apresentação (10,5 min)
+npm start -- --cenario crise_ruido                    # ou o atalho: npm run crise-ruido (loop até o Ctrl+C)
+npm run crise-ruido -- --ciclos 3 --seed 42           # 3 ciclos reproduzíveis e encerra
+npm run crise-ruido -- --uma-vez --idade 10           # só o roteiro nominal, uma vez; idade de 5 a 12
+npm run eventos-aleatorios -- --ciclos 20 --seed 42   # 20 eventos sorteados (teste do TCC)
+npm run demo -- --ciclos 1                            # sequência da apresentação (10,5 min + pausa final)
 ```
 
-| Cenário | Atalho | O que acontece | Roteiro |
+### Loop (padrão) e opções
+
+Todo cenário roda em **loop** até o Ctrl+C. Quando o roteiro termina (todos
+os sinais de volta ao calmo), vem uma **pausa calma** e começa um novo ciclo
+do mesmo cenário. A pausa (padrão 120 s) é o tempo para:
+
+1. o episódio anterior fechar no site: o modelo ainda alerta ~20–25 s depois
+   de a fisiologia normalizar, e o episódio só fecha após 30 s seguidos em
+   baixo risco;
+2. a linha de base ambiental da regra de gatilho se restabelecer (≥ 60 s de
+   leituras calmas antes da janela de análise).
+
+O 1º ciclo é o roteiro nominal, com os 2 minutos calmos iniciais. É o mesmo
+do `--uma-vez` e das tabelas do [docs/testes.md](docs/testes.md). A partir do
+2º ciclo, cada um varia um pouco. Os limites foram conferidos para manter o
+resultado esperado (`npm run verificar`):
+
+| O que varia | Quanto |
+|---|---|
+| Intensidade do pico (BPM, EDA, HRV e movimento; luz e ruído com sorteio próprio) | ±15% |
+| Duração de cada fase (subida, platô, descida) | ±20% |
+| Antecedência do sinal ambiental (cruzar o limite da regra → início da fisiologia) | 8 a 15 s |
+
+No terminal, cada ciclo começa com uma linha destacada e a variação sorteada.
+Cada leitura continua com o nome da fase (trecho real de
+`npm run crise-ruido -- --seed 42`):
+
+```
+=== Ciclo 3 · crise_ruido ===
+    roteiro crise_ruido · pico ×1,06 · subida 35 s · platô 61 s · descida 35 s · ambiente ×1,08 · antecedência ~14 s
+[10:56] bpm  79  eda  4.03  hrv  53.0  gyro   2.4  reg 0.18  luz  292  ruido  44.0 | ruído subindo
+...
+[13:26] bpm  77  eda  3.79  hrv  57.0  gyro   8.1  reg 0.12  luz  303  ruido  44.8 | pausa calma (recuperação) · ciclo 4 em 120 s
+```
+
+| Opção | O que faz |
+|---|---|
+| `--uma-vez` | Só o roteiro nominal, uma vez, e encerra (como antes do loop) |
+| `--ciclos N` | Roda N ciclos (no `eventos_aleatorios`, N eventos) e uma pausa final, para o último episódio fechar no site, e encerra |
+| `--pausa S` | Pausa calma entre ciclos, em segundos (padrão 120; mínimo 90: abaixo disso o simulador avisa e usa 90). No `eventos_aleatorios`, a pausa é sorteada entre S e 2×S |
+| `--seed N` | Semente do sorteio e do ruído dos sensores: a mesma seed repete a mesma sequência de ciclos ou eventos e as mesmas leituras. Sem `--seed`, uma é sorteada e impressa no início |
+| `--idade A` | Idade da criança, de 5 a 12 anos (padrão 8) |
+| `--duracao S` | Para depois de S segundos, em qualquer modo |
+
+O `barulho_sem_crise` (e o `ambiente_sem_crise` do `eventos_aleatorios`) usa
+pausa de pelo menos **300 s** depois dele. Como a criança fica calma, as
+leituras barulhentas entram na linha de base de 5 min da regra de gatilho, e
+ela precisa desse tempo para voltar ao ambiente calmo (ver
+[docs/testes.md](docs/testes.md#teste-com-eventos-aleatórios)).
+
+| Cenário | Atalho | O que acontece | Roteiro nominal |
 |---|---|---|---|
 | `calmo` | `npm run calmo` | Repouso: todos os sinais estáveis | 300 s (sempre calmo) |
 | `exercicio` | `npm run exercicio` | Atividade física: BPM, EDA e movimento sobem juntos, movimento irregular | 410 s |
@@ -253,22 +307,84 @@ npm run demo                                       # sequência da apresentaçã
 | `ruido_depois_da_crise` | `npm run ruido-depois-da-crise` | A fisiologia sobe primeiro; o ruído só sobe ~30 s depois (criança gritando) | 357 s |
 | `crise_e_recuperacao` | `npm run crise-e-recuperacao` | Calmo → crise com ruído (~2 min) → volta gradual e ≥ 90 s calmo (o episódio fecha) | 417 s |
 | `demo` | `npm run demo` | Apresentação: calmo → exercício → calmo → crise com ruído → recuperação → crise sem gatilho → recuperação | 630 s |
+| `eventos_aleatorios` | `npm run eventos-aleatorios` | Eventos sorteados de vários tipos, com pausas calmas aleatórias (ver abaixo) | sem fim |
 
 Os cenários isolados começam com **2 minutos calmos** (linha de base da regra
 de gatilho); a `demo` começa com 60 s. As transições são rampas de 20 a 40 s.
-A linha do tempo e a duração do roteiro aparecem no início da execução, e cada
-leitura é impressa com a fase atual. Depois do roteiro, tudo fica calmo até
-o Ctrl+C (ou use `--duracao`).
+A linha do tempo do roteiro aparece no início da execução, e cada leitura é
+impressa com a fase atual. Em loop, cada ciclo dura o trecho ativo do roteiro
+(~2,5 a 4 min) mais a pausa.
 
 Com `crise_ruido`, o alerta do dashboard deve indicar "Provável gatilho:
 ruído"; com `crise_luz`, "luminosidade"; com `crise_sem_gatilho`, "Sem
 gatilho ambiental aparente". Os episódios aparecem no histórico, abaixo do
-gráfico.
+gráfico, um por ciclo.
 
-Para conferir os cenários contra o modelo e a regra de gatilho **sem broker**
-(roda em segundos): `npm run verificar` (ou
-`node verificar.js --cenario demo --sementes 50`). Resultados esperados ×
-obtidos e o roteiro da apresentação: [docs/testes.md](docs/testes.md).
+### Cenário `eventos_aleatorios`
+
+Sequência sem fim (ou `--ciclos N` eventos) de eventos sorteados, separados
+por pausas calmas de 120 a 240 s. Cada evento reaproveita o roteiro de um
+cenário, com a variação descrita acima:
+
+| Tipo | Roteiro usado | Crise real | Gatilho esperado | Peso |
+|---|---|---|---|---|
+| `sonora` | `crise_ruido` | sim | `ruido` | 20 |
+| `visual` | `crise_luz` | sim | `luminosidade` | 15 |
+| `sobrecarga_sensorial` | `crise_ruido_e_luz` | sim | `ruido_e_luminosidade` | 15 |
+| `interna` | `crise_sem_gatilho` | sim | `nenhum_ambiental` | 15 |
+| `motora` | `estereotipia` | sim | `nenhum_ambiental` | 10 |
+| `consequencia` | `ruido_depois_da_crise` | sim | `nenhum_ambiental` (o ruído é consequência) | 10 |
+| `exercicio` | `exercicio` | não | sem episódio (pode gerar alerta falso: limitação conhecida) | 10 |
+| `ambiente_sem_crise` | `barulho_sem_crise` | não | sem episódio | 5 |
+
+- Os pesos ficam em `PESOS_EVENTOS` (`simulator/scenarios.js`). O mesmo tipo
+  sai no máximo 2 vezes seguidas.
+- Cada crise ganha uma **intensidade** sorteada, que multiplica o pico de
+  BPM/EDA e a queda de HRV (`INTENSIDADES`): leve ×0,3, moderada ×0,65,
+  alta ×1. A alta é o roteiro nominal, o nível "alto" do dataset v4; a
+  moderada e a leve seguem a proporção dos níveis moderado e leve do mesmo
+  dataset.
+
+Trecho real de `npm run eventos-aleatorios -- --seed 42`:
+
+```
+=== Evento 11 · visual · intensidade moderada · gatilho esperado: luminosidade ===
+    roteiro crise_luz · pico ×0,67 · subida 31 s · platô 53 s · descida 36 s · ambiente ×1,02 · antecedência ~8 s
+[56:37] bpm  77  eda  3.98  hrv  54.2  gyro   8.1  reg 0.09  luz  304  ruido  44.5 | luz subindo
+...
+[58:45] bpm  77  eda  3.93  hrv  55.7  gyro   2.3  reg 0.00  luz  299  ruido  46.6 | pausa calma (recuperação) · evento 12 em 125 s
+```
+
+### Gabarito dos testes (`simulator/logs/`)
+
+Toda execução grava `simulator/logs/eventos_<data-hora>.csv` (e `.json`), com
+uma linha por evento (nos outros cenários, uma por ciclo). Cada linha é
+escrita quando os sinais voltam ao calmo. A pasta `logs/` está no
+`simulator/.gitignore`: os logs são locais.
+
+| Coluna | Conteúdo |
+|---|---|
+| `numero` | Número do evento ou ciclo |
+| `tipo` | Tipo do evento (`sonora`, `visual`…) ou, fora do `eventos_aleatorios`, o nome do cenário |
+| `intensidade` | `leve`, `moderada` ou `alta` (vazio fora do `eventos_aleatorios` e nos eventos sem crise) |
+| `inicio`, `fim` | Quando os sinais começaram a mudar e quando voltaram ao calmo (ISO 8601, hora local) |
+| `crise_real` | `sim` ou `não` |
+| `gatilho_esperado` | `ruido`, `luminosidade`, `ruido_e_luminosidade`, `nenhum_ambiental` ou `sem_episodio` |
+| `seed` | Semente da execução |
+| Extras | `cenario`, `fator_pico`, `fator_ambiente`, `antecedencia_s`, `fisiologia_inicio`, `pausa_depois_s` e `observacao` (`interrompido (…)` se o simulador parou no meio do evento) |
+
+O CSV segue o formato do CSV do histórico do site (`;`, vírgula decimal,
+UTF-8 com BOM), para comparar os dois no Excel. Passo a passo:
+[docs/testes.md](docs/testes.md#teste-com-eventos-aleatórios).
+
+### Verificação sem broker
+
+`npm run verificar` confere os cenários contra o modelo e a regra de gatilho
+**sem broker**, em segundos. Ele roda cada cenário em loop (3 ciclos, 20
+sementes) e o `eventos_aleatorios` com seed fixa, comparando o gabarito com
+os episódios detectados. `node verificar.js --uma-vez` repete a verificação
+antiga, só com o roteiro nominal. Resultados esperados × obtidos e o roteiro
+da apresentação: [docs/testes.md](docs/testes.md).
 
 ## App do cuidador (celular)
 
@@ -340,7 +456,7 @@ Este é o README principal do projeto; os detalhes ficam em `docs/`:
 | [docs/modelo.md](docs/modelo.md) | Modelo preditivo: decisões de design, validação, ablação, importância das features e qual modelo está em produção |
 | [docs/gatilho.md](docs/gatilho.md) | Indicação de gatilho provável: algoritmo, limites e por quê, testes e limitações |
 | [docs/historico.md](docs/historico.md) | Histórico de episódios: campos, avaliação do cuidador, CSV e privacidade (LGPD) |
-| [docs/testes.md](docs/testes.md) | Cenários do simulador × resultado esperado × obtido e roteiro da apresentação |
+| [docs/testes.md](docs/testes.md) | Cenários do simulador × resultado esperado × obtido (uma vez e em loop), teste com eventos aleatórios e roteiro da apresentação |
 | [docs/avaliacao_dataset.md](docs/avaliacao_dataset.md) | Avaliação do dataset sintético |
 | [docs/mqtt.md](docs/mqtt.md) | Diagrama, tópicos (quem publica/assina, QoS, retain), formatos das mensagens e ACL sugerida |
 | [docs/app.md](docs/app.md) | App do cuidador: telas, `env.json`, como rodar (emulador e celular) e limitações |

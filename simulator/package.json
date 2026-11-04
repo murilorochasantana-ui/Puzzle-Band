@@ -18,6 +18,7 @@
     "ruido-depois-da-crise": "node index.js --cenario ruido_depois_da_crise",
     "crise-e-recuperacao": "node index.js --cenario crise_e_recuperacao",
     "demo": "node index.js --cenario demo",
+    "eventos-aleatorios": "node index.js --cenario eventos_aleatorios",
     "verificar": "node verificar.js",
     "verificar-app": "node ../tools/verificar-app.mjs"
   },

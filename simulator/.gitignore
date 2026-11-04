@@ -1,2 +1,4 @@
 node_modules/
 .env
+# gabaritos gerados pelo simulador (locais)
+logs/
