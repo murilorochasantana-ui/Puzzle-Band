@@ -16,6 +16,17 @@
   gap: 16px;
 }
 
+.dashboard__header-controls {
+  display: flex;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+
+.theme-select__icon {
+  margin-right: 6px;
+}
+
 .dashboard__header h1 {
   margin: 0;
   font-size: 28px;
@@ -82,7 +93,7 @@
 }
 
 .stress-badge__icon {
-  color: var(--badge-color);
+  color: var(--badge-ink);
 }
 
 .dashboard__tiles {
@@ -163,8 +174,9 @@
   position: absolute;
   top: 8px;
   transform: translateX(-50%);
-  background: var(--text-primary);
-  color: var(--surface-1);
+  background: var(--tooltip-bg);
+  color: var(--tooltip-text);
+  border: 1px solid var(--tooltip-border);
   padding: 6px 10px;
   border-radius: 8px;
   font-size: 12px;
@@ -188,7 +200,7 @@
   font: inherit;
   padding: 8px 14px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: var(--page-plane);
   color: var(--text-primary);
   cursor: pointer;
@@ -208,16 +220,16 @@
   font-size: 13px;
   padding: 4px 8px;
   border-radius: 6px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
 }
 
 .sim-controls__speed-btn.is-active {
-  background: var(--series-1);
-  border-color: var(--series-1);
-  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 
 .manual-controls__buffer {
@@ -264,16 +276,16 @@
   font-size: 13px;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: var(--page-plane);
   color: var(--text-secondary);
   cursor: pointer;
 }
 
 .manual-controls__gyro-btn.is-active {
-  background: var(--series-7);
-  border-color: var(--series-7);
-  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
 }
 
 .manual-controls__group-label {
@@ -302,16 +314,26 @@
   font-size: 13px;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: var(--page-plane);
   color: var(--text-secondary);
   cursor: pointer;
 }
 
 .manual-controls__toggle-btn.is-active {
-  background: var(--series-3);
-  border-color: var(--series-3);
-  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+
+/* Foco visivel em todos os botoes do painel (teclado) */
+.manual-controls__toggle-btn:focus-visible,
+.manual-controls__gyro-btn:focus-visible,
+.sim-controls__speed-btn:focus-visible,
+.sim-controls__play:focus-visible,
+.sim-controls__reset:focus-visible {
+  outline: 2px solid var(--series-1);
+  outline-offset: 2px;
 }
 
 .alert-banner {
@@ -334,7 +356,7 @@
 }
 
 .alert-banner--serious .alert-banner__icon {
-  color: var(--status-serious);
+  color: var(--status-serious-ink);
 }
 
 .alert-banner--critical {
@@ -343,7 +365,7 @@
 }
 
 .alert-banner--critical .alert-banner__icon {
-  color: var(--status-critical);
+  color: var(--status-critical-ink);
 }
 
 .alert-banner__icon {
@@ -396,7 +418,7 @@
 }
 
 .connection-status__icon {
-  color: var(--item-color);
+  color: var(--item-ink);
   margin-right: 6px;
 }
 
@@ -405,7 +427,7 @@
 }
 
 .connection-status__error {
-  color: var(--status-critical);
+  color: var(--status-critical-ink);
 }
 
 .alert-banner p.alert-banner__seen,
@@ -417,7 +439,7 @@
 
 .alert-banner__seen span,
 .episode__seen span {
-  color: var(--status-good);
+  color: var(--status-good-ink);
 }
 
 .episode__seen {
@@ -449,7 +471,7 @@
   font-size: 13px;
   padding: 8px 12px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: var(--page-plane);
   color: var(--text-primary);
   cursor: pointer;
@@ -475,14 +497,14 @@
 }
 
 .episode-btn--danger {
-  color: var(--status-critical);
-  border-color: color-mix(in srgb, var(--status-critical) 50%, transparent);
+  color: var(--status-critical-ink);
+  border-color: var(--status-critical-ink);
 }
 
 .episode-btn--danger-solid {
-  background: var(--status-critical);
-  border-color: var(--status-critical);
-  color: white;
+  background: var(--danger-fill);
+  border-color: var(--danger-fill);
+  color: var(--on-danger);
   font-weight: 600;
 }
 
@@ -642,7 +664,7 @@
 }
 
 .episode__level-icon {
-  color: var(--level-color);
+  color: var(--level-ink);
 }
 
 .episode__tag {
@@ -721,7 +743,7 @@
   font-size: 13px;
   padding: 6px 10px;
   border-radius: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   background: var(--page-plane);
   color: var(--text-primary);
   max-width: 520px;

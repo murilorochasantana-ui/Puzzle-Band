@@ -4,8 +4,8 @@ import { HISTORY_TOPIC_LIMIT } from '../hooks/buildMessages';
 import { formatClock } from './formatTime';
 
 const LEVEL_INFO = {
-  atencao: { color: 'var(--status-warning)', icon: '▲', label: 'Atenção' },
-  alto_risco: { color: 'var(--status-critical)', icon: '⛔', label: 'Possível crise' },
+  atencao: { color: 'var(--status-warning)', ink: 'var(--status-warning-ink)', icon: '▲', label: 'Atenção' },
+  alto_risco: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'Possível crise' },
 };
 
 const SOURCE_LABEL = { manual: 'Simulador manual', mqtt: 'Pulseira (MQTT)' };
@@ -105,7 +105,7 @@ function EpisodeItem({ episode, onEvaluate, onObservation }) {
     <li className="episode">
       <div className="episode__head">
         <span className="episode__time">{when}</span>
-        <span className="episode__level" style={{ '--level-color': level.color }}>
+        <span className="episode__level" style={{ '--level-color': level.color, '--level-ink': level.ink }}>
           <span className="episode__level-icon" aria-hidden="true">{level.icon}</span>
           {level.label}
         </span>

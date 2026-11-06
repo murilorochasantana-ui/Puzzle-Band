@@ -46,6 +46,8 @@ class CoresApp extends ThemeExtension<CoresApp> {
     required this.semDados,
     required this.informativo,
     required this.informativoBorda,
+    required this.balao,
+    required this.balaoBorda,
     required this.sombraElevada,
   });
 
@@ -87,6 +89,14 @@ class CoresApp extends ThemeExtension<CoresApp> {
   /// Borda decorativa da linha informativa (nao e controle: abaixo de 3:1).
   final Color informativoBorda;
 
+  /// Baloes dos graficos e avisos (SnackBar). No claro, o inverso (fundo
+  /// escuro); no escuro, uma superficie elevada, sem bloco claro que ofusque a
+  /// vista a noite.
+  final ParCor balao;
+
+  /// Contorno do balao: so no escuro, para separar da superficie (>= 3:1).
+  final Color balaoBorda;
+
   /// Sombra suave e azulada das pecas "ao vivo" (faixa de estado e cartao do
   /// episodio). Vazia no tema escuro: ali as pecas se separam pelo tom.
   final List<BoxShadow> sombraElevada;
@@ -114,6 +124,8 @@ class CoresApp extends ThemeExtension<CoresApp> {
     semDados: TomRisco(texto: Color(0xFF56636D), fundo: Color(0xFFE6EBEE), grafico: Color(0xFF7A8994)),
     informativo: Color(0xFFEDF6FF),
     informativoBorda: Color(0xFFABBFD2),
+    balao: ParCor(fundo: Color(0xFF1B2A35), texto: Color(0xFFF0F3F5)),
+    balaoBorda: Color(0x00000000),
     sombraElevada: [
       BoxShadow(color: Color(0x0F2D5B86), offset: Offset(0, 1), blurRadius: 3),
       BoxShadow(color: Color(0x1F2D5B86), offset: Offset(0, 4), blurRadius: 16),
@@ -138,6 +150,8 @@ class CoresApp extends ThemeExtension<CoresApp> {
     semDados: TomRisco(texto: Color(0xFFA7B3BC), fundo: Color(0xFF263038), grafico: Color(0xFF6B7A86)),
     informativo: Color(0xFF172736),
     informativoBorda: Color(0xFF34506A),
+    balao: ParCor(fundo: Color(0xFF2B3741), texto: Color(0xFFE8EEF2)),
+    balaoBorda: Color(0xFF7B8A96),
     sombraElevada: [],
   );
 
@@ -160,6 +174,8 @@ class CoresApp extends ThemeExtension<CoresApp> {
     TomRisco? semDados,
     Color? informativo,
     Color? informativoBorda,
+    ParCor? balao,
+    Color? balaoBorda,
     List<BoxShadow>? sombraElevada,
   }) {
     return CoresApp(
@@ -180,6 +196,8 @@ class CoresApp extends ThemeExtension<CoresApp> {
       semDados: semDados ?? this.semDados,
       informativo: informativo ?? this.informativo,
       informativoBorda: informativoBorda ?? this.informativoBorda,
+      balao: balao ?? this.balao,
+      balaoBorda: balaoBorda ?? this.balaoBorda,
       sombraElevada: sombraElevada ?? this.sombraElevada,
     );
   }
@@ -206,7 +224,156 @@ class CoresApp extends ThemeExtension<CoresApp> {
       semDados: TomRisco.lerp(semDados, other.semDados, t),
       informativo: c(informativo, other.informativo),
       informativoBorda: c(informativoBorda, other.informativoBorda),
+      balao: ParCor.lerp(balao, other.balao, t),
+      balaoBorda: c(balaoBorda, other.balaoBorda),
       sombraElevada: BoxShadow.lerpList(sombraElevada, other.sombraElevada, t) ?? const [],
+    );
+  }
+}
+
+/// Fundo + texto (dias do calendario, selo e botao "Descartado").
+@immutable
+class ParCor {
+  const ParCor({required this.fundo, required this.texto});
+
+  final Color fundo;
+
+  /// Texto e icone sobre [fundo] (>= 4.5:1).
+  final Color texto;
+
+  static ParCor lerp(ParCor a, ParCor b, double t) =>
+      ParCor(fundo: Color.lerp(a.fundo, b.fundo, t)!, texto: Color.lerp(a.texto, b.texto, t)!);
+}
+
+/// Cores dos graficos, do calendario e da avaliacao do cuidador
+/// (`CoresDados.of(context)`). Contrastes em docs/design-app.md.
+@immutable
+class CoresDados extends ThemeExtension<CoresDados> {
+  const CoresDados({
+    required this.metricas,
+    required this.diaAmarelo,
+    required this.diaVermelho,
+    required this.pendente,
+    required this.descartado,
+    required this.descartadoTinta,
+    required this.barraConfirmada,
+    required this.barraPendente,
+    required this.barraPendenteListra,
+  });
+
+  /// Uma cor por metrica do grafico ao vivo, na ordem de `Metrica`
+  /// (models/sinais.dart). Tons frios e neutros: nenhum vermelho, ambar ou
+  /// verde dos niveis. >= 3:1 sobre a superficie e sobre as faixas de nivel.
+  final List<Color> metricas;
+
+  /// Dia com 1 a 5 crises confirmadas.
+  final ParCor diaAmarelo;
+
+  /// Dia com mais de 5 crises confirmadas.
+  final ParCor diaVermelho;
+
+  /// Possivel crise aguardando confirmacao: bolinha do calendario, contorno,
+  /// icone e texto do selo "a confirmar" (>= 4.5:1 sobre a superficie).
+  final Color pendente;
+
+  /// Botao "Descartado" (selecionado) e selo "Descartado" do cartao resumido:
+  /// vermelho tijolo cheio, diferente do framboesa de "Possivel crise" e da
+  /// pilula tingida do nivel (ΔE >= 17 no escuro).
+  final ParCor descartado;
+
+  /// Icone de "descartado" sobre superficies neutras (linha da avaliacao).
+  final Color descartadoTinta;
+
+  /// Grafico de 7 dias: crises confirmadas (cor solida).
+  final Color barraConfirmada;
+
+  /// Grafico de 7 dias: aguardando confirmacao (fundo claro + listras).
+  final Color barraPendente;
+  final Color barraPendenteListra;
+
+  static CoresDados of(BuildContext context) => Theme.of(context).extension<CoresDados>()!;
+
+  static const claro = CoresDados(
+    metricas: [
+      Color(0xFF4376B6), // batimentos
+      Color(0xFF9A5A94), // suor (EDA)
+      Color(0xFF025884), // HRV
+      Color(0xFF6E67BD), // movimento
+      Color(0xFF845011), // regularidade
+      Color(0xFF3A4D91), // luz
+      Color(0xFF108EA3), // ruido
+      Color(0xFF8160B5), // probabilidade
+    ],
+    diaAmarelo: ParCor(fundo: Color(0xFFF3C54E), texto: Color(0xFF1B2A35)),
+    diaVermelho: ParCor(fundo: Color(0xFFB02E52), texto: Color(0xFFFFFFFF)),
+    pendente: Color(0xFF1E66B0),
+    descartado: ParCor(fundo: Color(0xFFB3261E), texto: Color(0xFFFFFFFF)),
+    descartadoTinta: Color(0xFFB3261E),
+    barraConfirmada: Color(0xFF2D5B86),
+    barraPendente: Color(0xFFDCE7F2),
+    barraPendenteListra: Color(0xFF5F86AD),
+  );
+
+  static const escuro = CoresDados(
+    metricas: [
+      Color(0xFF407BC5),
+      Color(0xFFB57BAF),
+      Color(0xFF069CE4),
+      Color(0xFF736DC3),
+      Color(0xFFC2823E),
+      Color(0xFF6076BE),
+      Color(0xFF33A3B4),
+      Color(0xFF8766BB),
+    ],
+    diaAmarelo: ParCor(fundo: Color(0xFFE0B13F), texto: Color(0xFF1B1607)),
+    diaVermelho: ParCor(fundo: Color(0xFFE7849A), texto: Color(0xFF1F0A11)),
+    pendente: Color(0xFF8CC3F2),
+    descartado: ParCor(fundo: Color(0xFF9E3418), texto: Color(0xFFFCEAE6)),
+    descartadoTinta: Color(0xFFFF9F85),
+    barraConfirmada: Color(0xFF9DC2E6),
+    barraPendente: Color(0xFF23415E),
+    barraPendenteListra: Color(0xFF7FA6CC),
+  );
+
+  @override
+  CoresDados copyWith({
+    List<Color>? metricas,
+    ParCor? diaAmarelo,
+    ParCor? diaVermelho,
+    Color? pendente,
+    ParCor? descartado,
+    Color? descartadoTinta,
+    Color? barraConfirmada,
+    Color? barraPendente,
+    Color? barraPendenteListra,
+  }) {
+    return CoresDados(
+      metricas: metricas ?? this.metricas,
+      diaAmarelo: diaAmarelo ?? this.diaAmarelo,
+      diaVermelho: diaVermelho ?? this.diaVermelho,
+      pendente: pendente ?? this.pendente,
+      descartado: descartado ?? this.descartado,
+      descartadoTinta: descartadoTinta ?? this.descartadoTinta,
+      barraConfirmada: barraConfirmada ?? this.barraConfirmada,
+      barraPendente: barraPendente ?? this.barraPendente,
+      barraPendenteListra: barraPendenteListra ?? this.barraPendenteListra,
+    );
+  }
+
+  @override
+  CoresDados lerp(ThemeExtension<CoresDados>? other, double t) {
+    if (other is! CoresDados) return this;
+    Color c(Color a, Color b) => Color.lerp(a, b, t)!;
+    return CoresDados(
+      metricas: [for (var i = 0; i < metricas.length; i++) c(metricas[i], other.metricas[i])],
+      diaAmarelo: ParCor.lerp(diaAmarelo, other.diaAmarelo, t),
+      diaVermelho: ParCor.lerp(diaVermelho, other.diaVermelho, t),
+      pendente: c(pendente, other.pendente),
+      descartado: ParCor.lerp(descartado, other.descartado, t),
+      descartadoTinta: c(descartadoTinta, other.descartadoTinta),
+      barraConfirmada: c(barraConfirmada, other.barraConfirmada),
+      barraPendente: c(barraPendente, other.barraPendente),
+      barraPendenteListra: c(barraPendenteListra, other.barraPendenteListra),
     );
   }
 }

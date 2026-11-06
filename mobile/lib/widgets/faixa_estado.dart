@@ -6,6 +6,16 @@ import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import 'nivel_visual.dart';
 
+/// Divisoria entre o BPM e a coluna "Ao vivo" (testes de posicao).
+const chaveDivisoriaBpm = ValueKey('divisoria-bpm');
+
+/// Area a esquerda da divisoria, o grupo coracao + numero + "bpm", o coracao
+/// e o numero (testes de posicao).
+const chaveAreaBpm = ValueKey('area-bpm');
+const chaveGrupoBpm = ValueKey('grupo-bpm');
+const chaveCoracaoBpm = ValueKey('coracao-bpm');
+const chaveNumeroBpm = ValueKey('numero-bpm');
+
 /// O que a Home consegue mostrar agora.
 enum SituacaoEstado { configuracao, conectando, semConexao, painelParado, aguardando, aoVivo }
 
@@ -102,19 +112,24 @@ class _AoVivo extends StatelessWidget {
   }
 }
 
-/// BPM ao vivo (esquerda) | "Ao vivo" + media de 5 min (direita), como no
+//// BPM ao vivo (esquerda) | "Ao vivo" + media de 5 min (direita), como no
 /// modelo. O BPM usa o maior tamanho que deixa as duas colunas lado a lado
-/// (60 sp a partir de ~410 dp de largura, 48 sp num celular de 393 dp).
-/// Quando nem assim cabem (celular estreito, fonte ampliada), a coluna da
-/// direita desce para baixo do BPM, que volta a 60 sp.
+/// (60 ou 48 sp, conforme a largura). Quando nem assim cabem (celular
+/// estreito, fonte ampliada), "Ao vivo" desce para baixo do BPM, que volta a
+/// 60 sp.
+///
+/// Coracao, numero e "bpm" sao um grupo so: o coracao fica a 8 dp do
+/// primeiro algarismo, centrado na altura dos algarismos (cerca de 55% dela),
+/// e "bpm" fica na linha de base do numero, sem espaco vazio por dentro, com
+/// 1, 2 ou 3 digitos ou "—". O grupo fica centrado numa area de largura fixa
+/// (a do grupo com "000", medida na fonte e na escala atuais, com algarismos
+/// de mesma largura). Assim a divisoria e a coluna "Ao vivo" nunca se mexem;
+/// o grupo so se recentra quando o numero ganha ou perde um digito.
 class _LinhaBpm extends StatelessWidget {
   const _LinhaBpm({required this.estado, required this.tom});
 
   final EstadoAtual estado;
   final TomRisco tom;
-
-  static const _icone = 32.0;
-  static const _respiro = Espaco.l;
 
   static double _largura(String texto, TextStyle estilo, TextScaler escala) {
     final medida = TextPainter(
@@ -135,121 +150,217 @@ class _LinhaBpm extends StatelessWidget {
     final escala = MediaQuery.textScalerOf(context);
     final bpm = estado.leituras?.bpm;
     final media = estado.mediaBpm5min;
+    final numero = bpm != null ? '${bpm.round()}' : '—';
 
-    final String fala;
-    if (bpm == null) {
-      fala = 'Frequência cardíaca: sem leitura agora.';
-    } else {
-      fala = 'Frequência cardíaca: ${bpm.round()} batimentos por minuto, ao vivo.'
-          '${media != null ? ' Média de 5 minutos: ${media.round()}.' : ''}';
-    }
+    final falaBpm = bpm == null ? 'Batimentos: sem leitura agora' : 'Batimentos: $numero bpm';
+    final falaAoVivo = bpm == null
+        ? 'Ao vivo. Sem leitura de batimentos agora.'
+        : 'Ao vivo.${media != null ? ' Média de 5 minutos: ${media.round()} bpm.' : ''}';
 
     final estiloUnidade = texto.titleSmall!.copyWith(color: cores.tintaSuave);
     final estiloMedia = texto.bodyMedium!.copyWith(color: cores.tintaSuave);
+    final valorMedia = texto.titleSmall!.copyWith(fontFeatures: Tipografia.tabular);
+    final larguraUnidade = _largura('bpm', estiloUnidade, escala);
 
-    Widget esquerda(TextStyle estiloBpm) => Row(
+    // Medidas do grupo para um tamanho de numero: tudo sai da fonte e da
+    // escala atuais, nada depende do valor mostrado.
+    ({TextStyle estilo, double icone, double larguraCoracao, double topoCoracao, double area}) medir(
+      TextStyle base,
+    ) {
+      final estilo = base.copyWith(fontFeatures: Tipografia.tabular);
+      final pintor = TextPainter(
+        text: TextSpan(text: '000', style: estilo),
+        textDirection: TextDirection.ltr,
+        textScaler: escala,
+        maxLines: 1,
+      )..layout();
+      final linhaDeBase = pintor.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+      final larguraTres = pintor.width;
+      pintor.dispose();
+      final algarismos = escala.scale(estilo.fontSize!) * Tipografia.alturaDosAlgarismos;
+      final icone = algarismos * FaixaBpm.proporcaoCoracao / FaixaBpm.coracaoAltura;
+      final larguraCoracao = icone * FaixaBpm.coracaoLargura;
+      return (
+        estilo: estilo,
+        icone: icone,
+        larguraCoracao: larguraCoracao,
+        // Centro do coracao na metade da altura dos algarismos
+        topoCoracao: linhaDeBase - algarismos / 2 - icone / 2,
+        area: larguraCoracao + FaixaBpm.espacoCoracao + larguraTres + FaixaBpm.espacoUnidade + larguraUnidade,
+      );
+    }
+
+    Widget grupo(TextStyle base) {
+      final m = medir(base);
+      return Semantics(
+        container: true,
+        label: falaBpm,
+        excludeSemantics: true,
+        child: Row(
+          key: chaveGrupoBpm,
           mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.baseline,
-          textBaseline: TextBaseline.alphabetic,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.favorite_rounded, size: _icone, color: cores.tintaSuave),
-            const SizedBox(width: Espaco.s),
-            Text(bpm != null ? '${bpm.round()}' : '—', style: estiloBpm),
-            const SizedBox(width: 6),
-            Text('bpm', style: estiloUnidade),
+            Padding(
+              padding: EdgeInsets.only(top: m.topoCoracao),
+              // A caixa tem a largura do desenho: o espaco ate o numero e
+              // o de FaixaBpm.espacoCoracao, sem a margem do icone.
+              child: SizedBox(
+                key: chaveCoracaoBpm,
+                width: m.larguraCoracao,
+                height: m.icone,
+                child: OverflowBox(
+                  maxWidth: m.icone,
+                  maxHeight: m.icone,
+                  child: Icon(Icons.favorite_rounded, size: m.icone, color: cores.tintaSuave),
+                ),
+              ),
+            ),
+            const SizedBox(width: FaixaBpm.espacoCoracao),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(numero, key: chaveNumeroBpm, style: m.estilo, maxLines: 1, softWrap: false),
+                const SizedBox(width: FaixaBpm.espacoUnidade),
+                Text('bpm', style: estiloUnidade),
+              ],
+            ),
           ],
-        );
+        ),
+      );
+    }
 
     final aoVivo = Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.ssid_chart_rounded, size: 20, color: cores.tinta),
-        const SizedBox(width: 6),
+        Icon(Icons.ssid_chart_rounded, size: FaixaBpm.iconeAoVivo, color: cores.tinta),
+        const SizedBox(width: FaixaBpm.espacoAoVivo),
         Flexible(child: Text('Ao vivo', style: texto.titleSmall)),
         const SizedBox(width: Espaco.s),
         // Ponto parado (nunca pisca), no azul de "conectado"
         Container(
-          width: 8,
-          height: 8,
+          width: FaixaBpm.pontoAoVivo,
+          height: FaixaBpm.pontoAoVivo,
           decoration: BoxDecoration(color: cores.primaria, shape: BoxShape.circle),
         ),
       ],
     );
 
     // Lado a lado: coluna como no modelo ("Ao vivo" / "Média de 5 min:" /
-    // "96 bpm"). Empilhado: "Ao vivo" e a media na mesma linha, que quebra
-    // so se precisar.
-    final direita = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        aoVivo,
-        if (bpm == null) ...[
-          const SizedBox(height: 2),
-          Text('Sem leitura de batimentos agora.', style: estiloMedia),
-        ] else if (media != null) ...[
-          const SizedBox(height: 2),
-          Text('Média de 5 min:', style: estiloMedia),
-          Text('${media.round()} bpm', style: texto.titleSmall),
-        ],
-      ],
-    );
-    final abaixo = Wrap(
-      spacing: Espaco.l,
-      runSpacing: Espaco.xs,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        aoVivo,
-        if (bpm == null)
-          Text('Sem leitura de batimentos agora.', style: estiloMedia)
-        else if (media != null)
-          Text.rich(
-            TextSpan(
-              text: 'Média de 5 min: ',
-              style: estiloMedia,
-              children: [TextSpan(text: '${media.round()} bpm', style: texto.titleSmall)],
-            ),
-          ),
-      ],
-    );
-
-    return Semantics(
+    // "96 bpm"). As duas linhas abaixo de "Ao vivo" ocupam sempre a altura
+    // da versao completa (a referencia invisivel), com ou sem leitura.
+    final direita = Semantics(
       container: true,
-      label: fala,
+      label: falaAoVivo,
       excludeSemantics: true,
-      child: LayoutBuilder(
-        builder: (context, restricoes) {
-          final larguraMedia = _largura('Média de 5 min:', estiloMedia, escala);
-          final larguraAoVivo = 20 + 6 + _largura('Ao vivo', texto.titleSmall!, escala) + Espaco.s + 8;
-          final larguraDireita = larguraMedia > larguraAoVivo ? larguraMedia : larguraAoVivo;
-          // Mede com "888" (3 algarismos largos): a disposicao nao muda
-          // quando o BPM passa de 99 para 100.
-          bool cabe(TextStyle estiloBpm) {
-            final larguraEsquerda =
-                _icone + Espaco.s + _largura('888', estiloBpm, escala) + 6 + _largura('bpm', estiloUnidade, escala);
-            return larguraEsquerda + _respiro * 2 + 1 + larguraDireita <= restricoes.maxWidth;
-          }
-
-          final ladoALado = [texto.displayLarge!, texto.displayMedium!].where(cabe).firstOrNull;
-          if (ladoALado == null) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [esquerda(texto.displayLarge!), const SizedBox(height: Espaco.s), abaixo],
-            );
-          }
-          return IntrinsicHeight(
-            child: Row(
-              children: [
-                esquerda(ladoALado),
-                const SizedBox(width: _respiro),
-                Container(width: 1, color: tom.texto.withValues(alpha: 0.3)),
-                const SizedBox(width: _respiro),
-                Expanded(child: direita),
-              ],
-            ),
-          );
-        },
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          aoVivo,
+          const SizedBox(height: FaixaBpm.entreLinhas),
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Visibility(
+                visible: false,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [Text('Média de 5 min:', style: estiloMedia), Text('000 bpm', style: valorMedia)],
+                ),
+              ),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (bpm == null)
+                      Text('Sem leitura agora.', style: estiloMedia)
+                    else if (media != null) ...[
+                      Text('Média de 5 min:', style: estiloMedia),
+                      Text('${media.round()} bpm', style: valorMedia),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
+    );
+
+    // Empilhado: "Ao vivo" e a media centrados embaixo do grupo
+    final abaixo = Semantics(
+      container: true,
+      label: falaAoVivo,
+      excludeSemantics: true,
+      child: Column(
+        children: [
+          aoVivo,
+          const SizedBox(height: FaixaBpm.entreLinhas),
+          if (bpm == null)
+            Text('Sem leitura de batimentos agora.', style: estiloMedia, textAlign: TextAlign.center)
+          else if (media != null)
+            Text.rich(
+              TextSpan(
+                text: 'Média de 5 min: ',
+                style: estiloMedia,
+                children: [TextSpan(text: '${media.round()} bpm', style: valorMedia)],
+              ),
+              textAlign: TextAlign.center,
+            ),
+        ],
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, restricoes) {
+        final larguraMedia = _largura('Média de 5 min:', estiloMedia, escala);
+        final larguraAoVivo = FaixaBpm.iconeAoVivo +
+            FaixaBpm.espacoAoVivo +
+            _largura('Ao vivo', texto.titleSmall!, escala) +
+            Espaco.s +
+            FaixaBpm.pontoAoVivo;
+        final larguraDireita = larguraMedia > larguraAoVivo ? larguraMedia : larguraAoVivo;
+        // A disposicao depende so da largura e da fonte, nunca do valor
+        bool cabe(TextStyle base) =>
+            medir(base).area + FaixaBpm.respiro * 2 + FaixaBpm.divisoria + larguraDireita <= restricoes.maxWidth;
+
+        final ladoALado = [texto.displayLarge!, texto.displayMedium!].where(cabe).firstOrNull;
+        if (ladoALado == null) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(key: chaveAreaBpm, child: Center(child: grupo(texto.displayLarge!))),
+              const SizedBox(height: Espaco.s),
+              abaixo,
+            ],
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(key: chaveAreaBpm, width: medir(ladoALado).area, child: Center(child: grupo(ladoALado))),
+              const SizedBox(width: FaixaBpm.respiro),
+              Container(
+                key: chaveDivisoriaBpm,
+                width: FaixaBpm.divisoria,
+                color: tom.texto.withValues(alpha: 0.3),
+              ),
+              const SizedBox(width: FaixaBpm.respiro),
+              Expanded(child: Align(alignment: Alignment.centerLeft, child: direita)),
+            ],
+          ),
+        );
+      },
     );
   }
 }

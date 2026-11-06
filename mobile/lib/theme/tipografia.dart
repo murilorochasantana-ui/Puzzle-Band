@@ -61,4 +61,9 @@ abstract final class Tipografia {
 
   /// Algarismos de mesma largura, para numeros alinhados em coluna (eixos).
   static const tabular = [FontFeature.tabularFigures()];
+
+  /// Altura dos algarismos em fracao do tamanho da fonte (Atkinson
+  /// Hyperlegible Next: capHeight 668/1000; os algarismos vao de 668 a 681).
+  /// Usada para centrar o coracao do BPM na altura do numero.
+  static const alturaDosAlgarismos = 0.668;
 }

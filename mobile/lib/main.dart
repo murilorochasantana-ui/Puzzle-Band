@@ -57,7 +57,10 @@ Future<void> main() async {
 }
 
 class PuzzleBandApp extends StatefulWidget {
-  const PuzzleBandApp({super.key});
+  const PuzzleBandApp({super.key, this.rotaInicial = '/'});
+
+  /// Tela de abertura ('/' = Login). Os testes abrem direto em outra aba.
+  final String rotaInicial;
 
   @override
   State<PuzzleBandApp> createState() => _PuzzleBandAppState();
@@ -88,14 +91,23 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
 
   @override
   Widget build(BuildContext context) {
+    // Ajustes > Aparencia: seguir o sistema (padrao), claro ou escuro. Trocar
+    // reconstroi daqui (PreferenciasScope) e o tema muda na hora.
+    final aparencia = PreferenciasScope.of(context).aparencia;
     return MaterialApp(
       title: 'Puzzle Band',
       debugShowCheckedModeBanner: false,
-      // Tema unico (lib/theme/): claro e escuro, seguindo o sistema
+      // Tema unico (lib/theme/): claro e escuro
       theme: AppTheme.claro(),
       darkTheme: AppTheme.escuro(),
-      themeMode: ThemeMode.system,
-      initialRoute: '/',
+      themeMode: aparencia.themeMode,
+      // Barra de status e de navegacao do Android acompanham o tema que esta
+      // valendo (o escolhido ou o do sistema)
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: AppTheme.barrasDoSistema(Theme.of(context).brightness),
+        child: child!,
+      ),
+      initialRoute: widget.rotaInicial,
       routes: {
         '/': (context) => const LoginScreen(),
         '/home': (context) => const MainNavigation(initialIndex: 0),

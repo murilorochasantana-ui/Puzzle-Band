@@ -152,6 +152,25 @@ void main() {
     expect(segundo.historicoAoVivo, isFalse, reason: 'copia salva, nao recebida nesta sessao');
   });
 
+  test('estado com todas as metricas: lido, mas so entra no grafico ao vivo', () async {
+    final (service, _) = await criar(prefs);
+    final estado = jsonEncode({
+      'origem': 'site',
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
+      'fonte': 'manual',
+      'nivel': 'atencao',
+      'probabilidade': 0.61,
+      'leituras': {
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'bpm': 112, 'eda_uS': 7.1, 'hrv_ms': 30.5, 'gyro_mag_dps': 4.2,
+        'regularidade': 0.35, 'luz_lux': 640, 'ruido_db': 71.2,
+      },
+    });
+    expect(service.tratarMensagem('puzzleband/C01/estado', estado), isTrue);
+    expect(service.estado!.leituras!.ruidoDb, 71.2);
+    expect(service.sinaisRecentes, isEmpty, reason: 'sem conexao com o broker o estado nao e ao vivo');
+  });
+
   test('sem conexao, ack e avaliacao nao sao enviados', () async {
     final (service, _) = await criar(prefs);
     final ep = Episodio(id: 'ep_1', inicio: DateTime(2026, 11, 4), nivelMaximo: NivelRisco.atencao);

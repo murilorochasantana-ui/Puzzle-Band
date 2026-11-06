@@ -1,3 +1,15 @@
+/*
+ * Tokens do painel (claro e escuro). Contrastes WCAG medidos em
+ * docs/design-app.md ("Tema escuro" > "Site"):
+ *   - texto, secundario, suave e as "tintas" de status: >= 4,5:1 sobre a
+ *     superficie, a pagina e os fundos tingidos;
+ *   - borda de controle, foco e marcas de grafico: >= 3:1.
+ * O tema vem do botao "Tema" do cabecalho (src/theme.js):
+ *   - Sistema: sem data-theme no <html> (vale o prefers-color-scheme);
+ *   - Claro: data-theme="light"; Escuro: data-theme="dark".
+ * Os dois blocos escuros abaixo precisam ser iguais (o teste
+ * src/theme.test.js confere).
+ */
 :root {
   color-scheme: light;
 
@@ -5,55 +17,109 @@
   --page-plane: #f9f9f7;
   --text-primary: #0b0b0b;
   --text-secondary: #52514e;
-  --text-muted: #898781;
+  --text-muted: #62615c;
   --gridline: #e1e0d9;
   --baseline: #c3c2b7;
+  /* Contorno de cartoes (decorativo) */
   --border: rgba(11, 11, 11, 0.1);
+  /* Contorno de botoes e campos (>= 3:1) */
+  --control-border: #8a8984;
 
   --series-1: #2a78d6; /* bpm */
   --series-3: #1baf7a; /* eda */
   --series-7: #4a3aa7; /* gyro */
 
+  /* Botao escolhido (fonte dos dados, tema, velocidade, acao simulada) */
+  --accent: #1c5cab;
+  --on-accent: #ffffff;
+  /* Botao "Limpar" cheio (confirmacao) */
+  --danger-fill: #b3261e;
+  --on-danger: #ffffff;
+
+  /* Status: cor da marca e fundos tingidos; a "tinta" e para texto e icone */
   --status-good: #0ca30c;
   --status-warning: #fab219;
   --status-serious: #ec835a;
   --status-critical: #d03b3b;
+  --status-good-ink: #0b6e0b;
+  --status-warning-ink: #865700;
+  --status-serious-ink: #a8461c;
+  --status-critical-ink: #b02a2a;
+
+  /* Balao do grafico de BPM */
+  --tooltip-bg: #0b0b0b;
+  --tooltip-text: #fcfcfb;
+  --tooltip-border: transparent;
 
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Escuro pelo sistema (botao "Tema" em "Sistema") */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
+    /* Sem preto puro no fundo nem branco puro no texto (menos ofuscamento a noite) */
     --surface-1: #1a1a19;
-    --page-plane: #0d0d0d;
-    --text-primary: #ffffff;
+    --page-plane: #121211;
+    --text-primary: #f0efec;
     --text-secondary: #c3c2b7;
-    --text-muted: #898781;
+    --text-muted: #9a9890;
     --gridline: #2c2c2a;
     --baseline: #383835;
-    --border: rgba(255, 255, 255, 0.1);
+    --border: rgba(240, 239, 236, 0.12);
+    --control-border: #75746e;
 
     --series-1: #3987e5;
     --series-3: #199e70;
     --series-7: #9085e9;
+
+    --accent: #86b6ef;
+    --on-accent: #121211;
+    --danger-fill: #ef8a8a;
+    --on-danger: #121211;
+
+    --status-good-ink: #3fbf3f;
+    --status-warning-ink: #fab219;
+    --status-serious-ink: #ec835a;
+    --status-critical-ink: #f08080;
+
+    --tooltip-bg: #2c2c2a;
+    --tooltip-text: #f0efec;
+    --tooltip-border: #75746e;
   }
 }
 
+/* Escuro escolhido no botao "Tema" */
 :root[data-theme="dark"] {
   color-scheme: dark;
+  /* Sem preto puro no fundo nem branco puro no texto (menos ofuscamento a noite) */
   --surface-1: #1a1a19;
-  --page-plane: #0d0d0d;
-  --text-primary: #ffffff;
+  --page-plane: #121211;
+  --text-primary: #f0efec;
   --text-secondary: #c3c2b7;
-  --text-muted: #898781;
+  --text-muted: #9a9890;
   --gridline: #2c2c2a;
   --baseline: #383835;
-  --border: rgba(255, 255, 255, 0.1);
+  --border: rgba(240, 239, 236, 0.12);
+  --control-border: #75746e;
 
   --series-1: #3987e5;
   --series-3: #199e70;
   --series-7: #9085e9;
+
+  --accent: #86b6ef;
+  --on-accent: #121211;
+  --danger-fill: #ef8a8a;
+  --on-danger: #121211;
+
+  --status-good-ink: #3fbf3f;
+  --status-warning-ink: #fab219;
+  --status-serious-ink: #ec835a;
+  --status-critical-ink: #f08080;
+
+  --tooltip-bg: #2c2c2a;
+  --tooltip-text: #f0efec;
+  --tooltip-border: #75746e;
 }
 
 * {

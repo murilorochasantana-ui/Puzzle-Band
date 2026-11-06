@@ -9,7 +9,8 @@ import '../widgets/connection_bar.dart';
 import '../widgets/secao.dart';
 
 /// Ajustes: crianca monitorada (nome mostrado no Inicio, so neste celular),
-/// conexoes (com o erro, se houver), alertas sonoros e "sobre".
+/// conexoes (com o erro, se houver), alertas sonoros, aparencia (tema) e
+/// "sobre".
 class ConfiguracoesScreen extends StatelessWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -48,6 +49,8 @@ class ConfiguracoesScreen extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: Espaco.l),
+        const _Grupo(titulo: 'Aparência', itens: [_EscolhaDeAparencia()]),
         const SizedBox(height: Espaco.l),
         _Grupo(
           titulo: 'Sobre',
@@ -182,6 +185,46 @@ class _CampoNomeState extends State<_CampoNome> {
               'Vazio, o app mostra ${_preferencias.nomePadrao}.',
           helperMaxLines: 3,
         ),
+      ),
+    );
+  }
+}
+
+/// Aparencia: seguir o sistema (padrao), claro ou escuro. A escolha fica so
+/// neste celular e vale na hora. Lista de radio (e nao botoes segmentados):
+/// com a fonte ampliada, "Seguir o sistema" nao caberia num segmento. Cada
+/// opcao ocupa a linha inteira (56 dp).
+class _EscolhaDeAparencia extends StatelessWidget {
+  const _EscolhaDeAparencia();
+
+  static const _opcoes = [
+    (Aparencia.sistema, Icons.brightness_auto_outlined, 'Seguir o sistema', 'Usa o tema escolhido no Android.'),
+    (Aparencia.claro, Icons.light_mode_outlined, 'Claro', null),
+    (Aparencia.escuro, Icons.dark_mode_outlined, 'Escuro', 'Menos brilho à noite, no quarto da criança.'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final preferencias = PreferenciasScope.of(context);
+    return RadioGroup<Aparencia>(
+      groupValue: preferencias.aparencia,
+      onChanged: (a) {
+        if (a != null) preferencias.definirAparencia(a);
+      },
+      child: Column(
+        children: [
+          for (final (i, (aparencia, icone, titulo, apoio)) in _opcoes.indexed) ...[
+            if (i > 0) const Divider(indent: 56, endIndent: Espaco.l),
+            RadioListTile<Aparencia>(
+              key: ValueKey('aparencia-${aparencia.codigo}'),
+              value: aparencia,
+              secondary: Icon(icone),
+              title: Text(titulo),
+              subtitle: apoio == null ? null : Text(apoio),
+              controlAffinity: ListTileControlAffinity.trailing,
+            ),
+          ],
+        ],
       ),
     );
   }

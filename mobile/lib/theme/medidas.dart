@@ -74,3 +74,74 @@ class TamanhoAnimado extends StatelessWidget {
     );
   }
 }
+
+/// Linha do BPM na faixa de estado da tela Inicio (widgets/faixa_estado.dart).
+abstract final class FaixaBpm {
+  /// Entre o coracao e o primeiro algarismo: o mesmo com 1, 2 ou 3 digitos
+  /// ou "—".
+  static const double espacoCoracao = Espaco.s;
+
+  /// Entre o numero e "bpm".
+  static const double espacoUnidade = 6;
+
+  /// Altura do desenho do coracao em relacao a altura dos algarismos.
+  static const double proporcaoCoracao = 0.55;
+
+  /// Quanto do quadro do icone (24 x 24) o desenho do coracao ocupa
+  /// (Icons.favorite_rounded: 18,35 de altura e 20 de largura).
+  static const double coracaoAltura = 18.35 / 24;
+  static const double coracaoLargura = 20 / 24;
+
+  /// Entre a area do BPM, a divisoria e a coluna "Ao vivo".
+  static const double respiro = Espaco.l;
+  static const double divisoria = 1;
+
+  /// Linha "Ao vivo": icone, espaco e o ponto parado.
+  static const double iconeAoVivo = 20;
+  static const double espacoAoVivo = 6;
+  static const double pontoAoVivo = 8;
+
+  /// Entre as linhas da coluna "Ao vivo".
+  static const double entreLinhas = 2;
+}
+
+/// Calendario do Historico.
+abstract final class Calendario {
+  /// Lado minimo de um dia (area de toque). Em 393 dp de largura, cada dia
+  /// tem 48 dp; num celular de 360 dp, cerca de 45 dp.
+  static const double dia = 48;
+
+  /// Bolinha azul de "possivel crise aguardando confirmacao".
+  static const double bolinha = 8;
+
+  /// Contorno do dia de hoje e do dia escolhido.
+  static const double contornoHoje = 2;
+  static const double contornoEscolhido = 3;
+
+  /// Respiro lateral do cartao do calendario (o resto da largura vai para
+  /// os dias).
+  static const double margem = Espaco.xs;
+}
+
+/// Graficos.
+abstract final class Grafico {
+  /// Altura minima do grafico ao vivo (cresce para o balao caber inteiro).
+  static const double aoVivo = 240;
+
+  /// Altura do grafico de 7 dias.
+  static const double seteDias = 200;
+
+  /// Linha da serie e marcador do ultimo valor.
+  static const double linha = 2;
+  static const double marcador = 10;
+
+  /// Periodo das listras de "aguardando confirmacao" (em dp).
+  static const double listra = 6;
+
+  /// Distancia do balao ate a borda esquerda do grafico (passa dos rotulos
+  /// do eixo Y, que o Syncfusion nao amplia com a fonte).
+  static const double margemDoBalao = 56;
+
+  /// Quanto tempo o balao fica na tela depois de tirar o dedo.
+  static const Duration balaoVisivel = Duration(seconds: 4);
+}

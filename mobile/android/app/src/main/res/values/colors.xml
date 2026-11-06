@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo do app ("nevoa", lib/theme/cores.dart): a tela de abertura usa
+         a mesma cor do tema claro, sem flash branco puro. -->
+    <color name="fundo_app">#F0F3F5</color>
+</resources>

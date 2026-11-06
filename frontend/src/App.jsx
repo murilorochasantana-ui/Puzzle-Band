@@ -7,6 +7,7 @@ import ManualControls from './components/ManualControls';
 import AlertBanner from './components/AlertBanner';
 import ConnectionStatus from './components/ConnectionStatus';
 import EpisodeHistory from './components/EpisodeHistory';
+import ThemeToggle from './components/ThemeToggle';
 import useMqttReadings from './hooks/useMqttReadings';
 import useEpisodeMonitor from './hooks/useEpisodeMonitor';
 import useCaregiverSync from './hooks/useCaregiverSync';
@@ -108,7 +109,7 @@ function App() {
   const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
 
   return (
-    <div className="dashboard" data-theme="light">
+    <div className="dashboard">
       <header className="dashboard__header">
         <div>
           <h1>Puzzle Band</h1>
@@ -118,26 +119,29 @@ function App() {
               : 'Simulador manual · teste o modelo com cenários que você define, fora do dataset'}
           </p>
         </div>
-        <div className="source-select" role="group" aria-label="Fonte dos dados">
-          <span className="source-select__label">Fonte dos dados</span>
-          <div className="source-select__options">
-            <button
-              type="button"
-              className={`manual-controls__toggle-btn ${!mqttMode ? 'is-active' : ''}`}
-              aria-pressed={!mqttMode}
-              onClick={() => changeSource('manual')}
-            >
-              Simulador manual
-            </button>
-            <button
-              type="button"
-              className={`manual-controls__toggle-btn ${mqttMode ? 'is-active' : ''}`}
-              aria-pressed={mqttMode}
-              onClick={() => changeSource('mqtt')}
-            >
-              Pulseira (MQTT)
-            </button>
+        <div className="dashboard__header-controls">
+          <div className="source-select" role="group" aria-label="Fonte dos dados">
+            <span className="source-select__label">Fonte dos dados</span>
+            <div className="source-select__options">
+              <button
+                type="button"
+                className={`manual-controls__toggle-btn ${!mqttMode ? 'is-active' : ''}`}
+                aria-pressed={!mqttMode}
+                onClick={() => changeSource('manual')}
+              >
+                Simulador manual
+              </button>
+              <button
+                type="button"
+                className={`manual-controls__toggle-btn ${mqttMode ? 'is-active' : ''}`}
+                aria-pressed={mqttMode}
+                onClick={() => changeSource('mqtt')}
+              >
+                Pulseira (MQTT)
+              </button>
+            </div>
           </div>
+          <ThemeToggle />
         </div>
       </header>
 

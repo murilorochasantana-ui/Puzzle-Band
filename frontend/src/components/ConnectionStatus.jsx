@@ -1,23 +1,23 @@
 const BROKER_INFO = {
-  conectando: { color: 'var(--status-warning)', icon: '▲', label: 'conectando…' },
-  conectado: { color: 'var(--status-good)', icon: '●', label: 'conectado' },
-  desconectado: { color: 'var(--status-critical)', icon: '⛔', label: 'desconectado' },
-  erro: { color: 'var(--status-critical)', icon: '⛔', label: 'erro' },
+  conectando: { color: 'var(--status-warning)', ink: 'var(--status-warning-ink)', icon: '▲', label: 'conectando…' },
+  conectado: { color: 'var(--status-good)', ink: 'var(--status-good-ink)', icon: '●', label: 'conectado' },
+  desconectado: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'desconectado' },
+  erro: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'erro' },
 };
 
 const BAND_INFO = {
-  online: { color: 'var(--status-good)', icon: '●', label: 'online' },
-  offline: { color: 'var(--status-critical)', icon: '⛔', label: 'offline' },
-  desconhecido: { color: 'var(--status-warning)', icon: '▲', label: 'aguardando status' },
+  online: { color: 'var(--status-good)', ink: 'var(--status-good-ink)', icon: '●', label: 'online' },
+  offline: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'offline' },
+  desconhecido: { color: 'var(--status-warning)', ink: 'var(--status-warning-ink)', icon: '▲', label: 'aguardando status' },
 };
 
 // App do cuidador (puzzleband/<id>/app/status, "online"/"offline" com retain
 // e Last Will). Com o broker conectado, a falta de mensagem retida quer dizer
 // que o app nunca conectou: conta como desconectado.
 const APP_INFO = {
-  online: { color: 'var(--status-good)', icon: '●', label: 'conectado' },
-  offline: { color: 'var(--status-critical)', icon: '⛔', label: 'desconectado' },
-  sem_broker: { color: 'var(--status-warning)', icon: '▲', label: 'sem informação (broker desconectado)' },
+  online: { color: 'var(--status-good)', ink: 'var(--status-good-ink)', icon: '●', label: 'conectado' },
+  offline: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'desconectado' },
+  sem_broker: { color: 'var(--status-warning)', ink: 'var(--status-warning-ink)', icon: '▲', label: 'sem informação (broker desconectado)' },
 };
 
 function appInfo(appStatus, brokerStatus) {
@@ -27,7 +27,7 @@ function appInfo(appStatus, brokerStatus) {
 
 function Item({ title, info }) {
   return (
-    <span className="connection-status__item" style={{ '--item-color': info.color }}>
+    <span className="connection-status__item" style={{ '--item-color': info.color, '--item-ink': info.ink }}>
       <span className="connection-status__icon" aria-hidden="true">{info.icon}</span>
       {title}: <strong>{info.label}</strong>
     </span>

@@ -2,18 +2,29 @@
 // acessibilidade (leitor de tela, alvos de toque, contraste, fonte ampliada,
 // movimento). Os cenarios estao em test/apoio/cenarios.dart.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:puzzleband/main.dart';
 import 'package:puzzleband/models/models.dart';
+import 'package:puzzleband/models/resumo.dart';
+import 'package:puzzleband/models/sinais.dart';
+import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/login_screen.dart';
+import 'package:puzzleband/services/app_scope.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
 import 'package:puzzleband/utils/formatters.dart';
 import 'package:puzzleband/utils/relogio.dart';
+import 'package:puzzleband/widgets/calendario_crises.dart';
+import 'package:puzzleband/widgets/cartao_episodio.dart';
 import 'package:puzzleband/widgets/cartao_episodio_ativo.dart';
+import 'package:puzzleband/widgets/cartao_episodio_resumido.dart';
 import 'package:puzzleband/widgets/faixa_estado.dart';
 import 'package:puzzleband/widgets/gatilho_simples.dart';
 import 'package:puzzleband/widgets/painel_do_dia.dart';
+import 'package:puzzleband/widgets/selo_avaliacao.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
 
 import 'apoio/cenarios.dart';
 import 'apoio/fontes.dart';
@@ -53,13 +64,14 @@ void main() {
       await mostrar(tester, await possivelCrise());
 
       expect(find.bySemanticsLabel('Estado da criança: Possível crise'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp(r'^Frequência cardíaca: 128 batimentos por minuto, ao vivo')), findsOneWidget);
+      expect(find.bySemanticsLabel('Batimentos: 128 bpm'), findsOneWidget);
+      expect(find.bySemanticsLabel('Ao vivo. Média de 5 minutos: 96 bpm.'), findsOneWidget);
       expect(find.bySemanticsLabel(RegExp(r'^Provável gatilho: barulho\. Provável gatilho: ruído')), findsOneWidget);
 
       // So o nivel e anunciado sozinho (liveRegion); o BPM, que muda 1x/s, nao.
       final nivel = tester.getSemantics(find.bySemanticsLabel('Estado da criança: Possível crise'));
       expect(nivel.getSemanticsData().flagsCollection.isLiveRegion, isTrue);
-      final bpm = tester.getSemantics(find.bySemanticsLabel(RegExp(r'^Frequência cardíaca')));
+      final bpm = tester.getSemantics(find.bySemanticsLabel('Batimentos: 128 bpm'));
       expect(bpm.getSemanticsData().flagsCollection.isLiveRegion, isFalse);
       semantica.dispose();
     });
@@ -75,6 +87,86 @@ void main() {
         expect(find.descendant(of: faixa, matching: find.text(rotulo)), findsOneWidget);
         expect(find.descendant(of: faixa, matching: find.byIcon(icone)), findsOneWidget);
       }
+    });
+
+    testWidgets('BPM: grupo centrado, coração a 8 dp do número; divisória e "Ao vivo" fixos com 9, 90, 190 e "—"',
+        (tester) async {
+      final semantica = tester.ensureSemantics();
+      for (final escala in [1.0, 1.3]) {
+        (Offset, Offset?, Size)? referencia;
+        for (final bpm in [9.0, 90.0, 190.0, null]) {
+          await mostrar(tester, await comBpm(atencao(), bpm), escala: escala);
+          expect(tester.takeException(), isNull);
+          final faixa = find.byType(FaixaEstado);
+          final numero = find.byKey(chaveNumeroBpm);
+          expect(tester.widget<Text>(numero).data, bpm == null ? '—' : '${bpm.round()}');
+          final caso = 'BPM $bpm em ${escala}x';
+
+          // Coração, número e "bpm" juntos: 8 dp do coração ao primeiro
+          // algarismo; "bpm" logo depois do número
+          final coracao = tester.getRect(find.byKey(chaveCoracaoBpm));
+          final rNumero = tester.getRect(numero);
+          final unidade = tester.getRect(find.descendant(of: faixa, matching: find.text('bpm')));
+          expect(rNumero.left - coracao.right, moreOrLessEquals(FaixaBpm.espacoCoracao, epsilon: 0.01), reason: caso);
+          expect(unidade.left - rNumero.right, moreOrLessEquals(FaixaBpm.espacoUnidade, epsilon: 0.01), reason: caso);
+
+          // O coração fica centrado na altura dos algarismos
+          final pintor = TextPainter(
+            text: TextSpan(text: '0', style: tester.widget<Text>(numero).style),
+            textDirection: TextDirection.ltr,
+            textScaler: TextScaler.linear(escala),
+          )..layout();
+          final linhaDeBase = rNumero.top + pintor.computeDistanceToActualBaseline(TextBaseline.alphabetic);
+          final algarismos = TextScaler.linear(escala).scale(pintor.text!.style!.fontSize!) * Tipografia.alturaDosAlgarismos;
+          pintor.dispose();
+          expect(coracao.center.dy, moreOrLessEquals(linhaDeBase - algarismos / 2, epsilon: 0.5), reason: caso);
+          expect(coracao.height * FaixaBpm.coracaoAltura / algarismos, moreOrLessEquals(0.55, epsilon: 0.01));
+
+          // O grupo fica no centro da área à esquerda (1 dp de tolerância)
+          final area = tester.getRect(find.byKey(chaveAreaBpm));
+          final grupo = tester.getRect(find.byKey(chaveGrupoBpm));
+          expect(grupo.center.dx, moreOrLessEquals(area.center.dx, epsilon: 1), reason: caso);
+          expect(grupo.center.dy, moreOrLessEquals(area.center.dy, epsilon: 1), reason: caso);
+
+          // Divisória e "Ao vivo" não se mexem; a faixa não muda de altura
+          final divisoria = find.byKey(chaveDivisoriaBpm);
+          final medida = (
+            tester.getTopLeft(find.descendant(of: faixa, matching: find.text('Ao vivo'))),
+            divisoria.evaluate().isEmpty ? null : tester.getTopLeft(divisoria),
+            tester.getSize(faixa),
+          );
+          if (referencia == null) {
+            referencia = medida;
+          } else {
+            expect(medida.$1, referencia.$1, reason: '"Ao vivo" com $caso');
+            expect(medida.$2, referencia.$2, reason: 'divisória com $caso');
+            if (escala == 1.0) expect(medida.$3, referencia.$3, reason: 'altura da faixa com $caso');
+          }
+          if (divisoria.evaluate().isNotEmpty) {
+            // A coluna "Ao vivo" fica centrada na mesma altura do grupo
+            final direita = tester.getRect(find.bySemanticsLabel(RegExp(r'^Ao vivo\.')).first);
+            expect(direita.center.dy, moreOrLessEquals(grupo.center.dy, epsilon: 1), reason: caso);
+          }
+        }
+        // 393 dp: lado a lado (com divisória); 1,3x: "Ao vivo" desce
+        expect(referencia!.$2 != null, escala == 1.0);
+      }
+      semantica.dispose();
+    });
+
+    testWidgets('BPM: algarismos de mesma largura, coração neutro e "Batimentos: 79 bpm" para o leitor de tela',
+        (tester) async {
+      final semantica = tester.ensureSemantics();
+      for (final escuro in [false, true]) {
+        await mostrar(tester, await comBpm(atencao(), 79), escuro: escuro);
+        final numero = tester.widget<Text>(find.byKey(chaveNumeroBpm));
+        expect(numero.style!.fontFeatures, contains(const FontFeature.tabularFigures()));
+        final coracao = tester.widget<Icon>(find.descendant(of: find.byKey(chaveCoracaoBpm), matching: find.byType(Icon)));
+        final cores = escuro ? CoresApp.escuro : CoresApp.claro;
+        expect(coracao.color, cores.tintaSuave, reason: 'neutro: vermelho é cor de risco');
+        expect(find.bySemanticsLabel('Batimentos: 79 bpm'), findsOneWidget);
+      }
+      semantica.dispose();
     });
 
     testWidgets('"Estou ciente": botão grande, envia e mostra a confirmação', (tester) async {
@@ -431,72 +523,366 @@ void main() {
     });
   });
 
-  group('Histórico', () {
-    testWidgets('cartão mostra nível, data, duração, gatilho e avaliação', (tester) async {
+  group('Histórico: calendário', () {
+    DiaDoCalendario dia(WidgetTester tester, int d) => tester.widget<DiaDoCalendario>(diaDoCalendario(d));
+    BoxDecoration pintura(WidgetTester tester, int d) =>
+        tester.widget<Ink>(find.descendant(of: diaDoCalendario(d), matching: find.byType(Ink))).decoration! as BoxDecoration;
+
+    testWidgets('cor só pelas crises confirmadas: 0, 3 e 7 → sem cor, amarelo e vermelho', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2);
+      expect(find.text('Novembro de 2026'), findsOneWidget);
+      // 04/11: só um descartado (0 confirmadas); 01/11: 3; 03/11: 7
+      expect(dia(tester, 4).cor, CorDoDia.nenhuma);
+      expect(dia(tester, 1).cor, CorDoDia.amarelo);
+      expect(dia(tester, 3).cor, CorDoDia.vermelho);
+      expect(dia(tester, 10).cor, CorDoDia.nenhuma);
+      expect(pintura(tester, 4).color, isNull);
+      expect(pintura(tester, 1).color, CoresDados.claro.diaAmarelo.fundo);
+      expect(pintura(tester, 3).color, CoresDados.claro.diaVermelho.fundo);
+      // A cor nunca vem sozinha: a quantidade aparece no dia
+      expect(find.descendant(of: diaDoCalendario(3), matching: find.text('7')), findsOneWidget);
+      expect(find.descendant(of: diaDoCalendario(1), matching: find.text('3')), findsOneWidget);
+    });
+
+    testWidgets('leitor de tela: cada dia diz quantas crises e quantas aguardam confirmação', (tester) async {
       final semantica = tester.ensureSemantics();
-      await mostrar(tester, await calmo(), aba: 2, altura: 2300);
-      expect(find.bySemanticsLabel('Nível: Possível crise'), findsNWidgets(2));
-      expect(find.text('Hoje, 14:32'), findsOneWidget);
-      expect(find.text('Ontem, 18:05'), findsOneWidget);
-      expect(find.text('Duração: 1 min 57 s'), findsOneWidget);
-      expect(find.text('Provável gatilho: barulho'), findsOneWidget);
-      expect(find.text('Gatilho confirmado por você às 09:20.'), findsOneWidget);
-      expect(find.text('Indicação descartada no painel às 18:30.'), findsOneWidget);
-      expect(find.text('Alerta visto pelo cuidador às 14:33.'), findsOneWidget);
+      await mostrar(tester, await calmo(), aba: 2);
+      expect(find.bySemanticsLabel('3 de novembro: 7 crises confirmadas'), findsOneWidget);
+      expect(find.bySemanticsLabel('2 de novembro: 1 possível crise aguardando confirmação'), findsOneWidget);
+      expect(find.bySemanticsLabel('4 de novembro: nenhuma crise'), findsOneWidget);
+      expect(
+        find.bySemanticsLabel('5 de novembro, hoje: 1 crise confirmada e 1 possível crise aguardando confirmação'),
+        findsOneWidget,
+      );
       semantica.dispose();
     });
 
-    testWidgets('confirmar gatilho: envia com a observação e mostra a confirmação', (tester) async {
-      final servico = await calmo();
-      await mostrar(tester, servico, aba: 2);
+    testWidgets('bolinha azul só no dia que tem apenas possíveis crises; hoje tem contorno', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2);
+      Finder bolinha(int d) => find.descendant(of: diaDoCalendario(d), matching: find.byKey(const ValueKey('bolinha-azul')));
+      expect(bolinha(2), findsOneWidget, reason: '02/11: só pendente');
+      expect(bolinha(5), findsNothing, reason: '05/11: tem confirmada');
+      expect(bolinha(3), findsNothing);
+      expect(bolinha(4), findsNothing, reason: 'descartado não conta');
+      expect(dia(tester, 2).cor, CorDoDia.nenhuma, reason: 'pendente não entra na cor');
+      expect(pintura(tester, 5).border, isNotNull, reason: 'hoje');
+      expect(pintura(tester, 6).border, isNull);
+    });
 
-      await tester.tap(find.text('Adicionar observação').first);
+    testWidgets('descartado não tem efeito no calendário nem no gráfico de 7 dias', (tester) async {
+      final semantica = tester.ensureSemantics();
+      final servico = await calmo();
+      await mostrar(tester, servico, aba: 2, altura: 1400);
+      // Descarta a única possível crise de 02/11
+      await tocarNoMeio(tester, diaDoCalendario(2));
+      await tocarNoMeio(tester, cartao('ep_1'));
+      await tocarNoMeio(tester, find.text('Descartar'));
+      expect(servico.avaliacoes.single, ('ep_1', Avaliacao.descartado, ''));
+      expect(dia(tester, 2).bolinha, isFalse);
+      expect(dia(tester, 2).cor, CorDoDia.nenhuma);
+      expect(find.bySemanticsLabel('2 de novembro: nenhuma crise'), findsOneWidget);
+      // O episódio continua na lista, com o selo "Descartado"
+      expect(find.descendant(of: cartao('ep_1'), matching: find.text('Descartado')), findsWidgets);
+
+      await tester.tap(find.text('Gráficos'));
       await tester.pumpAndSettle();
+      expect(find.bySemanticsLabel(RegExp(r'^Gráfico de crises por dia: .*Seg, nenhuma; Ter, 7 crises confirmadas; Qua, nenhuma;')),
+          findsOneWidget);
+      expect(find.textContaining('Nos últimos 7 dias: 11 crises confirmadas e 1 aguardando sua confirmação.'), findsOneWidget);
+      semantica.dispose();
+    });
+
+    testWidgets('meses: volta até o primeiro mês com episódio e não passa do mês atual', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2);
+      final anterior = find.byTooltip('Mês anterior');
+      final proximo = find.byTooltip('Próximo mês');
+      expect(tester.widget<IconButton>(find.ancestor(of: proximo, matching: find.byType(IconButton))).onPressed, isNull);
+      expect(tester.widget<IconButton>(find.ancestor(of: anterior, matching: find.byType(IconButton))).onPressed, isNull,
+          reason: 'todos os episódios são de novembro');
+      await tester.tap(find.byTooltip('Recolher calendário'));
+      await tester.pumpAndSettle();
+      expect(diaDoCalendario(3), findsNothing);
+      expect(find.text('Em novembro: 11 crises confirmadas e 2 aguardando sua confirmação.'), findsOneWidget);
+      await tester.tap(find.byTooltip('Mostrar calendário'));
+      await tester.pumpAndSettle();
+      expect(diaDoCalendario(3), findsOneWidget);
+    });
+  });
+
+  group('Histórico: lista por dia', () {
+    testWidgets('separada por dia, do mais recente ao mais antigo, com o número de episódios', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2, altura: 4000);
+      final cabecalhos = ['Hoje', 'Ontem', 'Ter, 3 de nov.', 'Seg, 2 de nov.', 'Dom, 1 de nov.'];
+      final ys = [for (final c in cabecalhos) tester.getTopLeft(find.text(c)).dy];
+      expect(ys, [...ys]..sort(), reason: 'ordem dos dias');
+      expect(find.text('7 episódios'), findsOneWidget);
+      expect(find.text('2 episódios'), findsOneWidget);
+      // Todos os 14 episódios aparecem, inclusive o descartado
+      expect(find.byType(CartaoEpisodioResumido), findsNWidgets(14));
+      expect(tester.getTopLeft(cartao('ep_4')).dy, lessThan(tester.getTopLeft(cartao('ep_3')).dy));
+    });
+
+    testWidgets('cartão resumido: horário, nível, duração, gatilho e avaliação', (tester) async {
+      final semantica = tester.ensureSemantics();
+      await mostrar(tester, await calmo(), aba: 2, altura: 1600);
+      Finder no(String id, String texto) => find.descendant(of: cartao(id), matching: find.text(texto));
+      expect(no('ep_4', '14:32–14:33'), findsOneWidget);
+      expect(no('ep_4', 'Possível crise'), findsOneWidget); // nível do modelo
+      expect(no('ep_4', '1 min 57 s'), findsOneWidget);
+      expect(no('ep_4', 'Provável gatilho: barulho'), findsOneWidget);
+      expect(no('ep_4', SeloAvaliacao.textoPendente), findsOneWidget);
+      expect(no('ep_3', 'Confirmado'), findsOneWidget);
+      expect(no('ep_2', 'Descartado'), findsOneWidget);
+      // Resumido: sem botões nem texto técnico
+      expect(find.text('Confirmar gatilho'), findsNothing);
+      expect(find.textContaining('45 → 88 dB'), findsNothing);
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Das 14:32 às 14:33\. Nível: Possível crise\. Duração: 1 min 57 s\. '
+            r'Provável gatilho: barulho\. Avaliação: Possível crise aguardando sua confirmação\.$')),
+        findsOneWidget,
+      );
+      semantica.dispose();
+    });
+
+    testWidgets('cartão expande e recolhe no lugar; só um aberto por vez', (tester) async {
+      final semantica = tester.ensureSemantics();
+      await mostrar(tester, await calmo(), aba: 2, altura: 1600);
+      await tocarNoMeio(tester, cartao('ep_3'));
+      expect(find.text('Confirmado'), findsNWidgets(2), reason: 'selo + botão escolhido');
+      expect(find.text('Descartar'), findsOneWidget);
+      expect(find.text(AvaliacaoEpisodio.explicacao), findsOneWidget);
+      expect(find.text('Probabilidade máxima: 61%.'), findsOneWidget);
+      expect(find.textContaining('luminosidade (300 → 1150 lux'), findsOneWidget);
+      expect(find.text('Observação: A luz do refeitório piscou antes.'), findsOneWidget);
+      expect(tester.getSemantics(find.bySemanticsLabel(RegExp(r'^Das 09:10'))),
+          isSemantics(isButton: true, hasExpandedState: true, isExpanded: true));
+
+      // Abrir outro fecha o primeiro
+      await tocarNoMeio(tester, cartao('ep_4'));
+      expect(find.text('Observação: A luz do refeitório piscou antes.'), findsNothing);
+      expect(find.text('Alerta visto pelo cuidador às 14:33.'), findsOneWidget);
+      expect(find.text(AvaliacaoEpisodio.explicacao), findsOneWidget);
+
+      // Tocar de novo recolhe
+      await tocarNoMeio(tester, find.text('Provável gatilho: barulho').first);
+      expect(find.text(AvaliacaoEpisodio.explicacao), findsNothing);
+      semantica.dispose();
+    });
+
+    testWidgets('"Possível crise · a confirmar" abre o cartão já nos botões', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2);
+      await tocarNoMeio(tester, find.descendant(of: cartao('ep_4'), matching: find.text(SeloAvaliacao.textoPendente)));
+      final botao = find.text('Confirmar gatilho');
+      expect(botao, findsOneWidget);
+      final limite = tester.getTopLeft(find.byType(NavigationBar)).dy;
+      expect(tester.getCenter(botao).dy, inInclusiveRange(0, limite), reason: 'o botão ficou visível');
+      expect(tester.getBottomLeft(find.text('Descartar')).dy, lessThanOrEqualTo(limite));
+    });
+
+    testWidgets('confirmar gatilho: envia com a observação e o botão vira "Confirmado"', (tester) async {
+      final servico = await calmo();
+      await mostrar(tester, servico, aba: 2, altura: 1600);
+      await tocarNoMeio(tester, cartao('ep_4'));
+      await tocarNoMeio(tester, find.text('Adicionar observação'));
       await tester.enterText(find.byType(TextField).first, 'Sirene da escola');
-      await tester.tap(find.text('Confirmar gatilho').first);
-      await tester.pumpAndSettle();
+      await tocarNoMeio(tester, find.text('Confirmar gatilho'));
 
       expect(servico.avaliacoes.single, ('ep_4', Avaliacao.confirmado, 'Sirene da escola'));
       expect(find.text('Gatilho confirmado por você às 15:00.'), findsOneWidget);
       expect(find.text('Gatilho confirmado e enviado ao painel.'), findsOneWidget);
       expect(find.text('Observação: Sirene da escola'), findsOneWidget);
+      expect(find.descendant(of: cartao('ep_4'), matching: find.text('Confirmado')), findsNWidgets(2));
+    });
+
+    testWidgets('descartar: botão "Descartado" vermelho, selo no resumo, e dá para confirmar depois', (tester) async {
+      final servico = await calmo();
+      await mostrar(tester, servico, aba: 2, altura: 1600);
+      await tocarNoMeio(tester, cartao('ep_4'));
+      await tocarNoMeio(tester, find.text('Descartar'));
+      expect(servico.avaliacoes.last, ('ep_4', Avaliacao.descartado, ''));
+      expect(find.text('Indicação descartada e enviada ao painel.'), findsOneWidget);
+
+      final botao = find.ancestor(of: find.text('Descartado'), matching: find.byWidgetPredicate((w) => w is FilledButton));
+      expect(botao, findsOneWidget);
+      final fundo = tester.widget<Material>(find.descendant(of: botao, matching: find.byType(Material)).first).color;
+      expect(fundo, CoresDados.claro.descartado.fundo);
+      expect(find.descendant(of: botao, matching: find.byIcon(Icons.block_rounded)), findsOneWidget);
+      expect(find.descendant(of: find.byType(SeloAvaliacao), matching: find.text('Descartado')), findsWidgets);
+      // Mudou de ideia: confirma e a avaliação é reenviada
+      await tocarNoMeio(tester, find.text('Confirmar gatilho'));
+      expect(servico.avaliacoes.last, ('ep_4', Avaliacao.confirmado, ''));
+      expect(find.text('Descartar'), findsOneWidget);
     });
 
     testWidgets('descartar sem conexão avisa que não foi enviado', (tester) async {
       final servico = (await calmo())..envioFunciona = false;
-      await mostrar(tester, servico, aba: 2);
-      await tester.tap(find.text('Descartar').first);
-      await tester.pump();
+      await mostrar(tester, servico, aba: 2, altura: 1600);
+      await tocarNoMeio(tester, cartao('ep_4'));
+      await tocarNoMeio(tester, find.text('Descartar'));
       expect(find.textContaining('a avaliação não foi enviada'), findsOneWidget);
-      expect(find.text('Avaliação pendente.'), findsWidgets);
+      expect(find.text('Possível crise aguardando sua confirmação.'), findsOneWidget);
+    });
+
+    testWidgets('filtro por dia: tocar num dia mostra só ele; "Ver todos" limpa', (tester) async {
+      await mostrar(tester, await calmo(), aba: 2, altura: 4000);
+      await tocarNoMeio(tester, diaDoCalendario(3));
+      expect(find.text('Mostrando só 3 de novembro.'), findsOneWidget);
+      expect(find.byType(CartaoEpisodioResumido), findsNWidgets(7));
+      expect(find.text('Hoje'), findsNothing);
+      expect(tester.widget<DiaDoCalendario>(diaDoCalendario(3)).escolhido, isTrue);
+
+      // Dia sem episódios
+      await tocarNoMeio(tester, diaDoCalendario(10));
+      expect(find.text('Nenhum episódio em 10 de novembro'), findsOneWidget);
+      expect(find.byType(CartaoEpisodioResumido), findsNothing);
+
+      await tocarNoMeio(tester, find.text('Ver todos'));
+      expect(find.text('Mostrando só 10 de novembro.'), findsNothing);
+      expect(find.byType(CartaoEpisodioResumido), findsNWidgets(14));
     });
 
     testWidgets('vazio e sem conexão têm mensagem própria', (tester) async {
       await mostrar(tester, await semDadosAinda(), aba: 2);
       expect(find.text('Nenhum episódio ainda'), findsOneWidget);
+      expect(find.byType(CalendarioCrises), findsNothing);
 
       await mostrar(tester, await semConexao(), aba: 2);
       expect(find.text('Sem conexão: mostrando a última cópia salva, de 05/11 14:50.'), findsOneWidget);
+      expect(find.byType(CalendarioCrises), findsOneWidget);
     });
   });
 
-  group('Gráficos e Ajustes', () {
-    testWidgets('gráficos com faixa de tempo, resumo em texto e descrição para leitor de tela', (tester) async {
+  group('Gráficos', () {
+    testWidgets('seletor troca a série, o eixo, a cor e o resumo', (tester) async {
       final semantica = tester.ensureSemantics();
       await mostrar(tester, await possivelCrise(), aba: 1);
-      expect(find.text('Últimos 5 minutos, ao vivo. Média: 96 bpm.'), findsOneWidget);
-      expect(find.text('4 episódios nos últimos 7 dias, 2 de possível crise. Em novembro: 4 episódios.'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp(r'^Gráfico da frequência cardíaca.*última leitura 128')), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp(r'^Gráfico de episódios por dia: .*Hoje, 2 episódios \(Possível crise\)')), findsOneWidget);
+      SfCartesianChart grafico() =>
+          tester.widget<SfCartesianChart>(find.descendant(of: find.byType(GraficoSinais), matching: find.byType(SfCartesianChart)));
+      ChoiceChip chip(Metrica m) => tester.widget<ChoiceChip>(find.byKey(ValueKey('metrica-${m.name}')));
+
+      expect(chip(Metrica.bpm).selected, isTrue);
+      for (final m in Metrica.values) {
+        expect(find.text(m.rotulo), findsOneWidget, reason: 'nome por extenso e unidade');
+      }
+      expect(find.bySemanticsLabel(RegExp(r'^Gráfico de batimentos cardíacos nos últimos 5 minutos: atual 128 bpm')),
+          findsOneWidget);
+      expect((grafico().series.first as SplineAreaSeries).borderColor, CoresDados.claro.metricas[Metrica.bpm.index]);
+
+      await tocarNoMeio(tester, find.byKey(const ValueKey('metrica-ruido')));
+      expect(chip(Metrica.ruido).selected, isTrue);
+      expect(chip(Metrica.bpm).selected, isFalse);
+      final eixo = grafico().primaryYAxis as NumericAxis;
+      expect(eixo.title.text, 'dB');
+      expect([eixo.minimum, eixo.maximum], [20, 100]);
+      expect((grafico().series.first as SplineAreaSeries).borderColor, CoresDados.claro.metricas[Metrica.ruido.index]);
+      expect(find.bySemanticsLabel(RegExp(r'^Gráfico de ruído ambiente nos últimos 5 minutos: atual \d+ dB')),
+          findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Máxima: \d+ dB$')), findsOneWidget);
+
+      await tocarNoMeio(tester, find.byKey(const ValueKey('metrica-regularidade')));
+      final regularidade = grafico().primaryYAxis as NumericAxis;
+      expect(regularidade.title.text, '0 a 1');
+      expect([regularidade.minimum, regularidade.maximum], [0, 1]);
+      expect(find.bySemanticsLabel(RegExp(r'^Atual: 0,\d\d$')), findsOneWidget, reason: 'vírgula decimal');
       semantica.dispose();
     });
 
-    testWidgets('gráficos sem dados mostram estado vazio', (tester) async {
-      await mostrar(tester, await semDadosAinda(), aba: 1);
-      expect(find.text('Aguardando leituras ao vivo'), findsOneWidget);
-      expect(find.text('Nenhum episódio nos últimos 7 dias'), findsOneWidget);
+    testWidgets('cores das métricas: nenhuma é a de um nível de risco', (tester) async {
+      for (final dados in [CoresDados.claro, CoresDados.escuro]) {
+        final niveis = dados == CoresDados.claro ? CoresApp.claro : CoresApp.escuro;
+        for (final cor in dados.metricas) {
+          expect(cor, isNot(anyOf(niveis.calmo.grafico, niveis.atencao.grafico, niveis.crise.grafico)));
+        }
+        expect(dados.metricas.toSet().length, Metrica.values.length);
+      }
     });
 
+    testWidgets('faixas de fundo nos momentos de Atenção e Possível crise, com legenda', (tester) async {
+      final semantica = tester.ensureSemantics();
+      await mostrar(tester, await possivelCrise(), aba: 1);
+      final eixoX = tester
+          .widget<SfCartesianChart>(find.descendant(of: find.byType(GraficoSinais), matching: find.byType(SfCartesianChart)))
+          .primaryXAxis;
+      expect(eixoX.plotBands.length, 2);
+      expect(eixoX.plotBands.map((b) => b.color), [CoresApp.claro.atencao.fundo, CoresApp.claro.crise.fundo]);
+      expect(find.text('Momentos em Atenção'), findsOneWidget);
+      expect(find.text('Momentos em Possível crise'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'Nível Atenção das 14:5\d às 14:5\d\. Nível Possível crise das')), findsOneWidget);
+
+      await mostrar(tester, await calmo(), aba: 1);
+      expect(find.text('Momentos em Atenção'), findsNothing, reason: 'sem faixa, sem legenda');
+      semantica.dispose();
+    });
+
+    testWidgets('tocar no gráfico abre o balão com TODAS as métricas do instante', (tester) async {
+      await mostrar(tester, await possivelCrise(), aba: 1);
+      final area = tester.getRect(find.byType(GraficoSinais));
+      final gesto = await tester.startGesture(Offset(area.left + area.width * 0.8, area.center.dy));
+      await tester.pump();
+      final balao = find.byType(BalaoSinais);
+      expect(balao, findsOneWidget);
+      for (final m in Metrica.values) {
+        expect(find.descendant(of: balao, matching: find.text(m.curto)), findsOneWidget);
+      }
+      expect(find.descendant(of: balao, matching: find.textContaining(RegExp(r'^\d\d:\d\d:\d\d$'))), findsOneWidget);
+      // Arrastar troca o instante
+      final antes = tester.widget<BalaoSinais>(balao).amostra.hora;
+      await gesto.moveBy(Offset(-area.width * 0.4, 0));
+      await tester.pump();
+      expect(tester.widget<BalaoSinais>(balao).amostra.hora.isBefore(antes), isTrue);
+      // Some sozinho alguns segundos depois de tirar o dedo
+      await gesto.up();
+      await tester.pump(Grafico.balaoVisivel + const Duration(milliseconds: 50));
+      await tester.pumpAndSettle();
+      expect(balao, findsNothing);
+    });
+
+    testWidgets('painel parado e sem conexão: gráfico congelado, com aviso', (tester) async {
+      await mostrar(tester, await painelEPulseiraOffline(), aba: 1);
+      expect(find.text('O painel (site) parou de enviar às 15:00. O gráfico mostra os últimos 5 minutos recebidos.'),
+          findsOneWidget);
+      expect(find.byType(GraficoSinais), findsOneWidget);
+
+      await mostrar(tester, await semConexao(), aba: 1);
+      expect(find.text('Sem conexão com o servidor. O gráfico está parado na última leitura, das 15:00.'), findsOneWidget);
+      expect(find.byType(GraficoSinais), findsOneWidget);
+
+      await mostrar(tester, await conectando(), aba: 1);
+      expect(find.text('Conectando ao servidor…'), findsOneWidget);
+      expect(find.byType(GraficoSinais), findsNothing);
+    });
+
+    testWidgets('sem dados ainda: estados vazios', (tester) async {
+      await mostrar(tester, await semDadosAinda(), aba: 1);
+      expect(find.text('Aguardando leituras ao vivo'), findsOneWidget);
+      expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
+    });
+
+    testWidgets('7 dias: confirmadas e aguardando confirmação empilhadas, sem descartados', (tester) async {
+      final semantica = tester.ensureSemantics();
+      await mostrar(tester, await calmo(), aba: 1);
+      expect(
+        find.text('Nos últimos 7 dias: 11 crises confirmadas e 2 aguardando sua confirmação. '
+            'Em novembro: 11 crises confirmadas.'),
+        findsOneWidget,
+      );
+      expect(
+        find.bySemanticsLabel(RegExp(r'^Gráfico de crises por dia: Sex, nenhuma; Sáb, nenhuma; '
+            r'Dom, 3 crises confirmadas; Seg, 1 possível crise aguardando confirmação; Ter, 7 crises confirmadas; '
+            r'Qua, nenhuma; Hoje, 1 crise confirmada e 1 possível crise aguardando confirmação\.$')),
+        findsOneWidget,
+      );
+      final grafico = tester.widget<SfCartesianChart>(
+          find.descendant(of: find.byType(GraficoSeteDias), matching: find.byType(SfCartesianChart)));
+      expect(grafico.series.length, 2);
+      expect(grafico.series.every((s) => s is StackedColumnSeries), isTrue);
+      expect(find.text('Crise confirmada'), findsOneWidget);
+      expect(find.text('Possível crise aguardando confirmação'), findsOneWidget);
+      semantica.dispose();
+    });
+  });
+
+  group('Ajustes', () {
     testWidgets('ajustes: título igual à aba e "Alertas sonoros" liga/desliga', (tester) async {
       final servico = await calmo();
       await mostrar(tester, servico, aba: 3, altura: 1100);
@@ -505,6 +891,59 @@ void main() {
       await tester.tap(find.text('Alertas sonoros'));
       await tester.pumpAndSettle();
       expect(servico.sonoros, isFalse);
+    });
+
+    testWidgets('Aparência: a escolha troca o tema na hora, fica salva e as barras do Android acompanham',
+        (tester) async {
+      final semantica = tester.ensureSemantics();
+      final servico = await calmo();
+      final preferencias = preferenciasDe(servico);
+      tester.view.physicalSize = const Size(393 * 2, 1400 * 2);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+      // O app de verdade (main.dart), aberto direto em Ajustes
+      await tester.pumpWidget(AppScope(
+        service: servico,
+        child: PreferenciasScope(preferencias: preferencias, child: const PuzzleBandApp(rotaInicial: '/configuracoes')),
+      ));
+      await carregarImagens(tester);
+      await tester.pumpAndSettle();
+
+      MaterialApp app() => tester.widget<MaterialApp>(find.byType(MaterialApp));
+      Brightness brilho() => Theme.of(tester.element(find.text('Aparência'))).brightness;
+      SystemUiOverlayStyle barras() => tester
+          .widget<AnnotatedRegion<SystemUiOverlayStyle>>(find.byType(AnnotatedRegion<SystemUiOverlayStyle>).first)
+          .value;
+
+      expect(app().themeMode, ThemeMode.system, reason: 'padrão: seguir o sistema');
+      expect(brilho(), Brightness.light);
+      expect(find.bySemanticsLabel(RegExp('Seguir o sistema')), findsOneWidget);
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('aparencia-sistema'))),
+        isSemantics(isChecked: true, hasCheckedState: true, isInMutuallyExclusiveGroup: true, hasTapAction: true),
+      );
+
+      await tocarVisivel(tester, find.text('Escuro'));
+      expect(app().themeMode, ThemeMode.dark);
+      expect(brilho(), Brightness.dark);
+      expect(servico.prefs.getString('aparencia'), 'escuro');
+      expect(barras().statusBarIconBrightness, Brightness.light, reason: 'ícones claros no escuro');
+      expect(barras().systemNavigationBarColor, CoresApp.escuro.superficie);
+      expect(
+        tester.getSemantics(find.byKey(const ValueKey('aparencia-escuro'))),
+        isSemantics(isChecked: true, hasCheckedState: true, isInMutuallyExclusiveGroup: true, hasTapAction: true),
+      );
+      // Reabrir o app lê a escolha salva
+      expect(preferenciasDe(servico).aparencia, Aparencia.escuro);
+
+      await tocarVisivel(tester, find.text('Claro'));
+      expect(app().themeMode, ThemeMode.light);
+      expect(barras().statusBarIconBrightness, Brightness.dark);
+
+      await tocarVisivel(tester, find.text('Seguir o sistema'));
+      expect(app().themeMode, ThemeMode.system);
+      expect(servico.prefs.getString('aparencia'), isNull, reason: 'o padrão não precisa ficar salvo');
+      semantica.dispose();
     });
 
     testWidgets('ajustes mostra o erro de configuração', (tester) async {
@@ -537,7 +976,29 @@ void main() {
         await tocarVisivel(t, find.text('Nenhum episódio agora'));
       },
       'gráficos': (t, e) async => mostrar(t, await possivelCrise(), aba: 1, escuro: e),
+      'gráficos (ruído, 7 dias)': (t, e) async {
+        await mostrar(t, await possivelCrise(), aba: 1, escuro: e, altura: 1300);
+        await tocarNoMeio(t, find.byKey(const ValueKey('metrica-ruido')));
+      },
+      'gráficos (painel parado)': (t, e) async => mostrar(t, await painelEPulseiraOffline(), aba: 1, escuro: e),
       'histórico': (t, e) async => mostrar(t, await calmo(), aba: 2, escuro: e),
+      'histórico (cartão aberto, possível crise a confirmar)': (t, e) async {
+        await mostrar(t, await calmo(), aba: 2, escuro: e, altura: 1600);
+        await tocarNoMeio(t, cartao('ep_4'));
+      },
+      'histórico (descartado)': (t, e) async {
+        await mostrar(t, await calmo(), aba: 2, escuro: e, altura: 1600);
+        await tocarNoMeio(t, cartao('ep_4'));
+        await tocarNoMeio(t, find.text('Descartar'));
+        await t.pump(const Duration(seconds: 5)); // o aviso (SnackBar) some
+        await t.pumpAndSettle();
+      },
+      'histórico (filtro por dia, calendário recolhido)': (t, e) async {
+        await mostrar(t, await calmo(), aba: 2, escuro: e);
+        await tocarNoMeio(t, diaDoCalendario(3));
+        await t.tap(find.byTooltip('Recolher calendário'));
+        await t.pumpAndSettle();
+      },
       'ajustes': (t, e) async => mostrar(t, await painelEPulseiraOffline(), aba: 3, escuro: e, altura: 1100),
     };
 
@@ -564,6 +1025,23 @@ void main() {
           expect(tester.takeException(), isNull);
         }
       }
+      // Graficos: outra metrica e o balao aberto
+      await mostrar(tester, await possivelCrise(), aba: 1, escala: 1.3);
+      await tocarNoMeio(tester, find.byKey(const ValueKey('metrica-regularidade')));
+      final area = tester.getRect(find.byType(GraficoSinais));
+      final gesto = await tester.startGesture(area.center);
+      await tester.pump();
+      expect(find.byType(BalaoSinais), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      await gesto.up();
+      await tester.pump(Grafico.balaoVisivel);
+      await tester.pumpAndSettle();
+      // Historico: calendario, cartao aberto e descartado
+      await mostrar(tester, await calmo(), aba: 2, escala: 1.3);
+      await tocarNoMeio(tester, cartao('ep_4'));
+      await tocarNoMeio(tester, find.text('Descartar'));
+      expect(find.text('Descartado'), findsWidgets);
+      expect(tester.takeException(), isNull);
       // Inicio com o painel aberto, o detalhe do episodio e o editor de lembrete
       for (final (cenario, rotulo) in [
         (calmo, 'Hoje: 2 episódios'),

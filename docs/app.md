@@ -30,10 +30,15 @@ escuro: [design-app.md](design-app.md).
   [Lembretes](#lembretes-e-nome-da-criança)).
 - **Notificação** com som e vibração quando chega um alerta de atenção ou de
   possível crise, com no máximo uma por episódio (detalhes abaixo).
-- **Histórico** dos episódios (os 50 mais recentes do site), com **Confirmar
-  gatilho** / **Descartar** e uma observação curta. A avaliação volta para o
-  site, que mostra "avaliado pelo app". A última cópia fica salva no celular
-  para consulta offline.
+- **Gráficos**: os sinais dos últimos 5 minutos (BPM, suor, HRV, movimento,
+  regularidade, luz, ruído e probabilidade, uma métrica por vez), com um
+  balão que mostra todas as métricas do instante tocado, e as crises dos
+  últimos 7 dias pela avaliação do cuidador.
+- **Histórico** dos episódios (os 50 mais recentes do site), separado por
+  dia, com um **calendário** do mês no topo. Cada episódio é um cartão
+  resumido que abre no lugar, com **Confirmar gatilho** / **Descartar** e uma
+  observação curta. A avaliação volta para o site, que mostra "avaliado pelo
+  app". A última cópia fica salva no celular para consulta offline.
 - **Indicadores de conexão**: broker, pulseira (online/offline) e painel/site
   (ao vivo ou sem dados).
 - **Presença**: o app publica `online`/`offline` (com Last Will) em
@@ -47,12 +52,40 @@ escuro: [design-app.md](design-app.md).
 | Login | Só navega para a tela Início. Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
 | Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do site abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). |
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
-| Gráficos | BPM dos últimos 5 minutos recebidos no tópico `estado` (ao vivo) e episódios por dia nos últimos 7 dias (barra = número de episódios; cor = nível mais alto do dia), com uma frase-resumo (últimos 7 dias e mês). Sem dados, mostra uma mensagem em vez do gráfico. |
-| Histórico | Lista dos episódios: nível máximo, dia e hora ("Hoje, 14:32"), duração, provável gatilho, "alerta visto às HH:MM", avaliação em destaque, botões **Confirmar gatilho** / **Descartar** e uma observação opcional (até 200 caracteres, em "Adicionar observação"). Avisa quando está mostrando a cópia salva. |
-| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), versão e licenças. |
+| Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com o painel parado ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
+| Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. Avisa quando está mostrando a cópia salva. |
+| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), **Aparência** (Seguir o sistema, Claro ou Escuro), versão e licenças. |
 
-O tema segue o do sistema (claro ou escuro) e respeita a fonte ampliada e o
-"Remover animações" do Android. Detalhes em [design-app.md](design-app.md).
+O app respeita a fonte ampliada e o "Remover animações" do Android. Detalhes
+em [design-app.md](design-app.md).
+
+### Tema claro ou escuro
+
+**No app.**
+
+1. Abra **Ajustes** (última aba) e role até **Aparência**.
+2. Toque em **Seguir o sistema** (o padrão: usa o tema escolhido no Android),
+   **Claro** ou **Escuro**.
+
+- O tema muda na hora, sem reiniciar o app. A barra de status e a barra de
+  navegação do Android acompanham o tema escolhido.
+- A escolha fica salva **só neste celular** (`shared_preferences`, como o
+  nome da criança). Ela não vai para o MQTT nem para o site.
+- A tela de abertura, que aparece por um instante antes do app carregar,
+  segue sempre o tema do Android.
+
+**No site (painel).**
+
+1. No cabeçalho, ao lado de **Fonte dos dados**, use o grupo **Tema**:
+   **◐ Sistema** (o padrão), **☀ Claro** ou **☾ Escuro**.
+
+- A escolha fica salva no navegador (`localStorage`) e vale nas próximas
+  vezes que a página for aberta.
+- Se o navegador bloquear o armazenamento, o tema volta a seguir o sistema.
+- O tema do site e o do app são independentes.
+
+Paleta, contrastes e decisões do tema escuro:
+[design-app.md](design-app.md#8-tema-escuro).
 
 A tela de GPS (vazia) saiu da navegação. O arquivo `gps_screen.dart`
 continua no projeto e mostra "em breve".
@@ -140,6 +173,64 @@ sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
 - Consequência: limpar os dados do app, desinstalar ou trocar de celular
   apaga os lembretes, e outro cuidador não vê os lembretes deste. A
   notificação do aviso não leva o nome da criança.
+
+### Calendário do Histórico
+
+O calendário conta pela **sua avaliação**, não pelo nível que o modelo deu:
+
+| Você marcou o episódio como | No calendário |
+|---|---|
+| Confirmado (**Confirmar gatilho**) | Conta como **crise** no dia, qualquer que tenha sido o nível |
+| Pendente (ainda não avaliou) | **Possível crise aguardando confirmação**: não entra na contagem nem na cor |
+| Descartado (**Descartar**) | Não aparece no calendário de forma nenhuma (nem no gráfico de 7 dias) |
+
+**Como ler um dia.**
+
+- **Fundo amarelo**: de 1 a 5 crises confirmadas no dia.
+- **Fundo vermelho**: mais de 5 crises confirmadas.
+- **Sem cor**: nenhuma crise confirmada.
+- **Número pequeno** embaixo do dia: quantas crises você confirmou. A cor
+  nunca é a única informação.
+- **Bolinha azul** ao lado do número: o dia só tem possíveis crises
+  aguardando sua confirmação (nenhuma confirmada). É um lembrete para
+  revisar esses episódios. Se o dia já tem alguma crise confirmada, a
+  bolinha não aparece.
+- **Contorno**: o dia de hoje.
+
+O leitor de tela fala o dia inteiro, por exemplo "3 de novembro: 4 crises
+confirmadas" ou "5 de novembro: 2 possíveis crises aguardando confirmação".
+
+**Usar o calendário.**
+
+- Tocar num dia mostra só os episódios dele ("Mostrando só 3 de
+  novembro."). **Ver todos** (ou tocar de novo no mesmo dia) volta à lista
+  inteira.
+- As setas trocam o mês, do primeiro mês com episódio até o mês atual.
+- O botão com a seta para cima recolhe o calendário; recolhido, ele mostra
+  só o mês e o total ("Em novembro: 9 crises confirmadas e 2 aguardando sua
+  confirmação.").
+
+**"Possível crise" tem dois sentidos, e o app separa os dois.**
+
+- O **nível do modelo** "Possível crise" (`alto_risco`) aparece numa pílula
+  cheia e tingida, com o ícone do nível, ao lado do horário do episódio.
+- A **avaliação pendente** aparece sempre como **"Possível crise · a
+  confirmar"**: uma pílula só com contorno azul, com uma ampulheta, no fim do
+  cartão. Tocar nela abre o cartão já nos botões de avaliação.
+
+**Confirmar e descartar.**
+
+- **Confirmar gatilho** diz que o episódio foi mesmo uma crise. Ele passa a
+  contar no calendário e no gráfico de 7 dias, e o botão vira
+  **Confirmado**. Confirmar também ajuda o Puzzle Band a aprender os padrões
+  desta criança em versões futuras. Por enquanto o app só envia a
+  avaliação; nenhum aprendizado roda no celular.
+- **Descartar** diz que a indicação não fazia sentido. O botão fica
+  vermelho, com o texto **Descartado**, e o cartão mostra o selo
+  "Descartado". O episódio continua na lista, mas sai do calendário e do
+  gráfico de 7 dias.
+- Dá para mudar de ideia: tocar no outro botão reenvia a avaliação ao site
+  (tópico `avaliacao`, como antes). Sem conexão, o app avisa que não enviou.
 
 ## Configuração (`env.json`)
 
@@ -243,7 +334,8 @@ mobile/
 │   ├── main.dart               # inicializa serviços, rotas, barra inferior, ciclo de vida
 │   ├── config/app_config.dart  # MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, CHILD_ID e tópicos
 │   ├── models/models.dart      # parse validado de estado, alertas e histórico
-│   ├── models/resumo.dart      # episódios do dia, do mês e dos últimos 7 dias
+│   ├── models/resumo.dart      # contagens por dia/mês/7 dias pela avaliação do cuidador; lista por dia
+│   ├── models/sinais.dart      # leituras dos últimos 5 min (todas as métricas), faixas de eixo e trechos de nível
 │   ├── services/
 │   │   ├── mqtt_service.dart        # serviço MQTT único (ChangeNotifier)
 │   │   ├── notification_service.dart# notificações locais dos alertas e canais Android
@@ -252,7 +344,7 @@ mobile/
 │   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
 │   ├── screens/                # login, início, detalhe do episódio, gráficos, histórico, ajustes (+ gps "em breve")
-│   ├── widgets/                # faixa de estado, cartões do episódio, painel do dia, lembretes, nível, gatilho, cabeçalho...
+│   ├── widgets/                # faixa de estado, cartões do episódio (completo e resumido), calendário, selo da avaliação, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
 └── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)
 ```
@@ -285,9 +377,11 @@ rede.
   credencial pode fazer. A solução definitiva é a autenticação por usuário
   (tokens emitidos por um backend).
 - O histórico do app tem só os 50 episódios mais recentes que o site enviou.
-  Por isso "Picos de estresse no mês" conta apenas esses.
+  Por isso o calendário, o total do mês e o gráfico de 7 dias contam apenas
+  esses: com muitos episódios, os meses mais antigos ficam incompletos.
 - A média de BPM é a dos últimos 5 minutos calculada pelo site, não a do dia
-  inteiro: o app não guarda as leituras.
+  inteiro. O app guarda as leituras dos últimos 5 minutos só na memória,
+  para o gráfico: fechar o app apaga essas leituras.
 - **Lembretes só no celular.** Por decisão de privacidade, eles não têm
   cópia no site nem no broker: limpar os dados do app ou trocar de celular
   apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).

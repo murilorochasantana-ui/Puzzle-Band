@@ -1,10 +1,11 @@
 // Dados que o cuidador escreve e que ficam SO neste celular
-// (shared_preferences): o nome da crianca e os lembretes (de um episodio ou
-// do dia). Decisao de privacidade (docs/app.md): nada disto vai para o MQTT,
+// (shared_preferences): o nome da crianca, os lembretes (de um episodio ou
+// do dia) e a aparencia (claro, escuro ou seguir o sistema). Decisao de privacidade (docs/app.md): nada disto vai para o MQTT,
 // para o painel (site) nem para outro aparelho.
 
 import 'dart:convert';
 
+import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -49,6 +50,22 @@ class Lembrete {
   }
 }
 
+/// Tema do app escolhido em Ajustes > Aparencia.
+enum Aparencia {
+  sistema('sistema', ThemeMode.system),
+  claro('claro', ThemeMode.light),
+  escuro('escuro', ThemeMode.dark);
+
+  const Aparencia(this.codigo, this.themeMode);
+
+  /// Valor salvo no shared_preferences.
+  final String codigo;
+  final ThemeMode themeMode;
+
+  static Aparencia fromCodigo(String? codigo) =>
+      Aparencia.values.firstWhere((a) => a.codigo == codigo, orElse: () => Aparencia.sistema);
+}
+
 /// Resultado de salvar um lembrete (para a mensagem na tela).
 enum ResultadoLembrete { salvo, salvoComAviso, avisoFalhou, apagado }
 
@@ -69,10 +86,31 @@ class PreferenciasLocais extends ChangeNotifier {
   static const _diasDoLembreteDoDia = 30;
 
   static const _chaveNome = 'nome_crianca';
+  static const _chaveAparencia = 'aparencia';
   static const _chaveLembretes = 'lembretes_v1';
 
   String _nome = '';
+  Aparencia _aparencia = Aparencia.sistema;
   final Map<String, Lembrete> _lembretes = {};
+
+  // -------------------------------------------------------------------------
+  // Aparencia
+  // -------------------------------------------------------------------------
+
+  /// Padrao: seguir o sistema.
+  Aparencia get aparencia => _aparencia;
+
+  /// Troca o tema na hora (o MaterialApp escuta estas preferencias) e salva.
+  Future<void> definirAparencia(Aparencia aparencia) async {
+    if (aparencia == _aparencia) return;
+    _aparencia = aparencia;
+    notifyListeners();
+    if (aparencia == Aparencia.sistema) {
+      await prefs.remove(_chaveAparencia);
+    } else {
+      await prefs.setString(_chaveAparencia, aparencia.codigo);
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Nome da crianca
@@ -161,6 +199,7 @@ class PreferenciasLocais extends ChangeNotifier {
 
   void _carregar() {
     _nome = prefs.getString(_chaveNome) ?? '';
+    _aparencia = Aparencia.fromCodigo(prefs.getString(_chaveAparencia));
     try {
       final dados = jsonDecode(prefs.getString(_chaveLembretes) ?? '{}');
       if (dados is Map<String, dynamic>) {

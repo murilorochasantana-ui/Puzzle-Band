@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fundo do tema escuro do app (lib/theme/cores.dart): a tela de
+         abertura no modo escuro do sistema nao fica preta pura. -->
+    <color name="fundo_app">#11181D</color>
+</resources>

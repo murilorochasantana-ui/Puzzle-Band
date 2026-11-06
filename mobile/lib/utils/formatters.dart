@@ -65,3 +65,38 @@ String quandoEm(DateTime d, DateTime agora) {
   };
   return '$prefixo às ${horaMinuto(d)}';
 }
+
+const _mesesCurtos = ['jan.', 'fev.', 'mar.', 'abr.', 'maio', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'];
+const _semana = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+
+/// "Seg, 3 de nov." (com o ano quando nao e o ano de [agora])
+String dataCurta(DateTime d, {DateTime? agora}) {
+  final ano = agora != null && agora.year != d.year ? ' de ${d.year}' : '';
+  return '${_semana[d.weekday - 1]}, ${d.day} de ${_mesesCurtos[d.month - 1]}$ano';
+}
+
+/// "3 de novembro"
+String diaPorExtenso(DateTime d) => '${d.day} de ${nomeDoMes(d.month)}';
+
+/// "Novembro de 2026"
+String mesEAno(DateTime d) {
+  final mes = nomeDoMes(d.month);
+  return '${mes[0].toUpperCase()}${mes.substring(1)} de ${d.year}';
+}
+
+/// Numero com virgula decimal: 9.42 -> "9,4" (1 casa); 128.0 -> "128".
+String numeroBr(double valor, int casas) => valor.toStringAsFixed(casas).replaceAll('.', ',');
+
+/// "1 crise confirmada" / "4 crises confirmadas" / "nenhuma crise confirmada"
+String contarConfirmadas(int n) => switch (n) {
+      0 => 'nenhuma crise confirmada',
+      1 => '1 crise confirmada',
+      _ => '$n crises confirmadas',
+    };
+
+/// "1 possível crise aguardando confirmação" / "2 possíveis crises ..."
+String contarPendentes(int n) => switch (n) {
+      0 => 'nenhuma possível crise aguardando confirmação',
+      1 => '1 possível crise aguardando confirmação',
+      _ => '$n possíveis crises aguardando confirmação',
+    };

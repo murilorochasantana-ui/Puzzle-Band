@@ -2,6 +2,7 @@
 // sao sobrescritos e o estado e montado a mao em cada cenario.
 import 'package:puzzleband/config/app_config.dart';
 import 'package:puzzleband/models/models.dart';
+import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/services/aviso_de_lembrete.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
@@ -19,7 +20,7 @@ class ServicoFalso extends MqttService {
   EstadoAtual? estadoAtual;
   DateTime? recebidoEm;
   bool aoVivo = true;
-  List<BpmPonto> bpm = const [];
+  List<AmostraSinais> sinais = const [];
   List<Episodio> episodios = const [];
   DateTime? historicoEm;
   bool historicoVivo = true;
@@ -45,7 +46,7 @@ class ServicoFalso extends MqttService {
   @override
   EpisodioAtivo? get episodioAtivo => estadoAoVivo ? estadoAtual?.episodio : null;
   @override
-  List<BpmPonto> get bpmRecentes => bpm;
+  List<AmostraSinais> get sinaisRecentes => sinais;
   @override
   List<Episodio> get historico => episodios;
   @override

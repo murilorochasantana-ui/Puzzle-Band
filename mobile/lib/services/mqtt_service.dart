@@ -6,6 +6,8 @@
 //     (retain) a cada conexao - o site mostra "App do cuidador: conectado";
 //   - assina estado, alertas, historico e status (da pulseira);
 //   - publica ack ("Estou ciente") e avaliacao (confirmar/descartar gatilho);
+//   - guarda os ultimos 5 min de leituras do estado (todas as metricas) para
+//     o grafico ao vivo;
 //   - guarda a ultima copia do historico (shared_preferences) para mostrar
 //     sem conexao.
 // Mensagem malformada e descartada sem derrubar o app.
@@ -23,18 +25,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 import '../models/models.dart';
+import '../models/sinais.dart';
 import 'notification_service.dart';
 
 enum BrokerStatus { naoConfigurado, conectando, conectado, desconectado, erro }
 
 enum Presenca { online, offline, desconhecido }
-
-class BpmPonto {
-  const BpmPonto(this.hora, this.bpm);
-
-  final DateTime hora;
-  final double bpm;
-}
 
 class MqttService extends ChangeNotifier {
   MqttService({required this.config, required this.prefs, required this.notificacoes})
@@ -45,7 +41,7 @@ class MqttService extends ChangeNotifier {
   final NotificationService notificacoes;
   final Topics _topics;
 
-  static const janelaBpm = Duration(minutes: 5); // grafico ao vivo
+  static const janelaSinais = Duration(minutes: 5); // grafico ao vivo
   static const _estadoMaxAtraso = Duration(seconds: 6); // site publica 1x/s
   static const _alertaMaxAtraso = Duration(minutes: 10); // alerta mais velho nao notifica
   static const _maxAlertas = 50;
@@ -73,8 +69,7 @@ class MqttService extends ChangeNotifier {
   EstadoAtual? _estado;
   DateTime? _estadoEm;
   bool _aoVivoAnterior = false;
-  String? _ultimaLeituraBpm;
-  final List<BpmPonto> _bpm = [];
+  final JanelaDeSinais _sinais = JanelaDeSinais(duracao: janelaSinais);
   final List<Alerta> _alertas = [];
   List<Episodio> _historico = const [];
   DateTime? _historicoRecebidoEm;
@@ -102,7 +97,9 @@ class MqttService extends ChangeNotifier {
   /// Episodio em andamento segundo o estado ao vivo (null se nao ha).
   EpisodioAtivo? get episodioAtivo => estadoAoVivo ? _estado?.episodio : null;
 
-  List<BpmPonto> get bpmRecentes => List.unmodifiable(_bpm);
+  /// Leituras ao vivo dos ultimos 5 minutos (todas as metricas, a
+  /// probabilidade e o nivel), a mais antiga primeiro.
+  List<AmostraSinais> get sinaisRecentes => _sinais.amostras;
   List<Alerta> get alertas => List.unmodifiable(_alertas);
   List<Episodio> get historico => _historico;
   DateTime? get historicoRecebidoEm => _historicoRecebidoEm;
@@ -389,19 +386,9 @@ class MqttService extends ChangeNotifier {
     _estado = novo;
     _estadoEm = referencia;
     _aoVivoAnterior = estadoAoVivo;
-    _registrarBpm(novo, agora);
+    // Pausado no site, o estado repete a mesma leitura: nao entra de novo
+    _sinais.registrar(novo, agora, aoVivo: estadoAoVivo);
     return true;
-  }
-
-  void _registrarBpm(EstadoAtual e, DateTime agora) {
-    _bpm.removeWhere((p) => agora.difference(p.hora) > janelaBpm);
-    final bpm = e.leituras?.bpm;
-    final idLeitura = e.leituras?.timestamp;
-    if (!estadoAoVivo || bpm == null) return;
-    // Pausado no site: o estado repete a mesma leitura - nao entra de novo
-    if (idLeitura != null && idLeitura == _ultimaLeituraBpm) return;
-    _ultimaLeituraBpm = idLeitura;
-    _bpm.add(BpmPonto(agora, bpm));
   }
 
   bool _tratarAlerta(String texto) {

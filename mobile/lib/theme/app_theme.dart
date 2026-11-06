@@ -3,6 +3,7 @@
 // daqui e as cores de `CoresApp`.
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'cores.dart';
 import 'medidas.dart';
@@ -13,11 +14,29 @@ export 'medidas.dart';
 export 'tipografia.dart';
 
 abstract final class AppTheme {
-  static ThemeData claro() => _tema(Brightness.light, CoresApp.claro);
+  static ThemeData claro() => _tema(Brightness.light, CoresApp.claro, CoresDados.claro);
 
-  static ThemeData escuro() => _tema(Brightness.dark, CoresApp.escuro);
+  static ThemeData escuro() => _tema(Brightness.dark, CoresApp.escuro, CoresDados.escuro);
 
-  static ThemeData _tema(Brightness brilho, CoresApp c) {
+  /// Barra de status e barra de navegacao do Android no tema que esta
+  /// valendo: status transparente (o fundo da tela aparece atras), com icones
+  /// claros no escuro e escuros no claro; navegacao na cor da barra inferior
+  /// do app, com a mesma divisoria.
+  static SystemUiOverlayStyle barrasDoSistema(Brightness brilho) {
+    final c = brilho == Brightness.dark ? CoresApp.escuro : CoresApp.claro;
+    final icones = brilho == Brightness.dark ? Brightness.light : Brightness.dark;
+    return SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: icones,
+      statusBarBrightness: brilho, // iOS
+      systemNavigationBarColor: c.superficie,
+      systemNavigationBarIconBrightness: icones,
+      systemNavigationBarDividerColor: c.divisoria,
+      systemNavigationBarContrastEnforced: false,
+    );
+  }
+
+  static ThemeData _tema(Brightness brilho, CoresApp c, CoresDados dados) {
     final texto = Tipografia.textTheme(tinta: c.tinta, suave: c.tintaSuave);
     final controle = RoundedRectangleBorder(borderRadius: BorderRadius.circular(Raio.controle));
     const tamanhoMinimo = Size(Toque.minimo, Toque.minimo);
@@ -68,7 +87,7 @@ abstract final class AppTheme {
       useMaterial3: true,
       brightness: brilho,
       colorScheme: esquema,
-      extensions: [c],
+      extensions: [c, dados],
       fontFamily: Tipografia.familia,
       fontFamilyFallback: Tipografia.fallback,
       textTheme: texto,
@@ -89,6 +108,16 @@ abstract final class AppTheme {
         },
       ),
       iconTheme: IconThemeData(color: c.tintaSuave, size: 24),
+      // So a tela "Licenças de software" (showLicensePage) tem AppBar
+      appBarTheme: AppBarTheme(
+        backgroundColor: c.fundo,
+        foregroundColor: c.tinta,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        titleTextStyle: texto.titleLarge,
+        systemOverlayStyle: barrasDoSistema(brilho),
+      ),
       dividerTheme: DividerThemeData(color: c.divisoria, thickness: 1, space: 1),
       cardTheme: CardThemeData(
         color: c.superficie,
@@ -179,15 +208,45 @@ abstract final class AppTheme {
           ),
         ),
       ),
+      // Aviso: o mesmo par do balao dos graficos (no escuro, superficie
+      // elevada com contorno, sem bloco claro a noite)
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor: c.tinta,
-        contentTextStyle: texto.bodyMedium!.copyWith(color: c.fundo),
-        actionTextColor: c.primariaSuave,
+        backgroundColor: c.balao.fundo,
+        contentTextStyle: texto.bodyMedium!.copyWith(color: c.balao.texto),
+        actionTextColor: brilho == Brightness.dark ? c.primaria : c.primariaSuave,
         elevation: 0,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Raio.controle)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Raio.controle),
+          side: BorderSide(color: c.balaoBorda),
+        ),
+      ),
+      // Aparencia (Ajustes): anel de 3:1 desmarcado, cor de acao marcado
+      radioTheme: RadioThemeData(
+        fillColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? c.primaria : c.contorno,
+        ),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: c.primaria),
+      // Seletor de metrica (Graficos): escolhido com fundo e contorno mais
+      // grosso, nao so pela cor
+      chipTheme: ChipThemeData(
+        backgroundColor: c.superficie,
+        selectedColor: c.primariaSuave,
+        disabledColor: c.superficieAlta,
+        labelStyle: texto.labelMedium!.copyWith(color: c.tinta),
+        secondaryLabelStyle: texto.labelMedium!.copyWith(color: c.sobrePrimariaSuave),
+        padding: const EdgeInsets.symmetric(horizontal: Espaco.s, vertical: Espaco.xs),
+        side: WidgetStateBorderSide.resolveWith(
+          (s) => s.contains(WidgetState.selected)
+              ? BorderSide(color: c.primaria, width: 2)
+              : BorderSide(color: c.contorno),
+        ),
+        shape: const StadiumBorder(),
+        showCheckmark: false,
+        elevation: 0,
+        pressElevation: 0,
+      ),
       // Editor de lembrete
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: c.superficie,

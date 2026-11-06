@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:puzzleband/config/app_config.dart';
 import 'package:puzzleband/models/models.dart';
 import 'package:puzzleband/models/resumo.dart';
+import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/services/notification_service.dart';
 import 'package:puzzleband/utils/formatters.dart';
 
@@ -143,16 +144,148 @@ void main() {
       expect(episodiosNoMes(episodios, agora), 3);
     });
 
-    test('ultimos 7 dias: total e nivel mais alto por dia', () {
-      final dias = ultimos7Dias(episodios, agora);
+    Episodio ep(String id, DateTime inicio, Avaliacao avaliacao, {double? duracaoS = 60, String? encerramento = 'normalizou'}) =>
+        Episodio(
+          id: id,
+          inicio: inicio,
+          nivelMaximo: NivelRisco.atencao,
+          avaliacao: avaliacao,
+          duracaoS: duracaoS,
+          encerramento: encerramento,
+        );
+
+    test('calendario: conta pela avaliacao, descartado nao entra', () {
+      final lista = [
+        for (var i = 0; i < 7; i++) ep('v$i', DateTime(2026, 11, 3, 8 + i), Avaliacao.confirmado),
+        for (var i = 0; i < 3; i++) ep('a$i', DateTime(2026, 11, 1, 8 + i), Avaliacao.confirmado),
+        ep('p1', DateTime(2026, 11, 2, 9), Avaliacao.pendente),
+        ep('p2', DateTime(2026, 11, 2, 10), Avaliacao.pendente),
+        ep('d1', DateTime(2026, 11, 4, 9), Avaliacao.descartado),
+        ep('d2', DateTime(2026, 11, 1, 20), Avaliacao.descartado),
+        ep('m1', DateTime(2026, 11, 5, 9), Avaliacao.confirmado),
+        ep('m2', DateTime(2026, 11, 5, 10), Avaliacao.pendente),
+      ];
+      final dias = contagemPorDia(lista);
+      expect(dias[DateTime(2026, 11, 3)]!.confirmadas, 7);
+      expect(dias[DateTime(2026, 11, 1)]!.confirmadas, 3, reason: 'o descartado do dia nao conta');
+      expect(dias[DateTime(2026, 11, 2)]!.somentePendentes, isTrue);
+      expect(dias[DateTime(2026, 11, 5)]!.somentePendentes, isFalse, reason: 'tem confirmada: sem bolinha');
+      expect(dias.containsKey(DateTime(2026, 11, 4)), isFalse, reason: 'dia so com descartado nao aparece');
+
+      expect(corDoDia(0), CorDoDia.nenhuma);
+      expect(corDoDia(1), CorDoDia.amarelo);
+      expect(corDoDia(3), CorDoDia.amarelo);
+      expect(corDoDia(5), CorDoDia.amarelo);
+      expect(corDoDia(6), CorDoDia.vermelho);
+      expect(corDoDia(7), CorDoDia.vermelho);
+
+      final mes = contagemNoMes(dias, 2026, 11);
+      expect(mes.confirmadas, 11);
+      expect(mes.pendentes, 3);
+    });
+
+    test('ultimos 7 dias: confirmadas e pendentes, sem descartados; duracao so dos encerrados', () {
+      final lista = [
+        ep('1', DateTime(2026, 11, 4, 9), Avaliacao.confirmado, duracaoS: 65),
+        ep('2', DateTime(2026, 11, 4, 14), Avaliacao.pendente, duracaoS: 40),
+        ep('3', DateTime(2026, 11, 4, 14, 50), Avaliacao.pendente, duracaoS: null, encerramento: null),
+        ep('4', DateTime(2026, 11, 4, 10), Avaliacao.descartado, duracaoS: 500),
+        ep('5', DateTime(2026, 11, 2, 8), Avaliacao.descartado),
+        ep('6', DateTime(2026, 10, 20, 8), Avaliacao.confirmado),
+      ];
+      final dias = ultimos7Dias(lista, agora);
       expect(dias.length, 7);
       expect(dias.last.rotulo, 'Qua'); // 04/11/2026 e quarta-feira
-      expect(dias.last.total, 2);
-      expect(dias.last.nivelMaximo, NivelRisco.altoRisco);
-      expect(dias[4].total, 1); // 02/11
-      expect(dias[4].nivelMaximo, NivelRisco.atencao);
-      expect(dias.first.total, 0);
-      expect(dias.first.nivelMaximo, isNull);
+      expect(dias.last.contagem.confirmadas, 1);
+      expect(dias.last.contagem.pendentes, 2);
+      expect(dias.last.contagem.duracaoS, 105, reason: 'descartado e em andamento nao somam');
+      expect(dias[4].contagem.total, 0, reason: '02/11 so tem descartado');
+      expect(dias.first.contagem.total, 0);
+    });
+
+    test('lista por dia: mais recente primeiro, todos os episodios', () {
+      final grupos = episodiosPorDia([
+        ep('a', DateTime(2026, 11, 2, 8), Avaliacao.descartado),
+        ep('b', DateTime(2026, 11, 4, 9), Avaliacao.pendente),
+        ep('c', DateTime(2026, 11, 4, 14), Avaliacao.confirmado),
+      ]);
+      expect(grupos.map((g) => g.$1), [DateTime(2026, 11, 4), DateTime(2026, 11, 2)]);
+      expect(grupos.first.$2.map((e) => e.id), ['c', 'b']);
+      expect(grupos.last.$2.single.id, 'a', reason: 'descartado continua na lista');
+    });
+  });
+
+  group('sinais ao vivo', () {
+    final inicio = DateTime(2026, 11, 5, 15);
+    EstadoAtual estado(String leitura, {double? bpm = 90, NivelRisco nivel = NivelRisco.baixoRisco}) => EstadoAtual(
+          fonte: 'manual',
+          nivel: nivel,
+          probabilidade: 0.42,
+          leituras: Leituras(
+            timestamp: leitura,
+            bpm: bpm,
+            edaUs: 3.1,
+            hrvMs: 48,
+            gyroDps: 1.5,
+            regularidade: 0.2,
+            luzLux: 300,
+            ruidoDb: 50,
+          ),
+        );
+
+    test('guarda todas as metricas por 5 minutos, uma vez por leitura', () {
+      final janela = JanelaDeSinais();
+      expect(janela.registrar(estado('l1'), inicio, aoVivo: true), isTrue);
+      expect(janela.registrar(estado('l1'), inicio.add(const Duration(seconds: 1)), aoVivo: true), isFalse,
+          reason: 'site pausado repete a leitura');
+      expect(janela.registrar(estado('l2', bpm: null), inicio.add(const Duration(seconds: 2)), aoVivo: true), isTrue,
+          reason: 'sem BPM ainda guarda as outras metricas');
+      expect(janela.registrar(estado('l3'), inicio.add(const Duration(seconds: 3)), aoVivo: false), isFalse);
+
+      final a = janela.amostras.first;
+      expect(Metrica.values.map((m) => m.valor(a)), [90, 3.1, 48, 1.5, 0.2, 300, 50, closeTo(42, 1e-9)]);
+      expect(janela.amostras[1].bpm, isNull);
+
+      janela.registrar(estado('l4'), inicio.add(const Duration(minutes: 5, seconds: 1)), aoVivo: true);
+      expect(janela.amostras.length, 2, reason: 'a primeira passou de 5 min');
+    });
+
+    test('estatistica, faixa do eixo e trechos de nivel', () {
+      const niveis = [
+        NivelRisco.baixoRisco,
+        NivelRisco.atencao,
+        NivelRisco.atencao,
+        NivelRisco.altoRisco,
+        NivelRisco.baixoRisco,
+        NivelRisco.atencao,
+      ];
+      final amostras = [
+        for (var i = 0; i < 6; i++) AmostraSinais(hora: inicio.add(Duration(seconds: i)), nivel: niveis[i], bpm: 80.0 + i * 10),
+      ];
+      final est = EstatisticaSinal.de(amostras, Metrica.bpm)!;
+      expect([est.atual, est.minima, est.maxima, est.media], [130, 80, 130, 105]);
+      expect(EstatisticaSinal.de(amostras, Metrica.eda), isNull);
+
+      final faixa = Metrica.bpm.faixa.ajustada([35, 190]);
+      expect([faixa.minimo, faixa.maximo, faixa.intervalo], [0, 200, 40], reason: 'no maximo 6 divisoes');
+      expect(Metrica.regularidade.faixa.ajustada([3]).maximo, 1, reason: 'faixa fixa');
+
+      final trechos = trechosDeNivel(amostras);
+      expect(trechos.map((t) => t.nivel), [NivelRisco.atencao, NivelRisco.altoRisco, NivelRisco.atencao]);
+      expect(trechos.first.inicio, inicio.add(const Duration(seconds: 1)));
+      expect(trechos.first.fim, inicio.add(const Duration(seconds: 3)));
+      expect(trechos.last.fim, inicio.add(const Duration(seconds: 5)));
+    });
+
+    test('formatos: virgula decimal, datas por extenso e contagens', () {
+      expect(numeroBr(9.42, 1), '9,4');
+      expect(numeroBr(128, 0), '128');
+      expect(dataCurta(DateTime(2026, 11, 3)), 'Ter, 3 de nov.');
+      expect(dataCurta(DateTime(2025, 5, 4), agora: inicio), 'Dom, 4 de maio de 2025');
+      expect(diaPorExtenso(DateTime(2026, 11, 3)), '3 de novembro');
+      expect(mesEAno(DateTime(2026, 11)), 'Novembro de 2026');
+      expect(contarConfirmadas(1), '1 crise confirmada');
+      expect(contarPendentes(2), '2 possíveis crises aguardando confirmação');
     });
   });
 

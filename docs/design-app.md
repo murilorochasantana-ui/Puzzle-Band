@@ -41,8 +41,13 @@ Três princípios guiam todas as telas:
   vermelha, amarela e azul, e o vermelho e o amarelo são justamente as cores
   de Atenção e Possível crise. Por isso o logo mantém as suas cores, mas a
   interface nunca usa vermelho ou amarelo como decoração, nem em botões como
-  "Descartar" ou "Sair" (no visual anterior os dois eram vermelhos). A cor de
-  ação vem do azul da fita, dessaturado.
+  "Sair" (no visual anterior ele era vermelho). A cor de ação vem do azul da
+  fita, dessaturado. Duas exceções, pedidas para o Histórico e sempre com
+  ícone e texto: o calendário pinta de amarelo e vermelho os dias com crises
+  confirmadas (é informação de risco, explicada na legenda), e o botão
+  "Descartar", depois de escolhido, fica vermelho tijolo com o texto
+  "Descartado", como alerta visual. O tijolo é diferente do framboesa de
+  "Possível crise", para "descartado" não parecer "crise".
 - **Cada texto faz um trabalho.** Títulos em caixa normal (a única caixa alta
   é o logotipo "PUZZLE BAND", que é identidade), frases curtas em voz ativa e
   mensagens de erro que dizem o que aconteceu e o que fazer.
@@ -97,6 +102,57 @@ tingido fica acima de 11:1 nos dois temas.
   com contraste ≥ 3:1 contra a superfície. A primeira tentativa (verde-sálvia,
   âmbar e vermelho mais próximos) falhou nessa checagem e foi ajustada.
 
+### Gráficos, calendário e avaliação
+
+Ficam em `CoresDados` (`mobile/lib/theme/cores.dart`), ao lado das cores
+base.
+
+**Métricas do gráfico ao vivo.** Uma cor por métrica, só tons frios ou
+neutros. Nenhuma usa o vermelho, o âmbar ou o verde dos níveis.
+
+| Métrica | Claro | Escuro |
+|---|---|---|
+| Batimentos | `#4376B6` | `#407BC5` |
+| Suor (EDA) | `#9A5A94` | `#B57BAF` |
+| HRV | `#025884` | `#069CE4` |
+| Movimento | `#6E67BD` | `#736DC3` |
+| Regularidade | `#845011` | `#C2823E` |
+| Luz | `#3A4D91` | `#6076BE` |
+| Ruído | `#108EA3` | `#33A3B4` |
+| Probabilidade | `#8160B5` | `#8766BB` |
+
+- Todas têm pelo menos 3:1 sobre a superfície e sobre as faixas de Atenção e
+  Possível crise, nos dois temas (a menor medida: 3,25 no claro e 3,03 no
+  escuro).
+- O validador da skill de visualização de dados aprovou a faixa de
+  luminosidade, o croma e o contraste. A separação entre cores vizinhas no
+  seletor ficou em ΔE 14,0 (claro) e 13,4 (escuro), um pouco abaixo dos 15
+  pedidos para séries **lado a lado**. Com o vermelho, o âmbar e o verde fora,
+  sobra uma faixa estreita de matizes, e nenhuma combinação testada passou
+  de 15.
+- Isso é aceitável aqui por dois motivos: o gráfico desenha **uma métrica por
+  vez**, e a cor nunca identifica a série sozinha. O nome e a unidade estão
+  no seletor, no título do eixo, no resumo e no balão.
+
+**Calendário, avaliação e 7 dias.**
+
+| Papel | Claro | Escuro | Contraste (claro / escuro) |
+|---|---|---|---|
+| Dia amarelo (1 a 5 crises) | fundo `#F3C54E`, texto `#1B2A35` | fundo `#E0B13F`, texto `#1B1607` | 9,0 / 9,0 |
+| Dia vermelho (mais de 5) | fundo `#B02E52`, texto `#FFFFFF` | fundo `#E7849A`, texto `#1F0A11` | 6,3 / 7,4 |
+| "A confirmar" (bolinha, contorno, ícone e texto) | `#1E66B0` | `#8CC3F2` | 5,9 / 8,5 sobre a superfície |
+| Botão e selo "Descartado" (pílula cheia) | fundo `#B3261E`, texto `#FFFFFF` | fundo `#9E3418`, texto `#FCEAE6` | 6,5 / 6,1 |
+| Ícone de descartado sobre superfície neutra | `#B3261E` | `#FF9F85` | 5,4 / 6,7 sobre o destaque |
+| Barra "crise confirmada" | `#2D5B86` | `#9DC2E6` | 7,1 / 8,6 sobre a superfície |
+| Barra "aguardando confirmação" | fundo `#DCE7F2` + listras `#5F86AD` | fundo `#23415E` + listras `#7FA6CC` | listras 3,8 / 6,2 sobre a superfície |
+
+- Os dias amarelo e vermelho usam tons mais fortes dos matizes de Atenção e
+  Possível crise.
+- O número do dia e a contagem de crises usam o texto do par, sempre com
+  pelo menos 4,5:1.
+- O selo "Descartado" era uma pílula rosada, quase igual à pílula do nível
+  "Possível crise". Agora é cheio, como o botão (seção 8).
+
 ## 4. Tipografia
 
 - **Fonte: Atkinson Hyperlegible Next** (Braille Institute of America,
@@ -148,6 +204,10 @@ tingido fica acima de 11:1 nos dois temas.
     sozinha depois de 5 s, com outro fade de 200 ms;
   - o painel "Hoje" abre e fecha com transição de tamanho, e a seta gira de
     ">" para "⌄";
+  - no Histórico, o cartão do episódio e o calendário abrem e fecham no lugar
+    com transição de tamanho; o selo "a confirmar" rola a lista até os botões;
+  - nos Gráficos, o balão do instante tocado fica 4 s depois de tirar o dedo
+    e some sem animação; o balão do gráfico de 7 dias entra com um fade curto;
   - um único fade na abertura do Login.
 - **Sem movimento:** nada se move sozinho. O coração e o ponto de estado que
   pulsavam sem parar no visual anterior (900 ms, escala de 0,95 a 1,2) foram
@@ -175,6 +235,11 @@ tingido fica acima de 11:1 nos dois temas.
 | Painel "Hoje": o botão informa ao leitor de tela se está aberto ou recolhido; cada episódio é um botão que fala o relatório inteiro | O cuidador sabe o que o toque faz e ouve o episódio sem abrir o detalhe | Teste do estado expandido (`isExpanded`) e dos rótulos; `labeledTapTargetGuideline` com o painel aberto |
 | A confirmação do "Estou ciente" é anunciada uma vez e some sozinha depois de 5 s; o botão não volta para o mesmo episódio | A mensagem não fica velha na tela, e o cuidador não precisa fechar nada | Teste com `tester.pump(Duration(seconds: 5))`; teste de que o timer é cancelado ao sair da tela |
 | Botão "Hoje" com contorno de 3,2:1 sobre o fundo (o modelo tinha 1,4:1) | É um controle (WCAG 1.4.11) | Contraste medido; `androidTapTargetGuideline` |
+| BPM como um grupo (coração a 8 dp do número, "bpm" na linha de base), centrado numa área de largura fixa, com algarismos de mesma largura | O número muda 1×/s; se a divisória e "Ao vivo" pulassem a cada leitura, o olho teria de reencontrá-los toda vez. Coração longe do número parecia outro elemento | Teste: com 9, 90, 190 e "—", em 1,0× e 1,3×: divisória e "Ao vivo" no mesmo lugar, 8 dp do coração ao número, grupo no centro da área (1 dp) |
+| Calendário: a cor nunca vem sozinha. Cada dia mostra o número de crises confirmadas e o leitor de tela fala o dia inteiro ("3 de novembro: 4 crises confirmadas") | Daltonismo; amarelo e vermelho também são cores de nível | Teste das cores (0, 3 e 7 crises), da bolinha azul e da semântica de cada dia |
+| Nível do modelo e avaliação nunca se confundem: o nível é uma pílula cheia ("Possível crise"); a avaliação pendente é uma pílula de contorno azul, sempre "Possível crise · a confirmar" | O modelo e o cuidador usam a mesma expressão para coisas diferentes | Teste dos textos do cartão; imagens |
+| Histórico resumido por padrão; o cartão abre no lugar, um por vez, e informa ao leitor de tela se está aberto | A lista anterior tinha botões e textos técnicos em todo cartão | Teste de abrir e recolher (`isExpanded`); imagens |
+| Gráfico: o balão do toque mostra todas as métricas do instante; os mesmos valores (atual, mínima, máxima, média) estão sempre visíveis abaixo do gráfico e no leitor de tela | O balão depende de toque; os valores não podem depender só dele | Teste do balão e do resumo; descrição do gráfico para o leitor de tela |
 
 ## 7. Antes e depois, tela a tela
 
@@ -261,10 +326,34 @@ medidas novas entraram no tema.
   um BPM de dois dígitos ("90"). Com três dígitos, que é o caso de uma crise,
   e num celular de 393 dp, as duas colunas não cabem com o número em 60 sp.
   A faixa escolhe sozinha o maior tamanho que deixa as colunas lado a lado:
-  60 sp a partir de ~410 dp e 48 sp em 393 dp. Se nenhum cabe (celular
-  estreito ou fonte ampliada), "Ao vivo" e a média descem para uma linha
-  abaixo do BPM. A medida usa sempre "888", para a disposição não mudar
-  quando o BPM passa de 99 para 100.
+  60 sp a partir de ~410 dp e 48 sp em 393 dp. Se nenhum cabe (celulares de
+  375 dp ou menos, ou fonte ampliada), "Ao vivo" e a média descem para baixo
+  do BPM, centradas, e o BPM volta a 60 sp.
+- **BPM como um grupo só, com layout fixo.**
+  - **O grupo:** coração, número e "bpm" formam um bloco sem espaço vazio
+    por dentro. O coração fica a 8 dp do primeiro algarismo
+    (`FaixaBpm.espacoCoracao`) e "bpm" fica na linha de base do número.
+  - **O coração:** acompanha a altura dos algarismos. O desenho ocupa cerca
+    de 55% dela e fica centrado nos algarismos. A altura vem da própria
+    fonte: os algarismos da Atkinson Hyperlegible Next medem 0,668 do
+    tamanho da letra (`Tipografia.alturaDosAlgarismos`). Ele continua
+    neutro, sem vermelho.
+  - **A área:** o grupo fica centrado, na horizontal e na vertical, numa
+    área de largura fixa, a do grupo com "000" (algarismos de mesma largura,
+    `FontFeature.tabularFigures()`, medidos com `TextPainter` na escala de
+    fonte atual).
+  - **O que se mexe:** a divisória e a coluna "Ao vivo" não se movem com 9,
+    90, 190 ou "—". A coluna reserva sempre a altura da versão completa e
+    fica centrada na mesma altura do grupo. O único movimento é o grupo se
+    recentrar quando o número ganha ou perde um dígito.
+  - **Fonte ampliada:** com "Ao vivo" embaixo, o grupo e as duas linhas ficam
+    centrados.
+  - **Leitor de tela:** o grupo é lido como "Batimentos: 79 bpm", e a coluna
+    como "Ao vivo. Média de 5 minutos: 88 bpm."
+
+  | BPM 79 | BPM 190 | Fonte 1,3× |
+  |---|---|---|
+  | <img src="../mobile/test/goldens/inicio_bpm_79.png" width="200"> | <img src="../mobile/test/goldens/inicio_bpm_190.png" width="200"> | <img src="../mobile/test/goldens/fonte_130_inicio_bpm_190.png" width="200"> |
 - **Estado Calmo.** O modelo só mostra o caso Atenção com episódio. No Calmo,
   o lugar do cartão do episódio mostra "Nenhum episódio agora" e o último
   episódio real do histórico: nível, quando, duração e avaliação. Tocar abre
@@ -339,7 +428,7 @@ medidas novas entraram no tema.
 |---|---|---|
 | Fonte Inter | Atkinson Hyperlegible Next | Fonte aprovada no redesenho (baixa visão, 0/O e 1/l distintos). Ela é mais larga e mais alta, então os blocos ficam um pouco mais altos. |
 | Textos de 12,5 e 14 px; rótulos da navegação em 12 | Mínimo de 14 sp para leitura (16 sp nos títulos dos blocos); navegação em 14 | Menor tamanho de leitura definido no tema |
-| BPM em 64 | 60 sp em telas de ~410 dp ou mais; 48 sp em 393 dp; empilhado com a fonte ampliada | O BPM de três dígitos não cabe em duas colunas num celular de 393 dp |
+| BPM em 64 | 60 sp em telas de ~410 dp ou mais; 48 sp em 393 dp; empilhado em 375 dp ou menos e com a fonte ampliada | O BPM de três dígitos não cabe em duas colunas num celular de 393 dp |
 | Coração vermelho; ponto "ao vivo" verde | Coração neutro; ponto azul (a cor de "conectado") | Vermelho e verde são cores de nível (Possível crise e Calmo) |
 | Borda do "Hoje" em 1,4:1 | Contorno de 3,2:1 | É um controle (WCAG 1.4.11) |
 | Sombra preta a 25% | Sombra azulada suave, só na faixa e no cartão do episódio, sem sombra no escuro | Decisão aprovada: menos peso visual, e a sombra marca as peças "ao vivo" |
@@ -378,10 +467,31 @@ medidas novas entraram no tema.
   - barra amarela de Atenção com 1,7:1 sobre o fundo;
   - legenda com "Calmo", que nunca aparece numa barra, porque todo episódio começa em Atenção.
 - **Depois:**
-  - o BPM ao vivo vem primeiro, com eixo rotulado em "bpm", marcas a cada minuto e o valor mais recente no fim da linha;
-  - o gráfico de 7 dias tem barras finas nas cores validadas, o valor na ponta de cada barra, "Hoje" no último dia, e só Atenção e Possível crise na legenda;
-  - uma frase-resumo substitui as caixas ("4 episódios nos últimos 7 dias, 2 de possível crise. Em novembro: 4 episódios.");
+  - **Sinais da criança** (últimos 5 minutos, ao vivo), tudo dentro do mesmo cartão:
+    - no topo, um seletor de chips roláveis com as oito métricas do tópico `estado`, cada uma com o nome por extenso, a unidade e uma bolinha da cor da série. O chip escolhido tem fundo e contorno mais grosso, não só outra cor;
+    - trocar a métrica troca a série, a cor e o eixo Y, com o título na unidade e uma faixa própria. A faixa padrão cresce se o dado sair dela; regularidade (0 a 1) e probabilidade (0 a 100%) são fixas. Os números usam vírgula decimal;
+    - faixas de fundo discretas marcam os momentos em que o nível era Atenção ou Possível crise. A legenda tem amostra, ícone e nome do nível;
+    - abaixo do gráfico, a leitura atual, a mínima, a máxima e a média dos 5 minutos, em quatro colunas (duas por linha com a fonte ampliada);
+    - tocar ou arrastar no gráfico mostra uma linha vertical, o marcador e um balão com o horário, o nível e **todas** as métricas daquele instante. O balão fica no canto oposto ao dedo e some 4 s depois de soltar;
+    - estados: sem dados ainda, conectando, sem conexão e painel parado. Nos dois últimos, o gráfico fica congelado, com um aviso que diz até quando há dados;
+  - **Crises nos últimos 7 dias**, pela avaliação do cuidador:
+    - barras empilhadas, com as crises confirmadas embaixo (cor sólida) e as possíveis crises aguardando confirmação em cima (tom claro com listras diagonais), separadas por 2 dp. Os descartados não entram;
+    - o total de cada dia fica na ponta da barra, e tocar numa barra mostra as duas contagens e a duração somada dos episódios encerrados do dia;
+    - uma frase-resumo: "Nos últimos 7 dias: 11 crises confirmadas e 2 aguardando sua confirmação. Em novembro: 11 crises confirmadas.";
   - cada gráfico tem uma descrição completa para leitor de tela.
+
+| BPM ao vivo | Ruído | Balão do instante |
+|---|---|---|
+| <img src="../mobile/test/goldens/graficos.png" width="220"> | <img src="../mobile/test/goldens/graficos_ruido.png" width="220"> | <img src="../mobile/test/goldens/graficos_balao.png" width="220"> |
+
+| 7 dias, com o balão do dia | Painel parado (dados congelados) | Sem dados |
+|---|---|---|
+| <img src="../mobile/test/goldens/graficos_7dias.png" width="220"> | <img src="../mobile/test/goldens/graficos_painel_parado.png" width="220"> | <img src="../mobile/test/goldens/graficos_sem_dados.png" width="220"> |
+
+O balão é desenhado pelo app, por cima do gráfico, e não pelo Syncfusion. O
+modelo de trackball do Syncfusion some quando passa da metade da altura do
+gráfico acima ou abaixo do ponto, e o balão, com uma linha por métrica,
+passaria sempre. O Syncfusion desenha só a linha vertical e o marcador.
 
 ### Histórico
 
@@ -395,22 +505,60 @@ medidas novas entraram no tema.
   - o campo de observação ficava sempre aberto em todo cartão;
   - "Descartar" era vermelho;
   - com a fonte em 1,3×, "Confirmar gatilho" ficava espremido contra a borda do botão (imagem `imagens/app-antes/fonte_130_historico.png`).
-- **Depois:**
-  - cada cartão mostra o selo do nível, a data relativa ("Hoje, 14:32", "Ontem, 18:05"), a duração em destaque e o gatilho em linguagem simples;
-  - a avaliação fica numa linha destacada ("Gatilho confirmado por você às 09:20.");
-  - a observação fica atrás de "Adicionar observação";
-  - os botões têm o mesmo peso visual e ficam um embaixo do outro quando os rótulos não cabem inteiros lado a lado;
-  - depois de enviar, o botão escolhido fica cheio com ✓, a linha de avaliação muda com um fade e aparece um aviso com o mesmo verbo do botão ("Gatilho confirmado e enviado ao painel.").
+- **Primeiro redesenho:**
+  - cada cartão mostrava o selo do nível, a data relativa, a duração, o gatilho, a avaliação e os botões, sempre abertos;
+  - a lista ficou poluída: com 14 episódios, eram 14 pares de botões e 14 textos técnicos.
+- **Agora** (por dia, com calendário e cartões resumidos):
+  - **Calendário do mês** no topo, pela avaliação do cuidador:
+    - CRISE é um episódio confirmado, de qualquer nível;
+    - POSSÍVEL CRISE é um episódio pendente;
+    - um DESCARTADO não aparece;
+  - **Cor do dia**, só pelas crises confirmadas: amarelo de 1 a 5, vermelho com mais de 5, sem cor sem crises;
+  - **Sem depender da cor**: o número de crises confirmadas fica numa pequena pílula invertida embaixo da data, para não ser confundido com ela. Um dia só com pendentes ganha uma bolinha azul ao lado do número;
+  - **Hoje e dia escolhido**: hoje tem contorno de 2 dp na cor do texto; o dia escolhido, um anel azul de 3 dp e `selected` para o leitor de tela;
+  - **Semana e meses**: a semana começa no domingo. Setas trocam o mês (do primeiro mês com episódio ao atual), e o calendário recolhe para economizar espaço;
+  - **Legenda** embaixo: amarelo, vermelho, bolinha azul e o número do dia;
+  - **Filtro**: tocar num dia filtra a lista ("Mostrando só 3 de novembro." + "Ver todos");
+  - **Lista por dia**: cabeçalhos "Hoje", "Ontem" e "Ter, 3 de nov.", com o número de episódios, fixos no topo enquanto os episódios do dia passam (`SliverMainAxisGroup` + `PinnedHeaderSliver`, do próprio Flutter);
+  - **Cartão resumido**, em duas linhas:
+    - horário (início–fim) em algarismos de mesma largura, selo do nível e duração;
+    - gatilho em linguagem simples e o indicador da avaliação (✓ "Confirmado", selo "Descartado" ou "Possível crise · a confirmar");
+  - **Cartão aberto**: tocar abre o cartão no lugar, um por vez, com o texto técnico do gatilho, a probabilidade máxima, a fonte, o horário do "Estou ciente", o lembrete do episódio, a observação e os botões. Acima dos botões vem a frase "Confirmar ajuda o Puzzle Band a aprender os padrões desta criança em versões futuras. Só crises confirmadas contam no calendário.";
+  - **Selo "a confirmar"**: tocar nele abre o cartão e rola até os botões;
+  - **Botão escolhido**: fica cheio e passa ao passado: "Confirmado" (azul) ou "Descartado" (vermelho tijolo, com ⊘). O outro continua disponível, e mudar de ideia reenvia a avaliação.
 
-| Lista inteira | Depois de confirmar | Vazio |
+| Calendário e lista | Lista por dia (captura longa) | Cartão aberto |
 |---|---|---|
-| <img src="../mobile/test/goldens/historico_completo.png" width="220"> | <img src="../mobile/test/goldens/historico_confirmado.png" width="220"> | <img src="../mobile/test/goldens/historico_vazio.png" width="220"> |
+| <img src="../mobile/test/goldens/historico.png" width="220"> | <img src="../mobile/test/goldens/historico_lista.png" width="220"> | <img src="../mobile/test/goldens/historico_cartao_expandido.png" width="220"> |
+
+| Possível crise a confirmar (selo tocado) | Descartado | Filtro por dia |
+|---|---|---|
+| <img src="../mobile/test/goldens/historico_pendente.png" width="220"> | <img src="../mobile/test/goldens/historico_descartado.png" width="220"> | <img src="../mobile/test/goldens/historico_filtro_dia.png" width="220"> |
+
+| Vazio | Cópia salva (sem conexão) |
+|---|---|
+| <img src="../mobile/test/goldens/historico_vazio.png" width="220"> | <img src="../mobile/test/goldens/historico_sem_conexao.png" width="220"> |
+
+**Nível × avaliação.** O modelo tem um nível chamado "Possível crise"
+(`alto_risco`), e o calendário chama de "possível crise" um episódio que o
+cuidador ainda não avaliou. Para não confundir:
+
+| | Nível do modelo | Avaliação pendente |
+|---|---|---|
+| Forma | pílula cheia, tingida | pílula só com contorno |
+| Cor | âmbar / framboesa | azul (o mesmo da bolinha do calendário) |
+| Ícone | triângulo / círculo cheio com "!" | ampulheta |
+| Texto | "Atenção" / "Possível crise" | sempre "Possível crise · a confirmar" |
+| Lugar no cartão | ao lado do horário | fim da segunda linha |
+| Leitor de tela | "Nível: Possível crise" | "Avaliação: Possível crise aguardando sua confirmação" |
 
 ### Ajustes (antes "Configurações", aba "Perfil")
 
 | Antes | Depois |
 |---|---|
 | <img src="imagens/app-antes/configuracoes.png" width="280"> | <img src="../mobile/test/goldens/ajustes.png" width="280"> |
+
+A imagem de Ajustes é uma captura longa, para a seção Aparência aparecer.
 
 - **Antes:**
   - uma foto de perfil com ícone de câmera sugeria uma função que não existia;
@@ -419,7 +567,8 @@ medidas novas entraram no tema.
   - "Sair da Conta" era vermelho.
 - **Depois:**
   - o nome é o mesmo na aba e no título;
-  - os grupos são Criança monitorada, Conexões, Alertas e Sobre;
+  - os grupos são Criança monitorada, Conexões, Alertas, Aparência e Sobre;
+  - em Aparência, o cuidador escolhe Seguir o sistema, Claro ou Escuro (seção 8);
   - cada conexão diz o que significa e mostra o erro, quando houver;
   - "Alertas sonoros" ocupa a linha inteira como área de toque;
   - "Licenças de software" abre as licenças, incluindo a da fonte;
@@ -431,7 +580,147 @@ medidas novas entraram no tema.
 |---|---|---|---|---|---|
 | <img src="../mobile/test/goldens/escuro_inicio_possivel_crise.png" width="140"> | <img src="../mobile/test/goldens/escuro_inicio_painel_aberto.png" width="140"> | <img src="../mobile/test/goldens/escuro_historico.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_inicio_possivel_crise_inteira.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_inicio_painel_aberto.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_historico.png" width="140"> |
 
-## 8. Como foi verificado
+| Escuro: balão | Escuro: 7 dias | Escuro: descartado | Fonte 1,3×: balão | Fonte 1,3×: 7 dias | Fonte 1,3×: cartão aberto |
+|---|---|---|---|---|---|
+| <img src="../mobile/test/goldens/escuro_graficos_balao.png" width="140"> | <img src="../mobile/test/goldens/escuro_graficos_7dias.png" width="140"> | <img src="../mobile/test/goldens/escuro_historico_descartado.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_graficos_balao.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_graficos_7dias.png" width="140"> | <img src="../mobile/test/goldens/fonte_130_historico_expandido.png" width="140"> |
+
+## 8. Tema escuro
+
+O tema escuro existe desde o redesenho, mas seguia sempre o sistema. Agora o
+usuário escolhe, no app e no site.
+
+- **App:** Ajustes → **Aparência**, com **Seguir o sistema** (o padrão),
+  **Claro** e **Escuro**.
+  - É uma lista de rádio, com uma opção por linha de 56 dp, e não botões
+    segmentados: com a fonte em 1,3×, "Seguir o sistema" não caberia num
+    segmento.
+  - A escolha fica só no celular, junto com o nome da criança, e vale na hora,
+    sem reiniciar: o `MaterialApp` escuta a preferência.
+- **Site:** grupo **Tema** no cabeçalho, com ◐ Sistema, ☀ Claro e ☾ Escuro.
+  - Usa o mesmo padrão de "Fonte dos dados": botões com `aria-pressed`.
+  - Fica salvo no `localStorage` do navegador e vira o `data-theme` do
+    `<html>`. "Sistema" tira o atributo, e o `prefers-color-scheme` volta a
+    valer.
+  - Um script curto no `index.html` aplica o tema antes do React, para a
+    página não abrir no tema errado.
+
+### Decisões
+
+- **Sem preto puro e sem branco puro**, para não cansar a vista à noite:
+  - app: fundo `#11181D`, superfície `#1A232A`, texto `#E8EEF2`;
+  - site: página `#121211`, superfície `#1A1A19`, texto `#F0EFEC` (antes, o
+    texto era `#FFFFFF` e a página `#0D0D0D`).
+- **Balões e avisos sem bloco claro.** No claro, o balão dos gráficos, o do
+  gráfico de 7 dias e o aviso (SnackBar) continuam "invertidos" (fundo escuro).
+  No escuro, eram blocos quase brancos (`#E8EEF2`) que ofuscavam; agora são
+  uma superfície elevada (`#2B3741`) com contorno de 4,5:1. No site, o balão
+  do gráfico de BPM segue a mesma regra.
+- **As cores continuam distinguíveis entre si no escuro.** A distância de cor
+  foi medida em OKLab (×100; 15 ou mais é fácil de separar):
+  - **Antes:** o selo "Descartado" (fundo `#46201D`, texto `#F6C2BE`) ficava a
+    3,5 da pílula de "Possível crise" (`#44192A`, `#F5A3B6`), e o botão
+    "Descartado" (`#F2B8B5`) a 5,3 do texto de crise. Eram quase iguais.
+  - **Agora:** o botão e o selo "Descartado" são uma pílula **cheia** em
+    tijolo `#9E3418`, com texto `#FCEAE6` (6,1:1). Ela fica a 21,7 da pílula
+    de crise, 33,3 do texto de crise, 25,9 do dia vermelho do calendário e
+    17,3 da série de crise.
+  - **Também no claro:** o selo, que era uma pílula rosada a 1,4 da pílula
+    de crise, passou a ser cheio como o botão (`#B3261E`, 47,0 da pílula de
+    crise).
+  - **Três formas, para não depender só da cor:** o nível é uma pílula
+    tingida e clara, "a confirmar" é só contorno e "Descartado" é cheio.
+  - **"Confirmado":** o ícone passou a usar a cor do texto, em vez do azul de
+    ação. No escuro, o azul de ação (`#9DC2E6`) ficava a 2,4 do azul de
+    "a confirmar" (`#8CC3F2`); agora a distância é 16,9.
+  - **Dia amarelo e dia vermelho:** 17,7 de distância entre si. As séries de
+    Atenção e de Possível crise ficam a 17,5.
+- **Gráficos (Syncfusion)** usam só o tema:
+  - eixos e rótulos em `tintaSuave` (8,1:1);
+  - grade e linha do eixo em `divisoria` (decorativas);
+  - linha do trackball em `tintaSuave`;
+  - marcadores com anel da superfície;
+  - séries, listras e faixas de nível com pelo menos 3:1 sobre a superfície
+    escura (seção 3).
+- **Barras do Android.** A barra de status (transparente) e a de navegação
+  (cor da barra inferior do app, com a mesma divisória) acompanham o tema que
+  está valendo, com ícones claros no escuro. É um `AnnotatedRegion` no
+  `MaterialApp`. A tela de licenças, a única com AppBar, usa o mesmo estilo.
+- **Tela de abertura do Android.** No modo escuro do sistema ela era preta
+  pura (`Theme.Black`). Agora usa o fundo do app (`#11181D`, em
+  `android/app/src/main/res/values-night/colors.xml`); no claro, `#F0F3F5`.
+
+### Contraste (escuro)
+
+Todos medidos com a fórmula do WCAG 2.1.
+
+| Par (app) | Contraste |
+|---|---|
+| Texto / fundo, superfície, superfície de destaque | 15,3 / 13,6 / 11,3 |
+| Texto secundário / fundo, superfície, destaque | 9,1 / 8,1 / 6,8 |
+| Texto de ação (`#9DC2E6`) / superfície | 8,6 |
+| Texto do botão cheio / botão | 7,9 |
+| Contorno de controles (`#6B7A86`) / superfície, fundo | 3,6 / 4,1 |
+| Texto dos níveis sobre o fundo tingido (Calmo, Atenção, Possível crise, Sem dados) | 7,7 / 8,4 / 7,6 / 6,3 |
+| Séries dos níveis / superfície | 4,8 / 5,1 / 4,3 |
+| Séries das métricas / superfície e faixas | 3,03 ou mais |
+| Dia amarelo / dia vermelho (número) | 9,0 / 7,4 |
+| "A confirmar" / superfície | 8,5 |
+| "Descartado" (texto / fundo cheio) | 6,1 |
+| Ícone de descartado (`#FF9F85`) / destaque | 6,7 |
+| Balão (texto / fundo) | 10,4 |
+| Contorno do balão / superfície | 4,5 |
+| Rádio desmarcado / marcado | 3,6 / 8,6 |
+
+| Par (site) | Claro | Escuro |
+|---|---|---|
+| Texto suave / superfície | 6,1 (antes 3,5) | 6,0 |
+| Borda de botões e campos (`--control-border`) / página | 3,3 (antes 1,2) | 4,0 (antes 1,3) |
+| Texto sobre botão escolhido (`--accent` / `--on-accent`) | 6,6 (antes 2,8 a 4,4) | 8,9 (antes 3,1 a 3,6) |
+| Status como texto e ícone (`--status-*-ink`) / página | 5,6 a 6,2 (atenção antes 1,8) | 7,1 a 10,2 (crítico antes 3,6) |
+| Texto suave / fundos tingidos dos avisos | 4,8 ou mais | 4,5 ou mais |
+| Botão "Limpar" cheio | 6,5 | 7,7 |
+| Balão do gráfico de BPM | 19,2 | 12,2 |
+
+No site, as cores dos status (bom, atenção, sério, crítico) continuam as
+mesmas nos fundos tingidos e nas marcas. Texto e ícone usam uma versão de
+texto (`--status-*-ink`) com pelo menos 4,5:1. Os botões escolhidos usam um
+único destaque (`--accent`) em vez de verde, azul e violeta com texto branco.
+Não há mais cor fixa (`white`) no CSS. Um teste confere que os dois blocos de
+tokens escuros do `index.css` (o do sistema e o escolhido) são iguais e não
+têm branco nem preto puros.
+
+### Telas no escuro
+
+As imagens `mobile/test/goldens/escuro_*.png` cobrem todas as telas e
+estados:
+
+- **Login.**
+- **Início:** calmo, atenção, possível crise, logo depois do "Estou ciente",
+  BPM 190, painel "Hoje" aberto e vazio, conectando, sem conexão, painel e
+  pulseira offline, erro de configuração.
+- **Episódio:** detalhe e editor de lembrete.
+- **Gráficos:** as oito métricas (`escuro_graficos` é o BPM;
+  `escuro_graficos_<métrica>` são as outras sete), o balão, os 7 dias, o
+  painel parado e sem dados.
+- **Histórico:** calendário, lista por dia, cartão confirmado aberto,
+  "a confirmar", descartado, filtro por dia, vazio, cópia salva.
+- **Ajustes:** com a Aparência e com erro de configuração.
+
+| Ajustes → Aparência | Início em atenção | Balão | Descartado | Calendário |
+|---|---|---|---|---|
+| <img src="../mobile/test/goldens/escuro_ajustes.png" width="150"> | <img src="../mobile/test/goldens/escuro_inicio_atencao.png" width="150"> | <img src="../mobile/test/goldens/escuro_graficos_balao.png" width="150"> | <img src="../mobile/test/goldens/escuro_historico_descartado.png" width="150"> | <img src="../mobile/test/goldens/escuro_historico.png" width="150"> |
+
+### O que o tema escuro não cobre
+
+- **Tela de abertura do Android.** Ela aparece antes de o Flutter carregar,
+  então segue o tema do sistema, não a escolha feita no app.
+- **Selo do logo.** Continua branco nos dois temas, porque o PNG da fita tem
+  fundo branco.
+- **Site sem verificação visual.** O tema escuro do site foi verificado por
+  medida (script de contraste sobre os tokens), lint, testes e build, mas não
+  foi aberto num navegador nesta etapa.
+
+## 9. Como foi verificado
 
 - `flutter analyze` sem avisos.
 - `flutter test` roda os testes que já existiam (parse das mensagens, resumos
@@ -447,26 +736,59 @@ medidas novas entraram no tema.
     - os lembretes do dia e do episódio (salvar, mostrar, editar, apagar, o
       aviso agendado e cancelado) e o nome da criança;
     - a faixa em celulares de 360 e 440 dp;
+    - o BPM fixo: posições iguais de "bpm", da divisória e de "Ao vivo" com
+      9, 90, 190 e "—", em 1,0× e 1,3×;
+    - nos Gráficos: a troca de métrica (série, eixo, cor e resumo), as
+      faixas de nível com legenda, o balão com todas as métricas (abrir,
+      arrastar e sumir), o painel parado, a falta de conexão e o gráfico de 7
+      dias sem descartados;
+    - no Histórico: as cores do calendário (0, 3 e 7 crises confirmadas: sem
+      cor, amarelo e vermelho), a bolinha azul só no dia com pendentes, a
+      semântica de cada dia, os descartados sem efeito no calendário e nos 7
+      dias, o filtro por dia, a navegação entre meses, a lista por dia, o
+      cartão que abre e recolhe (um por vez), o selo "a confirmar" rolando até
+      os botões, o botão "Descartado" vermelho e a mudança de ideia;
     - todos os estados de conexão;
-    - contraste AA, alvos de toque e rótulos em todas as telas, nos dois temas;
-    - fonte 1,3× em todas as telas e estados;
+    - contraste AA, alvos de toque e rótulos em todas as telas, nos dois
+      temas, inclusive com o cartão aberto, o filtro por dia e o descartado;
+    - fonte 1,3× em todas as telas e estados (4 abas × 8 cenários), com o
+      balão aberto e o cartão descartado;
     - "reduzir movimento";
     - as manchetes do gatilho.
-  - **`test/goldens_test.dart`**: 41 imagens das telas em `mobile/test/goldens/`.
+  - **`test/models_test.dart`**: além do parse, as regras puras do
+    calendário e dos 7 dias (descartados fora, duração só dos encerrados), a
+    janela de 5 minutos dos sinais (leitura repetida, sem BPM), as faixas de
+    eixo e os trechos de nível.
+  - **Aparência**: um teste abre o app de verdade em Ajustes e troca entre
+    Escuro, Claro e Seguir o sistema. Ele confere o `themeMode` do
+    `MaterialApp`, o brilho do tema, a preferência salva (e lida de novo),
+    a semântica do rádio e as barras do Android.
+  - **`test/goldens_test.dart`**: 85 imagens das telas em `mobile/test/goldens/`,
+    36 delas no tema escuro (seção 8).
     Uma mudança visual não intencional faz o teste falhar. Depois de uma
     mudança intencional, gere as imagens de novo com
     `flutter test --update-goldens test/goldens_test.dart`.
 - **Como os testes rodam:** com as fontes reais, um `MqttService` de teste
   (subclasse que só troca os dados lidos pelas telas) e um aviso de lembrete
   falso (sem o plugin de notificação).
-- **O que não mudou:** a lógica de MQTT, as notificações dos alertas, os
-  tópicos e os formatos de mensagem. Os arquivos `mqtt_service.dart`,
-  `notification_service.dart`, `app_scope.dart`, `lib/models/` e
-  `lib/config/` não foram alterados. A tela Início ganhou dois arquivos
-  novos em `lib/services/`: `preferencias_locais.dart` (nome e lembretes) e
-  `aviso_de_lembrete.dart` (aviso agendado).
+- **Auxiliar `mostrar()` dos testes.** Chamado duas vezes no mesmo teste,
+  ele reaproveitava a rota inicial do `MaterialApp`, ou seja, a aba e a tela
+  anteriores. Por isso o laço "fonte 1,3× em todas as telas" olhava só a
+  primeira tela. Agora ele desmonta a árvore antes de montar de novo, e o
+  laço cobre as quatro abas em todos os cenários.
+- **O que não mudou:** a conexão, as notificações dos alertas, os tópicos e
+  os formatos de mensagem. `notification_service.dart`, `app_scope.dart`,
+  `models/models.dart` e `lib/config/` não foram alterados.
+  - A tela Início ganhou dois arquivos em `lib/services/`:
+    `preferencias_locais.dart` (nome e lembretes) e `aviso_de_lembrete.dart`
+    (aviso agendado).
+  - No `mqtt_service.dart`, a única mudança foi o buffer do gráfico: em vez
+    de guardar só o BPM (`bpmRecentes`), ele guarda todas as métricas do
+    estado, a probabilidade e o nível dos últimos 5 minutos
+    (`sinaisRecentes`). A regra do buffer fica em `models/sinais.dart`,
+    testável sem broker.
 
-## 9. Limitações e ressalvas
+## 10. Limitações e ressalvas
 
 - **Símbolo do quebra-cabeça.** O logo (fita de quebra-cabeça) foi mantido
   como identidade do projeto. Vale registrar que parte da comunidade autista
@@ -487,6 +809,24 @@ medidas novas entraram no tema.
   `dataLabelSettings` geram um erro ao sair da tela ("disposed RenderObject
   was mutated"). Os valores sobre as barras e no fim da linha são desenhados
   como anotações (`CartesianChartAnnotation`), que não têm o problema.
+- **Trackball do Syncfusion 28.2.** O modelo do balão (`builder`) some
+  quando passa da metade da altura do gráfico acima ou abaixo do ponto. O
+  balão de todas as métricas é desenhado pelo app (um `Listener` acompanha o
+  dedo e `pixelToPoint` acha o instante). O Syncfusion desenha só a linha e o
+  marcador. Com a mesma lista de dados, ele também não refaz a série quando
+  só a métrica muda; por isso o gráfico tem uma chave por métrica.
+- **Cores das métricas.** A separação entre cores vizinhas ficou em ΔE 14,0
+  (claro) e 13,4 (escuro), abaixo dos 15 pedidos para séries lado a lado
+  (seção 3). Uma métrica aparece por vez, sempre com nome e unidade.
+- **Cabeçalhos fixos do Histórico e o `ensureVisible`.** Dentro de
+  `SliverMainAxisGroup` com `PinnedHeaderSliver`, o `ensureVisible` do
+  Flutter 3.47 erra a posição pela altura do cabeçalho. O selo "a confirmar"
+  calcula a rolagem até os botões à mão. Pelo mesmo motivo, o leitor de
+  tela, ao rolar sozinho até um cartão, pode deixá-lo parcialmente sob o
+  cabeçalho do dia.
+- **Dias do calendário em celulares estreitos.** Num celular de 393 dp, cada
+  dia tem 48 dp; num de 360 dp, cerca de 45 dp (acima dos 44 dp do WCAG
+  2.5.5, abaixo dos 48 do Material).
 - **Comparação com o Figma feita a olho.** O modelo tem 440 dp e usa a
   Inter; as imagens do app têm 393 dp e usam a Atkinson. Por isso a
   comparação é de estrutura, proporção e espaçamento, não de pixels (tabela
@@ -494,6 +834,8 @@ medidas novas entraram no tema.
 - **Aviso do lembrete é inexato.** O Android pode atrasar o aviso alguns
   minutos para economizar bateria. Um aviso exato exigiria a permissão de
   "alarme exato", que o cuidador teria de liberar à parte.
+- **Site sem verificação visual.** O tema do site foi conferido por medida
+  dos tokens, lint, testes e build, sem abrir num navegador (seção 8).
 - **Imagens golden dependem do sistema.** A renderização de fontes muda entre
   Windows, Linux e macOS. As imagens foram geradas no Windows; em outro
   sistema, gere de novo antes de comparar.
