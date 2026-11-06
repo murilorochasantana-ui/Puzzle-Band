@@ -2,69 +2,77 @@ import 'package:flutter/material.dart';
 
 import '../models/resumo.dart';
 import '../services/app_scope.dart';
-import '../services/mqtt_service.dart';
+import '../services/preferencias_locais.dart';
 import '../theme/app_theme.dart';
-import '../utils/formatters.dart';
 import '../utils/relogio.dart';
 import '../widgets/cabecalho.dart';
+import '../widgets/cartao_episodio_ativo.dart';
+import '../widgets/cartao_sem_episodio.dart';
 import '../widgets/connection_bar.dart';
 import '../widgets/faixa_estado.dart';
+import '../widgets/linha_probabilidade.dart';
+import '../widgets/painel_do_dia.dart';
+import 'episodio_screen.dart';
 
-/// Inicio: a faixa de estado e o centro da tela (entendida em menos de 2 s).
+/// Inicio, na ordem do modelo do Figma (docs/figma/home.md): nome da
+/// crianca, conexao, faixa de estado (nivel + BPM), cartao do episodio (ou
+/// "Nenhum episódio agora" com o ultimo episodio), probabilidade e o painel
+/// "Hoje" com os episodios do dia e os lembretes.
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final service = AppScope.of(context);
-    final texto = Theme.of(context).textTheme;
-    final detalhe = _detalheDoEstado(service);
-    final hoje = episodiosNoDia(service.historico, relogio());
+    final preferencias = PreferenciasScope.of(context);
+    final agora = relogio();
+    // O historico ja vem do mais recente para o mais antigo.
+    final hoje = [for (final e in service.historico) if (mesmoDia(e.inicio, agora)) e];
+    final estado = service.estado;
+    final aoVivo = situacaoDe(service) == SituacaoEstado.aoVivo && estado != null;
+    final ativo = service.episodioAtivo;
+
+    void abrirEpisodio(String id) => EpisodioScreen.abrir(context, id);
+
     return EstruturaTela(
+      titulo: preferencias.nomeCrianca,
       children: [
         ConnectionBar(service: service),
-        const SizedBox(height: Espaco.l),
-        FaixaEstado(service: service, onCiente: (id) => _confirmarCiente(context, id)),
-        if (detalhe != null) ...[
+        const SizedBox(height: Espaco.m),
+        FaixaEstado(service: service),
+        if (aoVivo) ...[
+          const SizedBox(height: Espaco.bloco),
+          if (ativo != null)
+            CartaoEpisodioAtivo(
+              key: const ValueKey('episodio-ativo'),
+              service: service,
+              ativo: ativo,
+              estado: estado,
+              onCiente: (id) => _confirmarCiente(context, id),
+            )
+          else
+            CartaoSemEpisodio(
+              ultimo: service.historico.isEmpty ? null : service.historico.first,
+              agora: agora,
+              onAbrir: abrirEpisodio,
+            ),
+          const SizedBox(height: Espaco.bloco),
+          LinhaProbabilidade(estado: estado),
           const SizedBox(height: Espaco.m),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: Espaco.xs),
-            child: Text(detalhe, style: texto.bodySmall),
-          ),
-        ],
-        const SizedBox(height: Espaco.xl),
-        Semantics(
-          container: true,
-          label: 'Hoje: ${contarEpisodios(hoje)}',
-          excludeSemantics: true,
-          child: Row(
-            children: [
-              Icon(Icons.today_outlined, color: CoresApp.of(context).tintaSuave),
-              const SizedBox(width: Espaco.s),
-              Expanded(child: Text('Hoje: ${contarEpisodios(hoje)}', style: texto.titleSmall)),
-            ],
-          ),
-        ),
+        ] else
+          const SizedBox(height: Espaco.bloco),
+        PainelDoDia(episodios: hoje, agora: agora, onAbrirEpisodio: abrirEpisodio),
       ],
     );
   }
 
-  /// Probabilidade e fonte do dado (so com estado ao vivo).
-  static String? _detalheDoEstado(MqttService service) {
-    final estado = service.estado;
-    if (!service.estadoAoVivo || estado == null) return null;
-    final prob = estado.probabilidade;
-    final probabilidade =
-        prob != null ? 'Probabilidade estimada: ${(prob * 100).round()}%.' : 'Analisando os primeiros 30 s.';
-    return '$probabilidade Fonte: ${rotuloFonte(estado.fonte).toLowerCase()}.';
-  }
-
-  static void _confirmarCiente(BuildContext context, String episodioId) {
+  static bool _confirmarCiente(BuildContext context, String episodioId) {
     final enviado = AppScope.read(context).enviarCiente(episodioId);
     if (!enviado) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Sem conexão com o servidor: o aviso não foi enviado. Tente de novo em instantes.')),
       );
     }
+    return enviado;
   }
 }

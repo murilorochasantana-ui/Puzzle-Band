@@ -44,6 +44,9 @@ class CoresApp extends ThemeExtension<CoresApp> {
     required this.atencao,
     required this.crise,
     required this.semDados,
+    required this.informativo,
+    required this.informativoBorda,
+    required this.sombraElevada,
   });
 
   /// Fundo das telas ("nevoa").
@@ -78,6 +81,16 @@ class CoresApp extends ThemeExtension<CoresApp> {
   final TomRisco crise;
   final TomRisco semDados;
 
+  /// Fundo azulado de uma linha informativa (probabilidade estimada).
+  final Color informativo;
+
+  /// Borda decorativa da linha informativa (nao e controle: abaixo de 3:1).
+  final Color informativoBorda;
+
+  /// Sombra suave e azulada das pecas "ao vivo" (faixa de estado e cartao do
+  /// episodio). Vazia no tema escuro: ali as pecas se separam pelo tom.
+  final List<BoxShadow> sombraElevada;
+
   static CoresApp of(BuildContext context) => Theme.of(context).extension<CoresApp>()!;
 
   /// Fundo do selo do logo nos dois temas: o PNG da fita tem fundo branco.
@@ -99,6 +112,12 @@ class CoresApp extends ThemeExtension<CoresApp> {
     atencao: TomRisco(texto: Color(0xFF8A5200), fundo: Color(0xFFFCEFD6), grafico: Color(0xFFC08A00)),
     crise: TomRisco(texto: Color(0xFFA3304F), fundo: Color(0xFFFBE6EC), grafico: Color(0xFFC73E66)),
     semDados: TomRisco(texto: Color(0xFF56636D), fundo: Color(0xFFE6EBEE), grafico: Color(0xFF7A8994)),
+    informativo: Color(0xFFEDF6FF),
+    informativoBorda: Color(0xFFABBFD2),
+    sombraElevada: [
+      BoxShadow(color: Color(0x0F2D5B86), offset: Offset(0, 1), blurRadius: 3),
+      BoxShadow(color: Color(0x1F2D5B86), offset: Offset(0, 4), blurRadius: 16),
+    ],
   );
 
   static const escuro = CoresApp(
@@ -117,6 +136,9 @@ class CoresApp extends ThemeExtension<CoresApp> {
     atencao: TomRisco(texto: Color(0xFFF3C46B), fundo: Color(0xFF3A2B10), grafico: Color(0xFFB88A1E)),
     crise: TomRisco(texto: Color(0xFFF5A3B6), fundo: Color(0xFF44192A), grafico: Color(0xFFD65C78)),
     semDados: TomRisco(texto: Color(0xFFA7B3BC), fundo: Color(0xFF263038), grafico: Color(0xFF6B7A86)),
+    informativo: Color(0xFF172736),
+    informativoBorda: Color(0xFF34506A),
+    sombraElevada: [],
   );
 
   @override
@@ -136,6 +158,9 @@ class CoresApp extends ThemeExtension<CoresApp> {
     TomRisco? atencao,
     TomRisco? crise,
     TomRisco? semDados,
+    Color? informativo,
+    Color? informativoBorda,
+    List<BoxShadow>? sombraElevada,
   }) {
     return CoresApp(
       fundo: fundo ?? this.fundo,
@@ -153,6 +178,9 @@ class CoresApp extends ThemeExtension<CoresApp> {
       atencao: atencao ?? this.atencao,
       crise: crise ?? this.crise,
       semDados: semDados ?? this.semDados,
+      informativo: informativo ?? this.informativo,
+      informativoBorda: informativoBorda ?? this.informativoBorda,
+      sombraElevada: sombraElevada ?? this.sombraElevada,
     );
   }
 
@@ -176,6 +204,9 @@ class CoresApp extends ThemeExtension<CoresApp> {
       atencao: TomRisco.lerp(atencao, other.atencao, t),
       crise: TomRisco.lerp(crise, other.crise, t),
       semDados: TomRisco.lerp(semDados, other.semDados, t),
+      informativo: c(informativo, other.informativo),
+      informativoBorda: c(informativoBorda, other.informativoBorda),
+      sombraElevada: BoxShadow.lerpList(sombraElevada, other.sombraElevada, t) ?? const [],
     );
   }
 }

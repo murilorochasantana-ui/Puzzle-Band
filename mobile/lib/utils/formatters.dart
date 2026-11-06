@@ -51,3 +51,17 @@ String contarEpisodios(int n) => switch (n) {
       1 => '1 episódio',
       _ => '$n episódios',
     };
+
+/// "hoje às 14:32" / "ontem às 09:10" / "amanhã às 08:00" / "em 03/11 às 18:05"
+String quandoEm(DateTime d, DateTime agora) {
+  final hoje = DateTime(agora.year, agora.month, agora.day);
+  final dia = DateTime(d.year, d.month, d.day);
+  final diferenca = (dia.difference(hoje).inHours / 24).round(); // round: dias de 23/25 h
+  final prefixo = switch (diferenca) {
+    0 => 'hoje',
+    -1 => 'ontem',
+    1 => 'amanhã',
+    _ => 'em ${_dois(d.day)}/${_dois(d.month)}',
+  };
+  return '$prefixo às ${horaMinuto(d)}';
+}

@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../services/app_scope.dart';
 import '../services/mqtt_service.dart';
+import '../services/preferencias_locais.dart';
 import '../theme/app_theme.dart';
 import '../widgets/cabecalho.dart';
 import '../widgets/connection_bar.dart';
 import '../widgets/secao.dart';
 
-/// Ajustes: crianca monitorada, conexoes (com o erro, se houver), alertas
-/// sonoros e "sobre".
+/// Ajustes: crianca monitorada (nome mostrado no Inicio, so neste celular),
+/// conexoes (com o erro, se houver), alertas sonoros e "sobre".
 class ConfiguracoesScreen extends StatelessWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -24,6 +25,7 @@ class ConfiguracoesScreen extends StatelessWidget {
         _Grupo(
           titulo: 'Criança monitorada',
           itens: [
+            const _CampoNome(),
             ListTile(
               leading: const Icon(Icons.child_care_rounded),
               title: Text('Identificação: ${service.config.childId}'),
@@ -138,6 +140,49 @@ class _Grupo extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// "Nome da criança": aparece no cabecalho do Inicio. Salvo no
+/// shared_preferences a cada mudanca; vazio, vale o CHILD_ID. Nao vai para
+/// o MQTT.
+class _CampoNome extends StatefulWidget {
+  const _CampoNome();
+
+  @override
+  State<_CampoNome> createState() => _CampoNomeState();
+}
+
+class _CampoNomeState extends State<_CampoNome> {
+  late final PreferenciasLocais _preferencias = PreferenciasScope.read(context);
+  late final TextEditingController _nome = TextEditingController(text: _preferencias.nomeDigitado);
+
+  @override
+  void dispose() {
+    _nome.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Espaco.l, Espaco.m, Espaco.l, Espaco.xs),
+      child: TextField(
+        controller: _nome,
+        maxLength: PreferenciasLocais.maxNome,
+        textCapitalization: TextCapitalization.words,
+        textInputAction: TextInputAction.done,
+        onChanged: _preferencias.definirNomeCrianca,
+        decoration: InputDecoration(
+          labelText: 'Nome da criança',
+          hintText: _preferencias.nomePadrao,
+          prefixIcon: const Icon(Icons.badge_outlined),
+          helperText: 'Aparece no Início. Fica só neste celular: não vai para o painel. '
+              'Vazio, o app mostra ${_preferencias.nomePadrao}.',
+          helperMaxLines: 3,
+        ),
+      ),
     );
   }
 }

@@ -14,16 +14,24 @@ abstract final class Espaco {
   /// Margem lateral das telas.
   static const double tela = 20;
 
+  /// Entre os blocos principais da tela Inicio (faixa, cartao, linhas).
+  static const double bloco = 20;
+
   /// Largura maxima do conteudo (tablet / celular deitado).
   static const double larguraMaxima = 560;
 }
 
-/// Raios em hierarquia: a faixa de estado e a peca mais "macia".
+/// Raios em hierarquia (modelo do Figma, docs/figma/home.md): as linhas
+/// tocaveis da Inicio sao as pecas mais "macias"; faixa e cartoes, 16.
 abstract final class Raio {
-  static const double faixa = 28;
+  static const double linha = 20;
+  static const double faixa = 16;
   static const double secao = 16;
   static const double controle = 12;
   static const double selo = 999;
+
+  /// Logo grande do Login.
+  static const double logoGrande = 28;
 }
 
 /// Areas de toque (Material / WCAG 2.5.5).

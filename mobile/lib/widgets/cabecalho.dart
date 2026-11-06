@@ -31,16 +31,20 @@ class LogoSelo extends StatelessWidget {
   }
 }
 
-/// Cabecalho fixo de todas as telas: logo + logotipo "PUZZLE BAND".
+/// Cabecalho fixo das telas: logo + logotipo "PUZZLE BAND". Com [titulo]
+/// (tela Inicio), o logotipo da lugar ao nome da crianca, em caixa normal.
 class Cabecalho extends StatelessWidget {
-  const Cabecalho({super.key});
+  const Cabecalho({super.key, this.titulo});
+
+  final String? titulo;
 
   @override
   Widget build(BuildContext context) {
     final cores = CoresApp.of(context);
+    final nome = titulo;
     return Semantics(
       header: true,
-      label: 'Puzzle Band',
+      label: nome == null ? 'Puzzle Band' : 'Puzzle Band. Criança: $nome',
       excludeSemantics: true,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(Espaco.tela, Espaco.m, Espaco.tela, Espaco.s),
@@ -49,13 +53,20 @@ class Cabecalho extends StatelessWidget {
             const LogoSelo(),
             const SizedBox(width: Espaco.m),
             Flexible(
-              child: Text(
-                'PUZZLE BAND',
-                maxLines: 1,
-                overflow: TextOverflow.fade,
-                softWrap: false,
-                style: Tipografia.logotipo(cores.tinta),
-              ),
+              child: nome == null
+                  ? Text(
+                      'PUZZLE BAND',
+                      maxLines: 1,
+                      overflow: TextOverflow.fade,
+                      softWrap: false,
+                      style: Tipografia.logotipo(cores.tinta),
+                    )
+                  : Text(
+                      nome,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
             ),
           ],
         ),
@@ -111,9 +122,12 @@ class CorpoTela extends StatelessWidget {
 
 /// Estrutura comum: cabecalho fixo + corpo rolavel.
 class EstruturaTela extends StatelessWidget {
-  const EstruturaTela({super.key, required this.children});
+  const EstruturaTela({super.key, required this.children, this.titulo});
 
   final List<Widget> children;
+
+  /// Nome no cabecalho no lugar do logotipo (so na tela Inicio).
+  final String? titulo;
 
   @override
   Widget build(BuildContext context) {
@@ -122,10 +136,42 @@ class EstruturaTela extends StatelessWidget {
         bottom: false,
         child: Column(
           children: [
-            const Cabecalho(),
+            Cabecalho(titulo: titulo),
             Expanded(child: CorpoTela(children: children)),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Cabecalho de uma tela aberta por cima das abas (detalhe do episodio):
+/// botao de voltar (48 dp) + titulo.
+class CabecalhoVoltar extends StatelessWidget {
+  const CabecalhoVoltar({super.key, required this.titulo});
+
+  final String titulo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(Espaco.s, Espaco.s, Espaco.tela, Espaco.xs),
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => Navigator.of(context).maybePop(),
+            tooltip: 'Voltar',
+            icon: const Icon(Icons.arrow_back_rounded),
+            color: CoresApp.of(context).tinta,
+          ),
+          const SizedBox(width: Espaco.xs),
+          Expanded(
+            child: Semantics(
+              header: true,
+              child: Text(titulo, style: Theme.of(context).textTheme.titleLarge, maxLines: 2),
+            ),
+          ),
+        ],
       ),
     );
   }

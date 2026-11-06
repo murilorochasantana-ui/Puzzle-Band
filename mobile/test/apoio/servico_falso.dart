@@ -2,6 +2,7 @@
 // sao sobrescritos e o estado e montado a mao em cada cenario.
 import 'package:puzzleband/config/app_config.dart';
 import 'package:puzzleband/models/models.dart';
+import 'package:puzzleband/services/aviso_de_lembrete.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
 import 'package:puzzleband/utils/relogio.dart';
@@ -84,5 +85,25 @@ class ServicoFalso extends MqttService {
   Future<void> definirAlertasSonoros(bool ligado) async {
     sonoros = ligado;
     notifyListeners();
+  }
+}
+
+/// Aviso de lembrete sem plugin: guarda o que seria agendado.
+class AvisoFalso implements AvisoDeLembrete {
+  bool funciona = true;
+  final agendados = <int, (DateTime, String, String)>{};
+  final cancelados = <int>[];
+
+  @override
+  Future<bool> agendar({required int id, required DateTime quando, required String titulo, required String texto}) async {
+    if (!funciona) return false;
+    agendados[id] = (quando, titulo, texto);
+    return true;
+  }
+
+  @override
+  Future<void> cancelar(int id) async {
+    agendados.remove(id);
+    cancelados.add(id);
   }
 }

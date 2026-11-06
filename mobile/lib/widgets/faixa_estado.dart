@@ -4,7 +4,6 @@ import '../models/models.dart';
 import '../services/mqtt_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
-import 'gatilho_simples.dart';
 import 'nivel_visual.dart';
 
 /// O que a Home consegue mostrar agora.
@@ -27,13 +26,14 @@ bool _recebeuAlgumDia(MqttService service) {
 }
 
 /// Faixa de estado: o elemento principal da Home. Nivel (icone + palavra +
-/// cor), BPM ao vivo e, durante um episodio, o provavel gatilho e o botao
-/// "Estou ciente". Sem estado ao vivo, diz por que e o que fazer.
+/// cor) e BPM ao vivo, com a media de 5 min ao lado (modelo do Figma,
+/// docs/figma/home.md). O episodio em andamento fica no cartao logo abaixo
+/// (cartao_episodio_ativo.dart). Sem estado ao vivo, diz por que e o que
+/// fazer.
 class FaixaEstado extends StatelessWidget {
-  const FaixaEstado({super.key, required this.service, required this.onCiente});
+  const FaixaEstado({super.key, required this.service});
 
   final MqttService service;
-  final ValueChanged<String> onCiente;
 
   @override
   Widget build(BuildContext context) {
@@ -45,14 +45,15 @@ class FaixaEstado extends StatelessWidget {
     return AnimatedContainer(
       duration: duracao,
       curve: Movimento.curva,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.fromLTRB(Espaco.l, Espaco.l, Espaco.l, 20),
       decoration: BoxDecoration(
         color: tom.fundo,
         borderRadius: BorderRadius.circular(Raio.faixa),
+        boxShadow: CoresApp.of(context).sombraElevada,
       ),
       child: TamanhoAnimado(
         child: situacao == SituacaoEstado.aoVivo
-            ? _AoVivo(service: service, estado: estado!, visual: visual, tom: tom, onCiente: onCiente)
+            ? _AoVivo(estado: estado!, visual: visual, tom: tom)
             : _SemEstadoAoVivo(service: service, situacao: situacao, tom: tom),
       ),
     );
@@ -60,40 +61,16 @@ class FaixaEstado extends StatelessWidget {
 }
 
 class _AoVivo extends StatelessWidget {
-  const _AoVivo({
-    required this.service,
-    required this.estado,
-    required this.visual,
-    required this.tom,
-    required this.onCiente,
-  });
+  const _AoVivo({required this.estado, required this.visual, required this.tom});
 
-  final MqttService service;
   final EstadoAtual estado;
   final NivelVisual visual;
   final TomRisco tom;
-  final ValueChanged<String> onCiente;
 
   @override
   Widget build(BuildContext context) {
-    final cores = CoresApp.of(context);
     final texto = Theme.of(context).textTheme;
     final curto = Movimento.de(context, Movimento.curto);
-    final bpm = estado.leituras?.bpm;
-    final media = estado.mediaBpm5min;
-    final ativo = service.episodioAtivo;
-
-    final String linhaBpm;
-    final String falaBpm;
-    if (bpm == null) {
-      linhaBpm = 'Sem leitura de batimentos agora.';
-      falaBpm = 'Frequência cardíaca: sem leitura agora.';
-    } else {
-      linhaBpm = media != null ? 'Ao vivo. Média de 5 min: ${media.round()} bpm.' : 'Ao vivo.';
-      falaBpm = 'Frequência cardíaca: ${bpm.round()} batimentos por minuto, ao vivo.'
-          '${media != null ? ' Média de 5 minutos: ${media.round()}.' : ''}';
-    }
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -118,100 +95,162 @@ class _AoVivo extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: Espaco.l),
-        Semantics(
-          container: true,
-          label: falaBpm,
-          excludeSemantics: true,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Icon(Icons.favorite_rounded, size: 28, color: cores.tintaSuave),
-                  const SizedBox(width: Espaco.s),
-                  Text(bpm != null ? '${bpm.round()}' : '—', style: texto.displayMedium),
-                  const SizedBox(width: 6),
-                  Text('bpm', style: texto.titleMedium!.copyWith(color: cores.tintaSuave)),
-                ],
-              ),
-              const SizedBox(height: Espaco.xs),
-              Text(linhaBpm, style: texto.bodySmall),
-            ],
-          ),
-        ),
-        if (ativo != null) ..._episodio(context, ativo),
+        const SizedBox(height: Espaco.m),
+        _LinhaBpm(estado: estado, tom: tom),
       ],
     );
   }
+}
 
-  List<Widget> _episodio(BuildContext context, EpisodioAtivo ativo) {
+/// BPM ao vivo (esquerda) | "Ao vivo" + media de 5 min (direita), como no
+/// modelo. O BPM usa o maior tamanho que deixa as duas colunas lado a lado
+/// (60 sp a partir de ~410 dp de largura, 48 sp num celular de 393 dp).
+/// Quando nem assim cabem (celular estreito, fonte ampliada), a coluna da
+/// direita desce para baixo do BPM, que volta a 60 sp.
+class _LinhaBpm extends StatelessWidget {
+  const _LinhaBpm({required this.estado, required this.tom});
+
+  final EstadoAtual estado;
+  final TomRisco tom;
+
+  static const _icone = 32.0;
+  static const _respiro = Espaco.l;
+
+  static double _largura(String texto, TextStyle estilo, TextScaler escala) {
+    final medida = TextPainter(
+      text: TextSpan(text: texto, style: estilo),
+      textDirection: TextDirection.ltr,
+      textScaler: escala,
+      maxLines: 1,
+    )..layout();
+    final largura = medida.width;
+    medida.dispose();
+    return largura;
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final cores = CoresApp.of(context);
     final texto = Theme.of(context).textTheme;
-    final ciente = service.cienteEm(ativo.id);
-    final inicio = ativo.inicio;
-    final maximoAcima = ativo.nivelMaximo.rank > estado.nivel.rank;
-    final titulo = inicio != null ? 'Episódio em andamento desde ${horaMinuto(inicio)}' : 'Episódio em andamento';
-    return [
-      const SizedBox(height: Espaco.l),
-      Divider(color: tom.texto.withValues(alpha: 0.25)),
-      const SizedBox(height: Espaco.l),
-      Semantics(
-        container: true,
-        liveRegion: true,
-        child: Text(titulo, style: texto.titleSmall),
-      ),
-      if (maximoAcima) ...[
-        const SizedBox(height: 2),
-        Text('Nível mais alto: ${NivelVisual.de(ativo.nivelMaximo).rotulo}.', style: texto.bodySmall),
+    final escala = MediaQuery.textScalerOf(context);
+    final bpm = estado.leituras?.bpm;
+    final media = estado.mediaBpm5min;
+
+    final String fala;
+    if (bpm == null) {
+      fala = 'Frequência cardíaca: sem leitura agora.';
+    } else {
+      fala = 'Frequência cardíaca: ${bpm.round()} batimentos por minuto, ao vivo.'
+          '${media != null ? ' Média de 5 minutos: ${media.round()}.' : ''}';
+    }
+
+    final estiloUnidade = texto.titleSmall!.copyWith(color: cores.tintaSuave);
+    final estiloMedia = texto.bodyMedium!.copyWith(color: cores.tintaSuave);
+
+    Widget esquerda(TextStyle estiloBpm) => Row(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          children: [
+            Icon(Icons.favorite_rounded, size: _icone, color: cores.tintaSuave),
+            const SizedBox(width: Espaco.s),
+            Text(bpm != null ? '${bpm.round()}' : '—', style: estiloBpm),
+            const SizedBox(width: 6),
+            Text('bpm', style: estiloUnidade),
+          ],
+        );
+
+    final aoVivo = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.ssid_chart_rounded, size: 20, color: cores.tinta),
+        const SizedBox(width: 6),
+        Flexible(child: Text('Ao vivo', style: texto.titleSmall)),
+        const SizedBox(width: Espaco.s),
+        // Ponto parado (nunca pisca), no azul de "conectado"
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(color: cores.primaria, shape: BoxShape.circle),
+        ),
       ],
-      const SizedBox(height: Espaco.m),
-      GatilhoSimples(gatilho: estado.gatilho, emAndamento: true),
-      const SizedBox(height: Espaco.l),
-      AnimatedSwitcher(
-        duration: Movimento.de(context, Movimento.curto),
-        child: ciente != null
-            ? Semantics(
-                key: const ValueKey('ciente'),
-                container: true,
-                liveRegion: true,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(Espaco.m),
-                  decoration: BoxDecoration(
-                    color: cores.superficie,
-                    borderRadius: BorderRadius.circular(Raio.controle),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.check_circle_rounded, color: cores.calmo.texto),
-                      const SizedBox(width: Espaco.s),
-                      Expanded(
-                        child: Text(
-                          'Você avisou que está ciente às ${horaMinuto(ciente)}.',
-                          style: texto.titleSmall,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              )
-            : Semantics(
-                key: const ValueKey('botao'),
-                hint: 'Avisa o painel que você viu o alerta',
-                child: FilledButton.icon(
-                  onPressed: () => onCiente(ativo.id),
-                  style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(Toque.principal)),
-                  icon: const Icon(Icons.check_rounded),
-                  label: const Text('Estou ciente'),
-                ),
-              ),
+    );
+
+    // Lado a lado: coluna como no modelo ("Ao vivo" / "Média de 5 min:" /
+    // "96 bpm"). Empilhado: "Ao vivo" e a media na mesma linha, que quebra
+    // so se precisar.
+    final direita = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        aoVivo,
+        if (bpm == null) ...[
+          const SizedBox(height: 2),
+          Text('Sem leitura de batimentos agora.', style: estiloMedia),
+        ] else if (media != null) ...[
+          const SizedBox(height: 2),
+          Text('Média de 5 min:', style: estiloMedia),
+          Text('${media.round()} bpm', style: texto.titleSmall),
+        ],
+      ],
+    );
+    final abaixo = Wrap(
+      spacing: Espaco.l,
+      runSpacing: Espaco.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        aoVivo,
+        if (bpm == null)
+          Text('Sem leitura de batimentos agora.', style: estiloMedia)
+        else if (media != null)
+          Text.rich(
+            TextSpan(
+              text: 'Média de 5 min: ',
+              style: estiloMedia,
+              children: [TextSpan(text: '${media.round()} bpm', style: texto.titleSmall)],
+            ),
+          ),
+      ],
+    );
+
+    return Semantics(
+      container: true,
+      label: fala,
+      excludeSemantics: true,
+      child: LayoutBuilder(
+        builder: (context, restricoes) {
+          final larguraMedia = _largura('Média de 5 min:', estiloMedia, escala);
+          final larguraAoVivo = 20 + 6 + _largura('Ao vivo', texto.titleSmall!, escala) + Espaco.s + 8;
+          final larguraDireita = larguraMedia > larguraAoVivo ? larguraMedia : larguraAoVivo;
+          // Mede com "888" (3 algarismos largos): a disposicao nao muda
+          // quando o BPM passa de 99 para 100.
+          bool cabe(TextStyle estiloBpm) {
+            final larguraEsquerda =
+                _icone + Espaco.s + _largura('888', estiloBpm, escala) + 6 + _largura('bpm', estiloUnidade, escala);
+            return larguraEsquerda + _respiro * 2 + 1 + larguraDireita <= restricoes.maxWidth;
+          }
+
+          final ladoALado = [texto.displayLarge!, texto.displayMedium!].where(cabe).firstOrNull;
+          if (ladoALado == null) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [esquerda(texto.displayLarge!), const SizedBox(height: Espaco.s), abaixo],
+            );
+          }
+          return IntrinsicHeight(
+            child: Row(
+              children: [
+                esquerda(ladoALado),
+                const SizedBox(width: _respiro),
+                Container(width: 1, color: tom.texto.withValues(alpha: 0.3)),
+                const SizedBox(width: _respiro),
+                Expanded(child: direita),
+              ],
+            ),
+          );
+        },
       ),
-      const SizedBox(height: Espaco.s),
-      Text('Indicação de apoio ao cuidador, sem valor diagnóstico.', style: texto.bodySmall),
-    ];
+    );
   }
 }
 

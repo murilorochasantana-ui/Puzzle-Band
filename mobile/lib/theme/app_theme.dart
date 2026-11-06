@@ -188,6 +188,25 @@ abstract final class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(Raio.controle)),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(color: c.primaria),
+      // Editor de lembrete
+      bottomSheetTheme: BottomSheetThemeData(
+        backgroundColor: c.superficie,
+        surfaceTintColor: Colors.transparent,
+        elevation: 0,
+        modalElevation: 0,
+        showDragHandle: true,
+        dragHandleColor: c.contorno,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(Raio.secao)),
+        ),
+      ),
+      timePickerTheme: TimePickerThemeData(
+        backgroundColor: c.superficie,
+        dialBackgroundColor: c.superficieAlta,
+        hourMinuteColor: c.superficieAlta,
+        hourMinuteTextColor: c.tinta,
+        helpTextStyle: texto.labelLarge,
+      ),
     );
   }
 }

@@ -1,6 +1,6 @@
 // Atkinson Hyperlegible Next (Braille Institute, licenca OFL), empacotada em
 // assets/fonts/ - o app nao depende de internet para a fonte. Escala classica
-// (The Elements of Typographic Style): 12, 14, 16, 18, 21, 24, 36, 48.
+// (The Elements of Typographic Style): 12, 14, 16, 18, 21, 24, 36, 48, 60.
 
 import 'package:flutter/material.dart';
 
@@ -23,8 +23,9 @@ abstract final class Tipografia {
         );
 
     return TextTheme(
-      displayLarge: s(48, FontWeight.w600, 1.05),
-      // BPM ao vivo
+      // BPM ao vivo (o modelo do Figma usa 64; 60 e o degrau da escala)
+      displayLarge: s(60, FontWeight.w600, 1.05),
+      // BPM ao vivo quando as duas colunas da faixa nao cabem com 60
       displayMedium: s(48, FontWeight.w600, 1.05),
       // Nome do nivel na faixa de estado
       displaySmall: s(36, FontWeight.w700, 1.15),

@@ -12,8 +12,10 @@ import 'screens/graficos_screen.dart';
 import 'screens/historico_screen.dart';
 import 'screens/configuracoes_screen.dart';
 import 'services/app_scope.dart';
+import 'services/aviso_de_lembrete.dart';
 import 'services/mqtt_service.dart';
 import 'services/notification_service.dart';
+import 'services/preferencias_locais.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -28,13 +30,24 @@ Future<void> main() async {
   await notificacoes.init();
 
   // Servico MQTT unico, vivo enquanto o processo do app estiver vivo
+  final config = AppConfig.fromEnvironment();
   final service = MqttService(
-    config: AppConfig.fromEnvironment(),
+    config: config,
     prefs: prefs,
     notificacoes: notificacoes,
   );
 
-  runApp(AppScope(service: service, child: const PuzzleBandApp()));
+  // Nome da crianca e lembretes: so neste celular (nao vao para o MQTT)
+  final preferencias = PreferenciasLocais(
+    prefs: prefs,
+    nomePadrao: config.childId,
+    aviso: AvisoDeLembreteLocal(),
+  );
+
+  runApp(AppScope(
+    service: service,
+    child: PreferenciasScope(preferencias: preferencias, child: const PuzzleBandApp()),
+  ));
 
   unawaited(service.iniciar());
   // Android 13+: permissao de notificacao na primeira abertura

@@ -24,10 +24,14 @@ import '../theme/app_theme.dart';
 
 /// Icone + manchete + texto tecnico do gatilho.
 class GatilhoSimples extends StatelessWidget {
-  const GatilhoSimples({super.key, required this.gatilho, this.emAndamento = false});
+  const GatilhoSimples({super.key, required this.gatilho, this.emAndamento = false, this.larguraDoIcone = 24});
 
   final Gatilho? gatilho;
   final bool emAndamento;
+
+  /// Coluna do icone (o icone fica centrado nela): alinha o texto com outras
+  /// linhas de icone + texto do mesmo cartao.
+  final double larguraDoIcone;
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +48,7 @@ class GatilhoSimples extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 1),
-            child: Icon(icone, size: 24, color: cores.tinta),
+            child: SizedBox(width: larguraDoIcone, child: Icon(icone, size: 24, color: cores.tinta)),
           ),
           const SizedBox(width: Espaco.m),
           Expanded(

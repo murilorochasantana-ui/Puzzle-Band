@@ -17,8 +17,17 @@ escuro: [design-app.md](design-app.md).
 - **Estado ao vivo**: Calmo / Atenção / Possível crise, com cor **e** ícone,
   BPM atual e média dos últimos 5 minutos.
 - **Alerta**: quando há um episódio em andamento, a Home mostra um card com o
-  provável gatilho e o botão **Estou ciente**. O site então mostra "Alerta
-  visto pelo cuidador às HH:MM".
+  provável gatilho e o botão **Estou ciente**. O toque mostra "Ciente às
+  HH:MM" por 5 s, e o botão não volta para o mesmo episódio. O site então
+  mostra "Alerta visto pelo cuidador às HH:MM".
+- **Painel do dia**: o botão **Hoje: X episódios** abre, na própria Home,
+  todos os episódios de hoje (do mais recente para o mais antigo) com um
+  relatório curto de cada um. Tocar num episódio abre o detalhe, com
+  **Confirmar gatilho** / **Descartar**.
+- **Lembretes e nome da criança**: o cuidador deixa lembretes curtos (de um
+  episódio ou do dia), com aviso opcional no celular, e escolhe o nome que
+  aparece na Home. Isso fica **só no celular** (ver
+  [Lembretes](#lembretes-e-nome-da-criança)).
 - **Notificação** com som e vibração quando chega um alerta de atenção ou de
   possível crise, com no máximo uma por episódio (detalhes abaixo).
 - **Histórico** dos episódios (os 50 mais recentes do site), com **Confirmar
@@ -36,10 +45,11 @@ escuro: [design-app.md](design-app.md).
 | Tela | Conteúdo |
 |---|---|
 | Login | Só navega para a tela Início. Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
-| Início | **Faixa de estado**: nível (ícone + palavra + cor), BPM ao vivo e média de 5 min; durante um episódio, o horário de início, o provável gatilho em linguagem simples (com o texto do site abaixo) e o botão **Estou ciente**. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). Acima, a linha de conexão ("Tudo conectado" ou o aviso da pulseira); abaixo, probabilidade, fonte e episódios de hoje. |
+| Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do site abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). |
+| Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
 | Gráficos | BPM dos últimos 5 minutos recebidos no tópico `estado` (ao vivo) e episódios por dia nos últimos 7 dias (barra = número de episódios; cor = nível mais alto do dia), com uma frase-resumo (últimos 7 dias e mês). Sem dados, mostra uma mensagem em vez do gráfico. |
 | Histórico | Lista dos episódios: nível máximo, dia e hora ("Hoje, 14:32"), duração, provável gatilho, "alerta visto às HH:MM", avaliação em destaque, botões **Confirmar gatilho** / **Descartar** e uma observação opcional (até 200 caracteres, em "Adicionar observação"). Avisa quando está mostrando a cópia salva. |
-| Ajustes | Criança monitorada (`CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), versão e licenças. |
+| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), versão e licenças. |
 
 O tema segue o do sistema (claro ou escuro) e respeita a fonte ampliada e o
 "Remover animações" do Android. Detalhes em [design-app.md](design-app.md).
@@ -72,6 +82,64 @@ fosse atual.
   (`POST_NOTIFICATIONS`) na primeira abertura. Se o cuidador negar, dá para
   liberar depois em Configurações do Android → Apps → Puzzle Band →
   Notificações.
+- Os avisos dos **lembretes** usam um terceiro canal, **Lembretes**, de
+  importância normal, separado dos alertas (ver
+  [Lembretes](#lembretes-e-nome-da-criança)).
+
+### Lembretes e nome da criança
+
+**Nome da criança.** Em **Ajustes → Criança monitorada → Nome da criança**,
+digite o nome (até 40 caracteres). Ele aparece no alto da tela Início e é
+salvo a cada letra. Com o campo vazio, a Início mostra o `CHILD_ID`.
+
+**Lembrete do dia.**
+
+1. Na Início, toque em **Hoje: X episódios** para abrir o painel.
+2. Toque em **Adicionar lembrete do dia**, escreva (até 120 caracteres) e
+   toque em **Salvar lembrete**.
+3. Para mudar ou apagar, toque em **Editar** no lembrete e depois em
+   **Salvar lembrete** ou **Apagar lembrete**.
+
+O lembrete do dia vale só para aquele dia: no dia seguinte, o painel começa
+sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
+
+**Lembrete de um episódio.**
+
+1. No painel do dia, toque no episódio para abrir o detalhe.
+2. Em **Lembrete**, toque em **Adicionar lembrete**, escreva e salve.
+3. O lembrete aparece no detalhe e no painel, embaixo do episódio. No
+   detalhe, use **Editar lembrete** ou **Apagar lembrete**.
+
+**Aviso no celular (opcional).**
+
+- No editor do lembrete, toque em **Escolher horário**. Um horário que já
+  passou hoje vale para amanhã. Para tirar o aviso, toque no **X** ao lado
+  do horário.
+- No horário, o celular mostra uma notificação no canal **Lembretes**, com
+  som normal e sem tela cheia, mesmo com o app fechado. Só não funciona se o
+  app for "forçado a parar" nas configurações do Android.
+- O aviso é **inexato**: o Android pode atrasar alguns minutos para
+  economizar bateria. Ele não pede a permissão de "alarme exato".
+- Com a tela bloqueada por PIN, padrão ou digital, o Android **não mostra
+  nada do lembrete**: o celular toca, e o texto aparece depois de
+  desbloquear.
+- O aviso continua agendado depois que o celular reinicia.
+- Precisa da permissão de notificação do app. Se o aparelho não conseguir
+  agendar, o app avisa e salva o lembrete sem aviso.
+- Apagar o lembrete, ou salvar sem horário, cancela o aviso.
+
+**Privacidade (decisão do projeto).**
+
+- Os lembretes e o nome da criança ficam **só neste celular**, no
+  `shared_preferences`.
+- Eles **não são enviados pelo MQTT** (não há tópico nem campo novo nas
+  mensagens), não aparecem no site e não vão para outro aparelho.
+- Motivo: são anotações pessoais do cuidador sobre a criança, e o broker é
+  compartilhado com o site, com uma credencial que fica dentro do APK (ver
+  [Limitações](#limitações)).
+- Consequência: limpar os dados do app, desinstalar ou trocar de celular
+  apaga os lembretes, e outro cuidador não vê os lembretes deste. A
+  notificação do aviso não leva o nome da criança.
 
 ## Configuração (`env.json`)
 
@@ -178,18 +246,23 @@ mobile/
 │   ├── models/resumo.dart      # episódios do dia, do mês e dos últimos 7 dias
 │   ├── services/
 │   │   ├── mqtt_service.dart        # serviço MQTT único (ChangeNotifier)
-│   │   ├── notification_service.dart# notificações locais e canais Android
-│   │   └── app_scope.dart           # entrega o serviço às telas (InheritedNotifier)
+│   │   ├── notification_service.dart# notificações locais dos alertas e canais Android
+│   │   ├── app_scope.dart           # entrega o serviço às telas (InheritedNotifier)
+│   │   ├── preferencias_locais.dart # nome da criança e lembretes (só no celular)
+│   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
-│   ├── screens/                # login, início, gráficos, histórico, ajustes (+ gps "em breve")
-│   ├── widgets/                # faixa de estado, linha de conexão, nível, gatilho, cabeçalho...
+│   ├── screens/                # login, início, detalhe do episódio, gráficos, histórico, ajustes (+ gps "em breve")
+│   ├── widgets/                # faixa de estado, cartões do episódio, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
 └── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)
 ```
 
 Pacote Android: `br.unimar.puzzleband`. O `AndroidManifest.xml` principal
-declara `INTERNET`, `POST_NOTIFICATIONS` e `VIBRATE`. Antes, `INTERNET` só
-existia no manifesto de debug, então um APK de release não teria rede.
+declara `INTERNET`, `POST_NOTIFICATIONS`, `VIBRATE` e `RECEIVE_BOOT_COMPLETED`.
+Esta última, junto com os dois receivers do `flutter_local_notifications`,
+reagenda os avisos dos lembretes depois que o celular reinicia. Antes,
+`INTERNET` só existia no manifesto de debug, então um APK de release não teria
+rede.
 
 ## Limitações
 
@@ -215,6 +288,9 @@ existia no manifesto de debug, então um APK de release não teria rede.
   Por isso "Picos de estresse no mês" conta apenas esses.
 - A média de BPM é a dos últimos 5 minutos calculada pelo site, não a do dia
   inteiro: o app não guarda as leituras.
+- **Lembretes só no celular.** Por decisão de privacidade, eles não têm
+  cópia no site nem no broker: limpar os dados do app ou trocar de celular
+  apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).
 - Só Android. A pasta `ios/` veio do projeto original e não foi configurada
   (o bundle id ainda é o de exemplo, e as notificações não foram ajustadas
   para iOS).

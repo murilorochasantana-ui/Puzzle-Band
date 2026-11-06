@@ -8,6 +8,7 @@ import 'package:puzzleband/main.dart';
 import 'package:puzzleband/models/models.dart';
 import 'package:puzzleband/services/app_scope.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
+import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -173,6 +174,17 @@ Future<ServicoFalso> semDadosAinda() async => (await calmo())
   ..episodios = const []
   ..bpm = const [];
 
+/// Calmo e ao vivo; o historico tem episodios, mas nenhum de hoje.
+Future<ServicoFalso> semEpisodiosHoje() async {
+  final servico = await calmo();
+  return servico..episodios = [for (final e in servico.episodios) if (e.inicio.day != agoraFixo.day) e];
+}
+
+/// Preferencias locais (nome da crianca e lembretes) no mesmo
+/// shared_preferences do servico, com o aviso falso.
+PreferenciasLocais preferenciasDe(ServicoFalso servico, {AvisoFalso? aviso}) =>
+    PreferenciasLocais(prefs: servico.prefs, nomePadrao: servico.config.childId, aviso: aviso ?? AvisoFalso());
+
 /// Monta o app (tema real, fontes reais) e espera assentar. `aba`: 0 Inicio,
 /// 1 Graficos, 2 Historico, 3 Ajustes. `tela` substitui a navegacao (Login).
 Future<void> mostrar(
@@ -184,6 +196,7 @@ Future<void> mostrar(
   double escala = 1.0,
   double altura = 852,
   bool reduzirMovimento = true,
+  PreferenciasLocais? preferencias,
 }) async {
   tester.view.physicalSize = Size(393 * 2, altura * 2);
   tester.view.devicePixelRatio = 2;
@@ -191,20 +204,23 @@ Future<void> mostrar(
   await tester.pumpWidget(
     AppScope(
       service: servico,
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.claro(),
-        darkTheme: AppTheme.escuro(),
-        themeMode: escuro ? ThemeMode.dark : ThemeMode.light,
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(escala),
-            disableAnimations: reduzirMovimento,
+      child: PreferenciasScope(
+        preferencias: preferencias ?? preferenciasDe(servico),
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.claro(),
+          darkTheme: AppTheme.escuro(),
+          themeMode: escuro ? ThemeMode.dark : ThemeMode.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(escala),
+              disableAnimations: reduzirMovimento,
+            ),
+            child: child!,
           ),
-          child: child!,
+          routes: {'/home': (_) => const MainNavigation()},
+          home: tela ?? MainNavigation(initialIndex: aba),
         ),
-        routes: {'/home': (_) => const MainNavigation()},
-        home: tela ?? MainNavigation(initialIndex: aba),
       ),
     ),
   );

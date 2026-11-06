@@ -14,8 +14,9 @@ Cloud):
   via MQTT. Roda o modelo, a regra de gatilho e o histórico, e publica o
   resultado processado para o app.
 - **App do cuidador** (`mobile/`) — app Android em Flutter: estado ao vivo,
-  notificação com som nos alertas, botão "Estou ciente" e histórico com
-  avaliação do gatilho, que volta para o site.
+  notificação com som nos alertas, botão "Estou ciente", painel com os
+  episódios do dia, histórico com avaliação do gatilho (que volta para o
+  site) e lembretes do cuidador, que ficam só no celular.
 - **Simulador da pulseira** (`simulator/`) — faz o papel do ESP32 e publica
   as leituras no broker.
 - **Modelo preditivo** (`model/`) — classificador em Python (Random
