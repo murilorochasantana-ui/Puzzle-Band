@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config/app_config.dart';
@@ -12,9 +14,15 @@ import 'screens/configuracoes_screen.dart';
 import 'services/app_scope.dart';
 import 'services/mqtt_service.dart';
 import 'services/notification_service.dart';
+import 'theme/app_theme.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Licenca OFL da fonte empacotada (aparece em Ajustes > Licencas de software)
+  LicenseRegistry.addLicense(() async* {
+    final texto = await rootBundle.loadString('assets/fonts/OFL.txt');
+    yield LicenseEntryWithLineBreaks(const ['Atkinson Hyperlegible Next'], texto);
+  });
   final prefs = await SharedPreferences.getInstance();
   final notificacoes = NotificationService();
   await notificacoes.init();
@@ -70,11 +78,10 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
     return MaterialApp(
       title: 'Puzzle Band',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        fontFamily: 'Roboto',
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF4CAF50)),
-        useMaterial3: true,
-      ),
+      // Tema unico (lib/theme/): claro e escuro, seguindo o sistema
+      theme: AppTheme.claro(),
+      darkTheme: AppTheme.escuro(),
+      themeMode: ThemeMode.system,
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
@@ -116,38 +123,38 @@ class _MainNavigationState extends State<MainNavigation> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: _screens[_currentIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
-        type: BottomNavigationBarType.fixed,
-        selectedItemColor: const Color(0xFFE91E63),
-        unselectedItemColor: Colors.grey,
-        backgroundColor: Colors.white,
-        showSelectedLabels: false,
-        showUnselectedLabels: false,
-        elevation: 8,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.bar_chart_outlined),
-            activeIcon: Icon(Icons.bar_chart),
-            label: 'Gráficos',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.history_outlined),
-            activeIcon: Icon(Icons.history),
-            label: 'Histórico',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.manage_accounts_outlined),
-            activeIcon: Icon(Icons.manage_accounts),
-            label: 'Perfil',
-          ),
-        ],
+      // Rotulos sempre visiveis; o nome da aba e o titulo da tela
+      bottomNavigationBar: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: CoresApp.of(context).divisoria)),
+        ),
+        child: NavigationBar(
+          selectedIndex: _currentIndex,
+          onDestinationSelected: (index) => setState(() => _currentIndex = index),
+          animationDuration: Movimento.de(context, Movimento.medio),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.home_outlined),
+              selectedIcon: Icon(Icons.home_rounded),
+              label: 'Início',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.insert_chart_outlined_rounded),
+              selectedIcon: Icon(Icons.insert_chart_rounded),
+              label: 'Gráficos',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.history_rounded),
+              selectedIcon: Icon(Icons.history_rounded),
+              label: 'Histórico',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings_rounded),
+              label: 'Ajustes',
+            ),
+          ],
+        ),
       ),
     );
   }

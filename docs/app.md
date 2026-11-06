@@ -7,8 +7,10 @@ gatilho. Tópicos e formatos: [mqtt.md](mqtt.md).
 
 As telas (login, home, gráficos, configurações) vieram do repositório
 [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
-(pasta `frontend/`). O visual (cores, layout, componentes) foi mantido. Os
-dados fixos foram trocados pelos dados reais e o necessário foi acrescentado.
+(pasta `frontend/`). Os dados fixos foram trocados pelos dados reais e o
+necessário foi acrescentado. Depois, o visual foi redesenhado para o público
+(cuidadores de crianças com TEA), com tema único, acessibilidade e tema
+escuro: [design-app.md](design-app.md).
 
 ## O que o app faz
 
@@ -33,11 +35,14 @@ dados fixos foram trocados pelos dados reais e o necessário foi acrescentado.
 
 | Tela | Conteúdo |
 |---|---|
-| Login | Só navega para a Home. Mostra o aviso "Versão de demonstração · sem autenticação real". |
-| Home | Indicadores de conexão; card de alerta com **Estou ciente** (só durante um episódio); **Estado Atual** (nível, probabilidade e fonte: simulador manual ou pulseira); **Frequência Cardíaca** ao vivo; **Resumo do Dia** (média de BPM dos últimos 5 min e episódios de hoje, contados no histórico). |
-| Gráficos | BPM dos últimos ~5 minutos recebidos no tópico `estado` (ao vivo) e episódios por dia nos últimos 7 dias (barra = número de episódios; cor = nível mais alto do dia). Sem dados, mostra uma mensagem em vez do gráfico. As caixas mostram a média de BPM (5 min) e os episódios do mês. |
-| Histórico (ícone de relógio na barra inferior) | Lista dos episódios: horário, duração, nível máximo, provável gatilho, avaliação, "alerta visto às HH:MM", botões **Confirmar gatilho** / **Descartar** e uma observação (até 200 caracteres). Avisa quando está mostrando a cópia salva. |
-| Configurações (Perfil) | Criança monitorada (`CHILD_ID`), conexão com o broker (ou o erro), pulseira e painel; opção **Alertas sonoros** (liga/desliga, salva no celular). |
+| Login | Só navega para a tela Início. Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
+| Início | **Faixa de estado**: nível (ícone + palavra + cor), BPM ao vivo e média de 5 min; durante um episódio, o horário de início, o provável gatilho em linguagem simples (com o texto do site abaixo) e o botão **Estou ciente**. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). Acima, a linha de conexão ("Tudo conectado" ou o aviso da pulseira); abaixo, probabilidade, fonte e episódios de hoje. |
+| Gráficos | BPM dos últimos 5 minutos recebidos no tópico `estado` (ao vivo) e episódios por dia nos últimos 7 dias (barra = número de episódios; cor = nível mais alto do dia), com uma frase-resumo (últimos 7 dias e mês). Sem dados, mostra uma mensagem em vez do gráfico. |
+| Histórico | Lista dos episódios: nível máximo, dia e hora ("Hoje, 14:32"), duração, provável gatilho, "alerta visto às HH:MM", avaliação em destaque, botões **Confirmar gatilho** / **Descartar** e uma observação opcional (até 200 caracteres, em "Adicionar observação"). Avisa quando está mostrando a cópia salva. |
+| Ajustes | Criança monitorada (`CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), versão e licenças. |
+
+O tema segue o do sistema (claro ou escuro) e respeita a fonte ampliada e o
+"Remover animações" do Android. Detalhes em [design-app.md](design-app.md).
 
 A tela de GPS (vazia) saiu da navegação. O arquivo `gps_screen.dart`
 continua no projeto e mostra "em breve".
@@ -152,14 +157,20 @@ flutter build apk --debug --dart-define-from-file=env.json
 
 ```bash
 flutter analyze      # análise estática (deve dar "No issues found!")
-flutter test         # testes de parse das mensagens, resumos e regras de notificação
+flutter test         # parse das mensagens, resumos, notificação, telas, acessibilidade e imagens (golden)
+flutter test --update-goldens test/goldens_test.dart   # só depois de mudar o visual de propósito
 ```
+
+As imagens das telas ficam em `test/goldens/` (estados, tema escuro e fonte
+1,3×). Elas foram geradas no Windows; em outro sistema, gere de novo antes
+de comparar.
 
 ## Estrutura
 
 ```
 mobile/
 ├── env.example.json            # modelo do env.json (sem senha)
+├── assets/fonts/               # Atkinson Hyperlegible Next (licença OFL)
 ├── lib/
 │   ├── main.dart               # inicializa serviços, rotas, barra inferior, ciclo de vida
 │   ├── config/app_config.dart  # MQTT_HOST, MQTT_PORT, MQTT_USER, MQTT_PASS, CHILD_ID e tópicos
@@ -169,10 +180,11 @@ mobile/
 │   │   ├── mqtt_service.dart        # serviço MQTT único (ChangeNotifier)
 │   │   ├── notification_service.dart# notificações locais e canais Android
 │   │   └── app_scope.dart           # entrega o serviço às telas (InheritedNotifier)
-│   ├── screens/                # login, home, gráficos, histórico, configurações (+ gps "em breve")
-│   ├── widgets/                # indicador de conexão e cores/ícones de cada nível
-│   └── utils/formatters.dart   # datas, horas e durações
-└── test/                       # flutter test
+│   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
+│   ├── screens/                # login, início, gráficos, histórico, ajustes (+ gps "em breve")
+│   ├── widgets/                # faixa de estado, linha de conexão, nível, gatilho, cabeçalho...
+│   └── utils/                  # datas, horas, durações; relógio das telas
+└── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)
 ```
 
 Pacote Android: `br.unimar.puzzleband`. O `AndroidManifest.xml` principal

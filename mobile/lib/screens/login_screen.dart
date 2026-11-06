@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../theme/app_theme.dart';
+import '../widgets/cabecalho.dart';
+
+/// Login de demonstracao: so navega para a Home (sem autenticacao real,
+/// limitacao documentada em docs/app.md).
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -7,120 +12,102 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  final _usernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  late AnimationController _animController;
-  late Animation<double> _fadeAnim;
-  late Animation<Offset> _slideAnim;
-
-  @override
-  void initState() {
-    super.initState();
-    _animController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-    _fadeAnim = CurvedAnimation(parent: _animController, curve: Curves.easeIn);
-    _slideAnim = Tween<Offset>(
-      begin: const Offset(0, 0.2),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
-    _animController.forward();
-  }
+class _LoginScreenState extends State<LoginScreen> {
+  final _usuario = TextEditingController();
+  final _senha = TextEditingController();
 
   @override
   void dispose() {
-    _animController.dispose();
-    _usernameController.dispose();
-    _passwordController.dispose();
+    _usuario.dispose();
+    _senha.dispose();
     super.dispose();
   }
 
+  void _entrar() => Navigator.pushReplacementNamed(context, '/home');
+
   @override
   Widget build(BuildContext context) {
+    final cores = CoresApp.of(context);
+    final texto = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: Colors.white,
       body: SafeArea(
-        child: FadeTransition(
-          opacity: _fadeAnim,
-          child: SlideTransition(
-            position: _slideAnim,
-            child: Center(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'lib/assets/autismo.png',
-                      width: 160,
-                      height: 160,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'PUZZLE BAND',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 2,
-                        color: Color(0xFF333333),
-                      ),
-                    ),
-                    const SizedBox(height: 40),
-                    // User 
-                    _buildTextField(
-                      controller: _usernameController,
-                      hint: 'Usuário',
-                      icon: Icons.person_outline,
-                      obscure: false,
-                    ),
-                    const SizedBox(height: 16),
-                    // Senha 
-                    _buildTextField(
-                      controller: _passwordController,
-                      hint: 'Senha',
-                      icon: Icons.lock_outline,
-                      obscure: true,
-                    ),
-                    const SizedBox(height: 32),
-                    // Enter
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          Navigator.pushReplacementNamed(context, '/home');
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFFBDBDBD),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          elevation: 2,
-                        ),
-                        child: const Text(
-                          'Entrar',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+        // O unico movimento de abertura do app: um fade curto do conteudo.
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0, end: 1),
+          duration: Movimento.de(context, Movimento.entrada),
+          curve: Movimento.curva,
+          builder: (context, opacidade, child) => Opacity(opacity: opacidade, child: child),
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.symmetric(horizontal: Espaco.xxl, vertical: Espaco.xl),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: AutofillGroup(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const Center(child: LogoSelo(tamanho: 136, raio: Raio.faixa)),
+                      const SizedBox(height: Espaco.xl),
+                      Semantics(
+                        header: true,
+                        label: 'Puzzle Band',
+                        excludeSemantics: true,
+                        child: Text(
+                          'PUZZLE BAND',
+                          textAlign: TextAlign.center,
+                          style: Tipografia.logotipo(cores.tinta, tamanho: 24),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Sem autenticacao real (limitacao documentada em docs/app.md)
-                    const Text(
-                      'Versão de demonstração · sem autenticação real',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF9E9E9E),
+                      const SizedBox(height: Espaco.s),
+                      Text(
+                        'App do cuidador',
+                        textAlign: TextAlign.center,
+                        style: texto.bodyMedium!.copyWith(color: cores.tintaSuave),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: Espaco.xxl),
+                      TextField(
+                        controller: _usuario,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.username],
+                        decoration: const InputDecoration(
+                          labelText: 'Usuário',
+                          prefixIcon: Icon(Icons.person_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: Espaco.l),
+                      TextField(
+                        controller: _senha,
+                        obscureText: true,
+                        textInputAction: TextInputAction.done,
+                        autofillHints: const [AutofillHints.password],
+                        onSubmitted: (_) => _entrar(),
+                        decoration: const InputDecoration(
+                          labelText: 'Senha',
+                          prefixIcon: Icon(Icons.lock_outline_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: Espaco.xl),
+                      FilledButton(
+                        onPressed: _entrar,
+                        style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(Toque.principal)),
+                        child: const Text('Entrar'),
+                      ),
+                      const SizedBox(height: Espaco.l),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(Icons.info_outline_rounded, size: 20, color: cores.tintaSuave),
+                          const SizedBox(width: Espaco.s),
+                          Expanded(
+                            child: Text(
+                              'Versão de demonstração: qualquer usuário e senha entram.',
+                              style: texto.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -129,41 +116,4 @@ class _LoginScreenState extends State<LoginScreen>
       ),
     );
   }
-
-  Widget _buildTextField({
-    required TextEditingController controller,
-    required String hint,
-    required IconData icon,
-    required bool obscure,
-  }) {
-    return TextField(
-      controller: controller,
-      obscureText: obscure,
-      style: const TextStyle(fontSize: 14, color: Color(0xFF333333)),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: const TextStyle(color: Color(0xFF9E9E9E), fontSize: 14),
-        prefixIcon: Icon(icon, size: 20, color: const Color(0xFF9E9E9E)),
-        filled: true,
-        fillColor: const Color(0xFFF5F5F5),
-        contentPadding:
-            const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF4CAF50), width: 1.5),
-        ),
-      ),
-    );
-  }
-
 }
-
-

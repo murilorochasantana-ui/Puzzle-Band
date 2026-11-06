@@ -92,7 +92,8 @@ puzzle-band/
 │   │   ├── services/mqtt_service.dart   # serviço MQTT único (TLS, Last Will, reconexão)
 │   │   ├── services/notification_service.dart
 │   │   ├── models/           # parse validado das mensagens do site
-│   │   └── screens/          # login, home, gráficos, histórico, configurações
+│   │   ├── theme/            # tema único (cores claro/escuro, tipografia, medidas)
+│   │   └── screens/          # login, início, gráficos, histórico, ajustes
 │   ├── test/                 # flutter test
 │   └── env.example.json      # modelo do mobile/env.json (broker, usuário app, CHILD_ID)
 └── frontend/
@@ -460,11 +461,13 @@ Este é o README principal do projeto; os detalhes ficam em `docs/`:
 | [docs/avaliacao_dataset.md](docs/avaliacao_dataset.md) | Avaliação do dataset sintético |
 | [docs/mqtt.md](docs/mqtt.md) | Diagrama, tópicos (quem publica/assina, QoS, retain), formatos das mensagens e ACL sugerida |
 | [docs/app.md](docs/app.md) | App do cuidador: telas, `env.json`, como rodar (emulador e celular) e limitações |
+| [docs/design-app.md](docs/design-app.md) | Design do app (UX/UI): direção visual, paleta com contrastes, tipografia, acessibilidade para o TEA e antes/depois de cada tela |
 
 ## Créditos
 
 As telas do app do cuidador (login, home, gráficos e configurações) vieram do
 repositório [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
-(pasta `frontend/`, Flutter). Aqui o visual foi mantido e os dados fixos
-foram trocados pelos dados recebidos do site via MQTT.
+(pasta `frontend/`, Flutter). Aqui os dados fixos foram trocados pelos dados
+recebidos do site via MQTT, e o visual foi redesenhado para o público do TEA
+([docs/design-app.md](docs/design-app.md)).
 

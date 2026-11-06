@@ -23,3 +23,31 @@ String rotuloFonte(String? fonte) => switch (fonte) {
       'pulseira' => 'Pulseira',
       _ => 'Fonte desconhecida',
     };
+
+/// "Hoje, 14:32" / "Ontem, 09:10" / "03/11, 18:05"
+String diaRelativo(DateTime d, DateTime agora) {
+  final hoje = DateTime(agora.year, agora.month, agora.day);
+  final dia = DateTime(d.year, d.month, d.day);
+  final diferenca = (hoje.difference(dia).inHours / 24).round(); // round: dias de 23/25 h
+  final prefixo = switch (diferenca) {
+    0 => 'Hoje',
+    1 => 'Ontem',
+    _ => '${_dois(d.day)}/${_dois(d.month)}',
+  };
+  return '$prefixo, ${horaMinuto(d)}';
+}
+
+const _meses = [
+  'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+  'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro',
+];
+
+/// "novembro"
+String nomeDoMes(int mes) => _meses[mes - 1];
+
+/// "1 episódio" / "3 episódios" / "nenhum episódio"
+String contarEpisodios(int n) => switch (n) {
+      0 => 'nenhum episódio',
+      1 => '1 episódio',
+      _ => '$n episódios',
+    };

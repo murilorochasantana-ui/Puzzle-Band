@@ -7,3 +7,7 @@ __pycache__/
 
 # Senha do broker do app Flutter (ver mobile/env.example.json)
 mobile/env.json
+
+# Skills e configurações locais do Claude (não vão para o GitHub)
+.claude/
+Skills Claude/
