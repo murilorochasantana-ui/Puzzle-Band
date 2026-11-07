@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Validacao automatica dos cenarios, OFFLINE (sem broker): gera as mesmas
 // leituras que o index.js publicaria (mesmo programTicks() e mesma --seed) e
-// passa pelo MESMO caminho do dashboard:
+// passa pelo MESMO processador que a pulseira roda ao vivo (borda.js,
+// createEdgeProcessor):
 //   buffer de 300 leituras -> classifyAt (frontend/src/model/classify.js, que
 //   chama computeFeatures, predictCrisisProbability e riskTierFromProbability
-//   do predict.js, como o App.jsx) -> episodios (episodes.js) -> gatilho
-//   provavel (trigger.js).
+//   do predict.js) -> episodios (episodes.js) -> gatilho provavel (trigger.js).
 // Roda em segundos (nao espera o relogio). A semente controla o ruido dos
 // sensores e o sorteio do roteiro: resultado reprodutivel, e igual ao do
 // simulador ao vivo com a mesma --seed.
@@ -32,14 +32,13 @@
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { generateReading } from '../frontend/src/model/simulate.js';
-import { classifyAt } from '../frontend/src/model/classify.js';
-import { createMonitor, ingestReadings, upsertEpisode, EPISODE_END_CALM_S } from '../frontend/src/model/episodes.js';
+import { EPISODE_END_CALM_S } from '../frontend/src/model/episodes.js';
+import { createEdgeProcessor } from './borda.js';
 import {
   EVENTOS_ALEATORIOS, INTENSIDADES, PAUSA_MIN_S, PAUSA_PADRAO_S, SCENARIOS, TIPOS_DE_EVENTO, VARIACAO_NOMINAL,
   calmTargets, cycleDetails, nominalScenario, programTicks, seeded, withRandom,
 } from './scenarios.js';
 
-const MAX_BUFFER = 300; // mesmo limite do App.jsx
 const EXTRA_S = EPISODE_END_CALM_S + 30; // --uma-vez: calmo extra no fim, para o ultimo episodio fechar
 const T0 = Date.parse('2026-01-01T12:00:00Z');
 const TIER_RANK = { baixo_risco: 0, atencao: 1, alto_risco: 2 };
@@ -56,15 +55,13 @@ const DEMO_SEGMENTS = nominalScenario('demo').segmentos;
 
 const secondsOf = (iso) => (Date.parse(iso) - T0) / 1000;
 
-// Executa um programa (programTicks) leitura a leitura, como o dashboard faz.
+// Executa um programa (programTicks) leitura a leitura, como a pulseira faz.
 // Math.random = ruido dos sensores com a semente `seed` (o mesmo que o
 // index.js usa); o sorteio do roteiro tem gerador proprio (scenarios.js).
 export function simulateProgram(ticks, seed, { extraCalmS = 0, idade = 8 } = {}) {
   return withRandom(seeded(seed), () => {
-    let buffer = [];
-    let monitor = createMonitor({ childId: 'SIM', source: 'mqtt' });
-    let lastReading = null;
-    let episodes = [];
+    // o MESMO processador que a pulseira roda ao vivo (borda.js), sem rede e sem arquivo
+    const processor = createEdgeProcessor({ childId: 'SIM', source: 'pulseira' });
     let nivelMax = 'baixo_risco';
     let primeiroAlerta = null;
     const tiersByPhase = new Map();
@@ -72,13 +69,8 @@ export function simulateProgram(ticks, seed, { extraCalmS = 0, idade = 8 } = {})
 
     const step = (t, alvos, fase) => {
       const reading = generateReading({ ...alvos, timestamp: new Date(T0 + t * 1000).toISOString() });
-      buffer = [...buffer, reading].slice(-MAX_BUFFER);
-      const result = ingestReadings(monitor, lastReading, buffer, classifyAt);
-      monitor = result.monitor;
-      lastReading = result.lastReading;
-      for (const ep of result.changed) episodes = upsertEpisode(episodes, ep);
+      const { tier } = processor.ingest(reading);
 
-      const tier = monitor.prevTier;
       if (TIER_RANK[tier] > TIER_RANK[nivelMax]) nivelMax = tier;
       if (tier !== 'baixo_risco' && primeiroAlerta === null) primeiroAlerta = t;
       if (!tiersByPhase.has(fase)) tiersByPhase.set(fase, { baixo_risco: 0, atencao: 0, alto_risco: 0 });
@@ -94,7 +86,7 @@ export function simulateProgram(ticks, seed, { extraCalmS = 0, idade = 8 } = {})
     const calm = calmTargets(idade);
     for (let k = 1; k <= extraCalmS; k += 1) step(last.t + k, calm, last.fase);
 
-    episodes = [...episodes].reverse().map((ep) => ({ ...ep, t_inicio: secondsOf(ep.inicio) }));
+    const episodes = [...processor.episodes()].reverse().map((ep) => ({ ...ep, t_inicio: secondsOf(ep.inicio) }));
     return { nivelMax, primeiroAlerta, episodes, tiersByPhase, cycles };
   });
 }
@@ -713,7 +705,7 @@ function main() {
   if (loopNames.length) {
     console.log(`Verificação offline em LOOP: ${ciclos} ciclos por execução (1º nominal, os outros com variação), `
       + `pausa calma de ${pausa} s, ${seeds} sementes por cenário`);
-    console.log('Mesmo caminho do site: classifyAt (predict.js) → episódios (episodes.js) → gatilho (trigger.js)\n');
+    console.log('Mesmo processamento da pulseira (borda.js): classifyAt (predict.js) → episódios (episodes.js) → gatilho (trigger.js)\n');
     for (const name of loopNames) evaluations.push(evaluateLoop(name, seeds, { ciclos, pausa }));
     printTable(LOOP_COLUMNS, evaluations.map((e) => e.linha), markdown);
     console.log(`\nDetalhes${markdown ? '' : ' (por ciclo)'}:\n`);

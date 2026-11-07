@@ -205,7 +205,7 @@ test('store: grava a cada atualizacao e segue em memoria se o storage falhar', (
   assert.equal(memoryOnly.getSnapshot().episodes.length, 1);
 });
 
-// ---------- ingestReadings (o que o hook do dashboard chama a cada render) ----------
+// ---------- ingestReadings (o que a pulseira chama a cada leitura, simulator/borda.js) ----------
 
 // Classificador falso: "alerta" quando o BPM passa de 100
 const fakeClassify = (readings, i) => (readings[i].bpm > 100
@@ -214,7 +214,7 @@ const fakeClassify = (readings, i) => (readings[i].bpm > 100
 const bpmAt = (t) => (t >= 60 && t < 90 ? 120 : 80); // um episodio de 30 s
 const series = (n) => Array.from({ length: n }, (_, t) => ({ ...reading(t), bpm: bpmAt(t) }));
 
-// Simula o buffer do App.jsx: cresce de `batch` em `batch` e e cortado em 300
+// Simula o buffer da pulseira: cresce de `batch` em `batch` e e cortado em 300
 function feed(readings, batch, maxBuffer = 300) {
   let monitor = createMonitor({ childId: 'C01', source: 'mqtt' });
   let last = null;

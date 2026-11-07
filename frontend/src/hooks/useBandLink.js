@@ -1,18 +1,28 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import mqtt from 'mqtt';
-import { parseAck, parseAppStatus, parseBandStatus, parseEvaluation, parseReading } from './parseMessages';
-import { topicsFor } from './buildMessages';
+import {
+  parseAlert,
+  parseAppStatus,
+  parseBandStatus,
+  parseHistory,
+  parseReading,
+  parseState,
+} from './parseMessages';
+import { buildControlMessage, buildEvaluationMessage, topicsFor } from './buildMessages';
 
-// Ligacao do site com o broker (WebSocket + TLS). Fica conectada nos DOIS
-// modos (Simulador manual e Pulseira), porque o site e o "servidor" do app do
-// cuidador: publica estado/alertas/historico e recebe avaliacao/ack.
+// Ligacao do PAINEL (site) com o broker (WebSocket + TLS). O site nao
+// processa nada: a pulseira (simulator/) roda o modelo, os episodios e o
+// gatilho - processamento na borda - e publica o resultado. O painel so
+// assina e mostra, e publica dois topicos de comando para a pulseira:
+//   controle   valores-alvo do "Controle da pulseira" (modo npm run controle)
+//   avaliacao  "Confirmar gatilho" / "Descartar" do historico, com origem "site"
+//
+// Assinaturas: leituras (QoS 0), status, app/status, estado, alertas e
+// historico (QoS 1). O painel NAO publica estado, alertas nem historico: a
+// pulseira e a unica dona desses topicos.
 //
 // Status do broker: conectando | conectado | desconectado | erro
 // Status da pulseira e do app: online | offline | desconhecido (sem mensagem ainda)
-//
-// Assinaturas: leituras, status, app/status, avaliacao, ack. O site NUNCA
-// assina estado/alertas/historico (que ele mesmo publica): assim nao
-// reprocessa as proprias mensagens.
 
 function readConfig() {
   const env = import.meta.env;
@@ -37,39 +47,24 @@ const configured = missing.length === 0;
 const topics = configured ? topicsFor(config.childId) : null;
 const randomSuffix = () => Math.random().toString(16).slice(2, 8);
 
-// `readingsEnabled`: so no modo Pulseira as leituras recebidas entram no
-// buffer; ao ligar/desligar, o buffer e zerado.
-export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
+export default function useBandLink({ maxBuffer }) {
   const [readings, setReadings] = useState([]);
   const [brokerStatus, setBrokerStatus] = useState('conectando');
   const [bandStatus, setBandStatus] = useState('desconhecido');
   const [appStatus, setAppStatus] = useState('desconhecido');
   const [errorMessage, setErrorMessage] = useState(null);
-  // +1 a cada (re)conexao: quem publica mensagens "retain" republica ao reconectar
+  const [state, setState] = useState(null); // ultimo estado (parseState)
+  const [history, setHistory] = useState(null); // ultimo historico (parseHistory)
+  const [lastAlert, setLastAlert] = useState(null); // ultimo alerta (parseAlert)
+  // +1 a cada (re)conexao: o painel reenvia os valores do controle
   const [connectionId, setConnectionId] = useState(0);
   const clientRef = useRef(null);
-  const readingsEnabledRef = useRef(readingsEnabled);
-  const listenersRef = useRef(new Set());
-
-  // Troca de modo: o buffer recomeca vazio (ajuste de estado durante o render,
-  // o padrao do React para "resetar quando a prop muda").
-  const [bufferMode, setBufferMode] = useState(readingsEnabled);
-  if (bufferMode !== readingsEnabled) {
-    setBufferMode(readingsEnabled);
-    setReadings([]);
-  }
-  useEffect(() => {
-    readingsEnabledRef.current = readingsEnabled;
-  }, [readingsEnabled]);
 
   useEffect(() => {
     if (!configured) return undefined;
 
     let lastError = null;
     let disposed = false; // eventos tardios de um cliente ja encerrado sao ignorados
-    const emit = (type, message) => {
-      listenersRef.current.forEach((listener) => listener(type, message));
-    };
 
     const client = mqtt.connect(config.url, {
       username: config.username,
@@ -77,7 +72,7 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
       clientId: `puzzleband-dash-${config.childId}-${randomSuffix()}`,
       reconnectPeriod: 3000,
       connectTimeout: 10000,
-      queueQoSZero: false, // estado velho nao serve: sem conexao, descarta
+      queueQoSZero: false,
     });
     clientRef.current = client;
 
@@ -86,10 +81,11 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
       lastError = null;
       setErrorMessage(null);
       setBrokerStatus('conectado');
-      // clean session: as assinaturas precisam ser refeitas a cada (re)conexao.
-      // Leituras em QoS 0; o resto em QoS 1 (status chegam na hora pelo retain).
+      // clean session: as assinaturas sao refeitas a cada (re)conexao. Os
+      // topicos com retain (status, app/status, estado, historico) entregam o
+      // ultimo valor logo apos a assinatura.
       client.subscribe(topics.leituras, { qos: 0 });
-      client.subscribe([topics.status, topics.appStatus, topics.avaliacao, topics.ack], { qos: 1 });
+      client.subscribe([topics.status, topics.appStatus, topics.estado, topics.alertas, topics.historico], { qos: 1 });
       setConnectionId((n) => n + 1);
     });
     client.on('reconnect', () => {
@@ -109,29 +105,32 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
       setBrokerStatus('erro');
     });
 
-    client.on('message', (topic, payload) => {
+    client.on('message', (topic, payload, packet) => {
       if (disposed) return;
       const text = payload.toString();
       if (topic === topics.leituras) {
-        if (!readingsEnabledRef.current) return; // modo manual: leituras da pulseira nao entram
         const reading = parseReading(text);
         if (!reading) return; // malformada: descarta sem quebrar a tela
         setReadings((prev) => {
           const next = [...prev, reading];
           return next.length > maxBuffer ? next.slice(next.length - maxBuffer) : next;
         });
+      } else if (topic === topics.estado) {
+        const message = parseState(text);
+        if (message) setState(message);
+      } else if (topic === topics.alertas) {
+        const message = parseAlert(text);
+        // alerta e sem retain; um "retido" seria lixo antigo no broker
+        if (message && !packet?.retain) setLastAlert(message);
+      } else if (topic === topics.historico) {
+        const message = parseHistory(text);
+        if (message) setHistory(message);
       } else if (topic === topics.status) {
         const status = parseBandStatus(text);
         if (status) setBandStatus(status);
       } else if (topic === topics.appStatus) {
         const status = parseAppStatus(text);
         if (status) setAppStatus(status);
-      } else if (topic === topics.avaliacao) {
-        const message = parseEvaluation(text);
-        if (message) emit('avaliacao', message);
-      } else if (topic === topics.ack) {
-        const message = parseAck(text);
-        if (message) emit('ack', message);
       }
     });
 
@@ -140,6 +139,9 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
       clientRef.current = null;
       client.end(true);
       setReadings([]);
+      setState(null);
+      setHistory(null);
+      setLastAlert(null);
       setBrokerStatus('conectando');
       setBandStatus('desconhecido');
       setAppStatus('desconhecido');
@@ -147,30 +149,34 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
     };
   }, [maxBuffer]);
 
-  // So publica com o broker conectado - um estado ou alerta velho entregue
-  // depois da reconexao seria enganoso. Devolve true se enviou.
-  const publish = useCallback((topicKey, message, options) => {
+  // So publica com o broker conectado (um comando velho entregue depois da
+  // reconexao seria enganoso). Devolve true se enviou.
+  const publish = useCallback((topicKey, message) => {
     const client = clientRef.current;
     if (!client?.connected) return false;
-    client.publish(topics[topicKey], JSON.stringify(message), options);
+    client.publish(topics[topicKey], JSON.stringify(message), { qos: 1 });
     return true;
   }, []);
 
-  const publishState = useCallback((message) => publish('estado', message, { qos: 0, retain: true }), [publish]);
-  const publishAlert = useCallback((message) => publish('alertas', message, { qos: 1 }), [publish]);
-  const publishHistory = useCallback((message) => publish('historico', message, { qos: 1, retain: true }), [publish]);
+  // Valores-alvo do "Controle da pulseira" (QoS 1, sem retain)
+  const publishControl = useCallback(
+    (values) => publish('controle', buildControlMessage(values, { timestamp: new Date().toISOString() })),
+    [publish],
+  );
 
-  // Avaliacao e ack vindos do app: listener(type, message), type = 'avaliacao' | 'ack'.
-  // Devolve a funcao que remove o listener (formato de cleanup do useEffect).
-  const addMessageListener = useCallback((listener) => {
-    listenersRef.current.add(listener);
-    return () => {
-      listenersRef.current.delete(listener);
-    };
-  }, []);
+  // Confirmar / Descartar / desfazer ("pendente") um episodio: quem aplica e a pulseira
+  const publishEvaluation = useCallback(
+    ({ episodioId, avaliacao, observacao }) => publish('avaliacao', buildEvaluationMessage({
+      episodioId, avaliacao, observacao, timestamp: new Date().toISOString(),
+    })),
+    [publish],
+  );
 
   return {
-    readings: configured && readingsEnabled ? readings : [],
+    readings: configured ? readings : [],
+    state: configured ? state : null,
+    history: configured ? history : null,
+    lastAlert: configured ? lastAlert : null,
     brokerStatus: configured ? brokerStatus : 'erro',
     bandStatus: configured ? bandStatus : 'desconhecido',
     appStatus: configured ? appStatus : 'desconhecido',
@@ -178,9 +184,7 @@ export default function useMqttReadings({ readingsEnabled, maxBuffer }) {
     childId: config.childId,
     connected: configured && brokerStatus === 'conectado',
     connectionId,
-    publishState,
-    publishAlert,
-    publishHistory,
-    addMessageListener,
+    publishControl,
+    publishEvaluation,
   };
 }

@@ -1,14 +1,18 @@
-// Mensagens que o site publica para o app do cuidador (ver docs/mqtt.md).
-// Funcoes puras (testadas em Node): o hook useCaregiverSync so decide QUANDO
-// publicar; o QUE vai em cada mensagem fica aqui.
+// Mensagens MQTT do Puzzle Band (ver docs/mqtt.md). Funcoes puras (testadas
+// em Node):
+//   - a pulseira (simulator/borda.js) publica estado, alertas e historico
+//     para o app do cuidador (e para o painel do site, que so mostra);
+//   - o painel do site publica controle e avaliacao para a pulseira.
+// Quem publica decide QUANDO; o QUE vai em cada mensagem fica aqui.
 
-import { SITE_ORIGIN } from './parseMessages.js';
+import { BAND_ORIGIN, SITE_ORIGIN } from './parseMessages.js';
+import { CONTROL_LIMITS } from '../model/simulate.js';
 
 export const STATE_INTERVAL_MS = 1000; // estado: 1 vez por segundo
 export const HISTORY_TOPIC_LIMIT = 50; // historico: os 50 episodios mais recentes
 
 // Leituras atuais que vao no estado (accel_mag_g e idade ficam de fora: o
-// app nao mostra e o modelo roda no site).
+// app nao mostra e o modelo roda na pulseira).
 const STATE_READING_FIELDS = ['bpm', 'eda_uS', 'hrv_ms', 'gyro_mag_dps', 'regularidade', 'luz_lux', 'ruido_db'];
 
 export function topicsFor(childId) {
@@ -21,12 +25,15 @@ export function topicsFor(childId) {
     historico: `${base}/historico`,
     avaliacao: `${base}/avaliacao`,
     ack: `${base}/ack`,
+    controle: `${base}/controle`,
     appStatus: `${base}/app/status`,
   };
 }
 
-// Fonte no protocolo: "manual" | "pulseira" (internamente o site usa 'mqtt').
-export const protocolSource = (source) => (source === 'mqtt' ? 'pulseira' : 'manual');
+// Fonte no protocolo: "pulseira" (cenarios da pulseira) | "manual" (pulseira
+// no modo controle, seguindo os valores do painel). Internamente a pulseira
+// usa 'pulseira' | 'manual'; 'mqtt' e o nome antigo de 'pulseira'.
+export const protocolSource = (source) => (source === 'pulseira' || source === 'mqtt' ? 'pulseira' : 'manual');
 
 const round = (v, digits) => {
   const f = 10 ** digits;
@@ -49,13 +56,17 @@ function pickReading(reading) {
   return out;
 }
 
-// puzzleband/<id>/estado (QoS 0, retain). `readings` e o buffer do site (ate
-// 300 leituras = 5 min de sinal a 1 Hz); `openEpisode` o episodio em
+// ---------------------------------------------------------------------------
+// Pulseira -> app (e painel)
+// ---------------------------------------------------------------------------
+
+// puzzleband/<id>/estado (QoS 0, retain). `readings` e o buffer da pulseira
+// (ate 300 leituras = 5 min de sinal a 1 Hz); `openEpisode` o episodio em
 // andamento ou null.
 export function buildStateMessage({ timestamp, source, childId, tier, probability, readings, openEpisode }) {
   const list = readings ?? [];
   return {
-    origem: SITE_ORIGIN,
+    origem: BAND_ORIGIN,
     timestamp,
     fonte: protocolSource(source),
     crianca: childId ?? null,
@@ -76,10 +87,10 @@ export function buildStateMessage({ timestamp, source, childId, tier, probabilit
 }
 
 // puzzleband/<id>/alertas (QoS 1). `alert` vem de ingestReadings
-// (model/episodes.js) com o timestamp acrescentado pelo useEpisodeMonitor.
+// (model/episodes.js) com o timestamp acrescentado pela pulseira.
 export function buildAlertMessage(alert, { source, childId }) {
   return {
-    origem: SITE_ORIGIN,
+    origem: BAND_ORIGIN,
     timestamp: alert.timestamp ?? new Date().toISOString(),
     fonte: protocolSource(source),
     crianca: childId ?? null,
@@ -92,7 +103,7 @@ export function buildAlertMessage(alert, { source, childId }) {
   };
 }
 
-// Um episodio no topico historico: os campos que o EpisodeHistory mostra.
+// Um episodio no topico historico: os campos que o app e o painel mostram.
 export function historyEntry(ep) {
   return {
     id: ep.id,
@@ -113,10 +124,22 @@ export function historyEntry(ep) {
   };
 }
 
+// Caminho inverso (a pulseira recuperando o historico da mensagem retida,
+// quando nao tem o arquivo local): a entrada ja validada por parseHistory
+// vira um episodio do historico. O gatilho volta so com tipo e texto (o
+// detalhe dos sinais nao vai no topico).
+export function historyEntryToEpisode(entry) {
+  return {
+    ...entry,
+    fonte: entry.fonte === 'manual' ? 'manual' : 'pulseira',
+    ultima_leitura: entry.fim ?? entry.inicio,
+  };
+}
+
 // puzzleband/<id>/historico (QoS 1, retain). `episodes` mais recente primeiro.
 export function buildHistoryMessage(episodes, { childId, timestamp }) {
   return {
-    origem: SITE_ORIGIN,
+    origem: BAND_ORIGIN,
     timestamp,
     crianca: childId ?? null,
     total: episodes.length,
@@ -125,8 +148,8 @@ export function buildHistoryMessage(episodes, { childId, timestamp }) {
 }
 
 // Muda quando um episodio abre, fecha, muda de nivel maximo/gatilho ou e
-// avaliado/visto - mas NAO a cada segundo de duracao. O site republica o
-// historico quando a assinatura muda.
+// avaliado/visto - mas NAO a cada segundo de duracao. A pulseira republica
+// o historico quando a assinatura muda.
 export function historySignature(episodes) {
   return episodes
     .slice(0, HISTORY_TOPIC_LIMIT)
@@ -142,4 +165,28 @@ export function historySignature(episodes) {
       ep.visto_pelo_cuidador_em ?? '',
     ].join('|'))
     .join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Painel do site -> pulseira
+// ---------------------------------------------------------------------------
+
+// puzzleband/<id>/controle (QoS 1, sem retain): valores-alvo do "Controle da
+// pulseira". So os campos de CONTROL_LIMITS, na ordem de la.
+export function buildControlMessage(values, { timestamp }) {
+  const message = { origem: SITE_ORIGIN, timestamp };
+  for (const field of Object.keys(CONTROL_LIMITS)) {
+    if (Number.isFinite(values?.[field])) message[field] = values[field];
+  }
+  return message;
+}
+
+// puzzleband/<id>/avaliacao (QoS 1, sem retain): mesmo formato que o app usa,
+// com origem "site". `avaliacao` "pendente" desfaz a avaliacao.
+export function buildEvaluationMessage({ episodioId, avaliacao, observacao, timestamp }) {
+  const message = { episodio_id: episodioId, avaliacao };
+  if (observacao !== undefined) message.observacao = observacao;
+  message.origem = SITE_ORIGIN;
+  message.timestamp = timestamp;
+  return message;
 }

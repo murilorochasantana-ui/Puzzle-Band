@@ -1,8 +1,9 @@
 // Teste de ponta a ponta do gatilho com o MODELO REAL: gera leituras com o
-// mesmo gerador do simulador manual (src/model/simulate.js), mantem o mesmo
-// buffer deslizante do App.jsx (300 leituras) e passa pelo mesmo caminho do
-// dashboard: ingestReadings -> classifyAt (Random Forest) -> episodios +
-// gatilho. Os "alertas" sao o que seria publicado em puzzleband/<id>/alertas.
+// mesmo gerador da pulseira simulada (src/model/simulate.js), mantem o mesmo
+// buffer deslizante dela (300 leituras) e passa pelo mesmo caminho do
+// processamento na borda (simulator/borda.js): ingestReadings -> classifyAt
+// (Random Forest) -> episodios + gatilho. Os "alertas" sao o que a pulseira
+// publicaria em puzzleband/<id>/alertas.
 //
 // Os cenarios reproduzem os do simulador de linha de comando descritos no
 // README (crise_ruido, crise_sem_gatilho) e acrescentam dois de controle.
@@ -18,7 +19,7 @@ import { generateReading } from '../src/model/simulate.js';
 import { classifyAt } from '../src/model/classify.js';
 import { createMonitor, ingestReadings, upsertEpisode } from '../src/model/episodes.js';
 
-const MAX_BUFFER = 300; // mesmo limite do App.jsx
+const MAX_BUFFER = 300; // mesmo limite da pulseira (simulator/borda.js)
 
 const CALM = {
   bpmTarget: 80, edaTarget: 4, hrvTarget: 55, gyroAction: 'repouso', movimentoRepetitivo: false,
@@ -92,7 +93,8 @@ function seeded(seed) {
 
 const T0 = Date.parse('2026-11-02T13:00:00Z');
 
-// speed: leituras por "tick", como os botoes 1x/2x/4x do simulador manual
+// speed: leituras processadas por lote (a pulseira processa 1 por vez; o
+// resultado nao pode depender do tamanho do lote)
 export function runScenario(name, seed = 1, { speed = 1 } = {}) {
   const scenario = SCENARIOS[name];
   const originalRandom = Math.random;

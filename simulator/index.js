@@ -1,8 +1,18 @@
 #!/usr/bin/env node
-// Simulador da pulseira Puzzle Band (ESP32) - publica 1 leitura por segundo
-// no broker MQTT, no mesmo formato que o dashboard (modo "Pulseira (MQTT)")
-// espera. As leituras vem do MESMO gerador do simulador manual do dashboard
-// (frontend/src/model/simulate.js); os cenarios ficam em scenarios.js.
+// Pulseira Puzzle Band (simulacao do ESP32) com PROCESSAMENTO NA BORDA: a
+// cada segundo gera uma leitura, roda o modelo, os episodios e o gatilho
+// (borda.js, com os mesmos modulos de frontend/src/model) e publica no broker:
+//   leituras   leitura bruta (QoS 0)            -> painel do site (graficos)
+//   estado     nivel, probabilidade... (retain) -> app do cuidador e painel
+//   alertas    mudanca de nivel (QoS 1)         -> app e painel
+//   historico  lista de episodios (retain)      -> app e painel
+//   status     online/offline (retain + Last Will)
+// e aplica no historico o ack ("Estou ciente") e a avaliacao que chegam do
+// app ou do painel. O app funciona so com a pulseira ligada: o site e opcional.
+//
+// As leituras vem do mesmo gerador de sempre (frontend/src/model/simulate.js),
+// seguindo um cenario (scenarios.js) ou, no modo controle, os valores-alvo
+// enviados pelo painel do site (controle.js).
 //
 // Por padrao o cenario roda em LOOP (ciclo -> pausa calma -> ciclo ...) ate
 // o Ctrl+C; o 1o ciclo e o roteiro nominal e os seguintes variam um pouco.
@@ -10,9 +20,11 @@
 //   node index.js --cenario crise_ruido [--ciclos 3] [--pausa 120] [--seed 42]
 //   node index.js --cenario crise_ruido --uma-vez          # roteiro nominal e encerra
 //   node index.js --cenario eventos_aleatorios --ciclos 20 --seed 42
+//   node index.js --cenario controle                       # controle remoto pelo painel
 //
 // Cada evento/ciclo vira uma linha do gabarito em logs/eventos_<data-hora>.csv
-// (e .json). Configuracao em simulator/.env (ver .env.example).
+// (e .json). O historico de episodios fica em data/historico_<id>.json.
+// Configuracao em simulator/.env (ver .env.example).
 
 import { randomInt } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -21,35 +33,49 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import dotenv from 'dotenv';
 import mqtt from 'mqtt';
-import { generateReading } from '../frontend/src/model/simulate.js';
+import { CALM_CONTROL, generateReading } from '../frontend/src/model/simulate.js';
+import { describeModel, modelInfoFrom } from '../frontend/src/model/modelInfo.js';
+import forest from '../frontend/src/model/forest.json' with { type: 'json' };
 import {
   EVENTOS_ALEATORIOS, INTENSIDADES, PAUSA_MIN_S, PAUSA_PADRAO_S, SCENARIOS, SCENARIO_NAMES, TIPOS_DE_EVENTO, VARIACAO_LIMITES,
   cycleBanner, cycleDetails, describeTimeline, nominalScenario, programTicks, scenarioDescription, seeded, withRandom,
 } from './scenarios.js';
 import { createGabaritoWriter, gabaritoEntry } from './gabarito.js';
+import { createEdgeLink, createEdgeProcessor } from './borda.js';
+import { openHistoryFile } from './historico.js';
+import { CONTROLE, CONTROLE_DESCRICAO, RAMPA_CONTROLE_S, controlTicks, createControl } from './controle.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ENV_PATH = join(HERE, '.env');
 const LOGS_DIR = join(HERE, 'logs');
+const DATA_DIR = join(HERE, 'data');
 const IDADE_MIN = 5;
-const IDADE_MAX = 12; // mesma faixa do controle de idade do dashboard
+const IDADE_MAX = 12; // mesma faixa do controle de idade do painel
 const SEED_MAX = 4294967295;
+const CENARIOS_VALIDOS = [...SCENARIO_NAMES, CONTROLE];
 
 const USAGE = `Uso: node index.js --cenario <nome> [opções]
-     npm start -- --cenario <nome> ...      (ou um atalho: npm run crise-ruido -- --ciclos 3)
+     npm start -- --cenario <nome> ...      (ou um atalho: npm run crise-ruido -- --ciclos 3, npm run controle)
 
-  --cenario   um dos cenários abaixo (padrão: calmo)
-  --idade     idade da criança, ${IDADE_MIN} a ${IDADE_MAX} anos (padrão: 8)
-  --uma-vez   só o roteiro nominal, uma vez, e encerra (comportamento antigo)
-  --ciclos    roda N ciclos (no eventos_aleatorios, N eventos) e encerra (padrão: loop até Ctrl+C)
-  --pausa     segundos de pausa calma entre ciclos (padrão: ${PAUSA_PADRAO_S}; mínimo ${PAUSA_MIN_S});
-              no eventos_aleatorios a pausa é sorteada entre S e 2×S (padrão: ${PAUSA_PADRAO_S}–${2 * PAUSA_PADRAO_S} s)
-  --seed      semente do sorteio e do ruído dos sensores (mesma seed = mesma sequência)
-  --duracao   para depois de N segundos, em qualquer modo`;
+  --cenario            um dos cenários abaixo (padrão: calmo)
+  --idade              idade da criança, ${IDADE_MIN} a ${IDADE_MAX} anos (padrão: 8; no controle, até o painel mandar outra)
+  --uma-vez            só o roteiro nominal, uma vez, e encerra (comportamento antigo)
+  --ciclos             roda N ciclos (no eventos_aleatorios, N eventos) e encerra (padrão: loop até Ctrl+C)
+  --pausa              segundos de pausa calma entre ciclos (padrão: ${PAUSA_PADRAO_S}; mínimo ${PAUSA_MIN_S});
+                       no eventos_aleatorios a pausa é sorteada entre S e 2×S (padrão: ${PAUSA_PADRAO_S}–${2 * PAUSA_PADRAO_S} s)
+  --seed               semente do sorteio e do ruído dos sensores (mesma seed = mesma sequência)
+  --duracao            para depois de N segundos, em qualquer modo
+  --limpar-historico   começa com o histórico de episódios vazio (esvazia data/historico_<id>.json
+                       e publica a lista vazia em historico, também para o app)
+
+  No modo controle (--cenario controle) não há ciclos: a pulseira segue os valores
+  do painel do site até o Ctrl+C (ou --duracao). --uma-vez, --ciclos e --pausa não se aplicam.`;
+
+const describeScenario = (name) => (name === CONTROLE ? CONTROLE_DESCRICAO : scenarioDescription(name));
 
 function scenarioList() {
-  const width = Math.max(...SCENARIO_NAMES.map((n) => n.length));
-  return SCENARIO_NAMES.map((n) => `  ${n.padEnd(width)}  ${scenarioDescription(n)}`).join('\n');
+  const width = Math.max(...CENARIOS_VALIDOS.map((n) => n.length));
+  return CENARIOS_VALIDOS.map((n) => `  ${n.padEnd(width)}  ${describeScenario(n)}`).join('\n');
 }
 
 function fail(message, { showUsage = false, showScenarios = false } = {}) {
@@ -75,6 +101,7 @@ function parseCli() {
         ciclos: { type: 'string' },
         pausa: { type: 'string' },
         seed: { type: 'string' },
+        'limpar-historico': { type: 'boolean', default: false },
         ajuda: { type: 'boolean', short: 'h' },
         help: { type: 'boolean' },
       },
@@ -96,7 +123,8 @@ function parseCli() {
   }
 
   const cenario = values.cenario.trim();
-  if (!SCENARIO_NAMES.includes(cenario)) fail(`cenário inválido: "${cenario}".`, { showScenarios: true });
+  if (!CENARIOS_VALIDOS.includes(cenario)) fail(`cenário inválido: "${cenario}".`, { showScenarios: true });
+  const controle = cenario === CONTROLE;
 
   const idade = Number(values.idade);
   if (!Number.isInteger(idade) || idade < IDADE_MIN || idade > IDADE_MAX) {
@@ -111,6 +139,11 @@ function parseCli() {
 
   const duracao = values.duracao === undefined ? Infinity : positiveInt('duracao', values.duracao, 'um número inteiro de segundos maior que zero');
 
+  if (controle && (values['uma-vez'] || values.ciclos !== undefined)) {
+    fail('--uma-vez e --ciclos não se aplicam ao modo controle (ele segue o painel até o Ctrl+C; use --duracao para limitar).');
+  }
+  if (controle && values.pausa !== undefined) console.warn('Aviso: --pausa não se aplica ao modo controle.');
+
   let umaVez = values['uma-vez'];
   if (umaVez && values.ciclos !== undefined) fail('use --uma-vez OU --ciclos, não os dois.');
   let ciclos = values.ciclos === undefined ? Infinity : positiveInt('ciclos', values.ciclos, 'um número inteiro maior que zero');
@@ -121,11 +154,11 @@ function parseCli() {
   }
 
   let pausa = PAUSA_PADRAO_S;
-  if (values.pausa !== undefined) {
+  if (values.pausa !== undefined && !controle) {
     pausa = positiveInt('pausa', values.pausa, 'um número inteiro de segundos');
     if (umaVez && cenario !== EVENTOS_ALEATORIOS) console.warn('Aviso: --pausa não se aplica com --uma-vez (não há segundo ciclo).');
     if (pausa < PAUSA_MIN_S) {
-      console.warn(`Aviso: --pausa ${pausa} é menor que o mínimo de ${PAUSA_MIN_S} s (30 s para o episódio anterior fechar no site`
+      console.warn(`Aviso: --pausa ${pausa} é menor que o mínimo de ${PAUSA_MIN_S} s (30 s para o episódio anterior fechar`
         + ` + 60 s de linha de base calma para o gatilho). Usando ${PAUSA_MIN_S} s.`);
       pausa = PAUSA_MIN_S;
     }
@@ -140,7 +173,18 @@ function parseCli() {
       fail(`--seed deve ser um número inteiro de 0 a ${SEED_MAX} (recebido: "${values.seed}").`);
     }
   }
-  return { cenario, idade, duracao, umaVez, ciclos, pausa, seed, seedInformada: values.seed !== undefined };
+  return {
+    cenario,
+    controle,
+    idade,
+    duracao,
+    umaVez,
+    ciclos,
+    pausa,
+    seed,
+    seedInformada: values.seed !== undefined,
+    limparHistorico: values['limpar-historico'],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -202,8 +246,16 @@ function formatElapsed(t) {
   return h ? `${h}:${mmss}` : mmss;
 }
 
-// [tempo] bpm, eda, hrv, gyro, reg, luz, ruido | fase
-function formatReading(t, r, fase, sent) {
+const TIER_SHORT = { baixo_risco: 'normal ', atencao: 'ATENÇÃO', alto_risco: 'CRISE  ' };
+
+// Nivel do modelo calculado na pulseira: "normal   12%" | "ATENÇÃO  64%" | "coletando" (< 31 leituras)
+function formatTier(tier, probability) {
+  if (!Number.isFinite(probability)) return 'coletando   ';
+  return `${TIER_SHORT[tier] ?? tier} ${String(Math.round(probability * 100)).padStart(3)}%`;
+}
+
+// [tempo] bpm, eda, hrv, gyro, reg, luz, ruido | nivel | fase
+function formatReading(t, r, step, fase) {
   const cols = [
     `bpm ${String(r.bpm).padStart(3)}`,
     `eda ${r.eda_uS.toFixed(2).padStart(5)}`,
@@ -213,7 +265,8 @@ function formatReading(t, r, fase, sent) {
     `luz ${String(r.luz_lux).padStart(4)}`,
     `ruido ${r.ruido_db.toFixed(1).padStart(5)}`,
   ];
-  return `[${formatElapsed(t)}] ${cols.join('  ')} | ${fase}${sent ? '' : '  (não enviada: sem conexão)'}`;
+  return `[${formatElapsed(t)}] ${cols.join('  ')} | ${formatTier(step.tier, step.probability)} | ${fase}`
+    + `${step.sent ? '' : '  (não enviada: sem conexão)'}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -245,7 +298,13 @@ function variationText() {
   return `pico ±${pct(L.pico[1] - 1)}, fases ±${pct(L.duracao[1] - 1)}, antecedência do ambiente ${L.antecedencia[0]}–${L.antecedencia[1]} s`;
 }
 
-function modeLines({ cenario, umaVez, ciclos, pausa }) {
+function modeLines({ cenario, controle, umaVez, ciclos, pausa }) {
+  if (controle) {
+    return [
+      'Modo: controle remoto até o Ctrl+C — abra o painel do site ("Controle da pulseira") para mudar os valores',
+      `Transição: rampa linear de ${RAMPA_CONTROLE_S} s até cada novo valor-alvo · valores fora da faixa são ignorados`,
+    ];
+  }
   const aleatorio = cenario === EVENTOS_ALEATORIOS;
   const unit = `${aleatorio ? 'evento' : 'ciclo'}${ciclos === 1 ? '' : 's'}`;
   if (umaVez && !aleatorio) {
@@ -273,32 +332,63 @@ function modeLines({ cenario, umaVez, ciclos, pausa }) {
   ];
 }
 
+const rel = (path) => relative(process.cwd(), path) || path;
+
 function main() {
   const options = parseCli();
-  const { cenario, idade, duracao, umaVez, ciclos, pausa, seed } = options;
+  const { cenario, controle, idade, duracao, umaVez, ciclos, pausa, seed } = options;
   const config = loadConfig();
   const aleatorio = cenario === EVENTOS_ALEATORIOS;
 
+  // Historico de episodios: arquivo local; sem arquivo, recupera da mensagem retida
+  const historyFile = openHistoryFile(DATA_DIR, config.childId, {
+    onError: (err) => console.error(`Erro ao gravar ${rel(historyFile.storage.path)}: ${err.message} (o histórico segue em memória)`),
+  });
+  const processor = createEdgeProcessor({
+    childId: config.childId,
+    source: controle ? 'manual' : 'pulseira',
+    storage: historyFile.storage,
+  });
+  let historyLine;
+  if (options.limparHistorico) {
+    processor.clear();
+    historyFile.storage.flush();
+    historyLine = `${rel(historyFile.storage.path)} — começando VAZIO (--limpar-historico; a lista vazia vai também para o app)`;
+  } else if (historyFile.status === 'ok') {
+    historyLine = `${rel(historyFile.storage.path)} (${historyFile.episodes} episódio(s) recuperado(s) do arquivo)`;
+  } else {
+    const why = historyFile.status === 'corrompido'
+      ? `arquivo corrompido, guardado como ${rel(historyFile.backup)}`
+      : 'arquivo ainda não existe';
+    historyLine = `${rel(historyFile.storage.path)} (${why}: recupera da mensagem retida em historico, se houver)`;
+  }
+  const recoverFromRetained = !options.limparHistorico && historyFile.status !== 'ok';
+
+  const control = controle ? createControl({ inicial: { ...CALM_CONTROL, idade } }) : null;
+
   const base = `puzzleband/${config.childId}`;
-  const topicReadings = `${base}/leituras`;
   const topicStatus = `${base}/status`;
 
-  const gabarito = createGabaritoWriter(LOGS_DIR, {
+  const gabarito = controle ? null : createGabaritoWriter(LOGS_DIR, {
     cenario, seed, pausa_s: pausa, ciclos: Number.isFinite(ciclos) ? ciclos : null, uma_vez: umaVez, idade, crianca: config.childId,
   });
 
-  console.log('Puzzle Band — simulador da pulseira (ESP32)');
-  console.log(`Cenário: ${cenario} — ${scenarioDescription(cenario)}`);
-  if (!aleatorio) console.log(`Linha do tempo (roteiro nominal): ${describeTimeline(cenario)}`);
+  console.log('Puzzle Band — pulseira simulada (ESP32) com processamento na borda');
+  console.log(`Cenário: ${cenario} — ${describeScenario(cenario)}`);
+  if (!aleatorio && !controle) console.log(`Linha do tempo (roteiro nominal): ${describeTimeline(cenario)}`);
   for (const line of modeLines(options)) console.log(line);
   console.log(`Seed: ${seed}${options.seedInformada ? '' : ' (sorteada)'} — para repetir a mesma sequência: --seed ${seed}`);
-  console.log(`Gabarito: ${relative(process.cwd(), gabarito.csvPath) || gabarito.csvPath} (e .json), uma linha por ${aleatorio ? 'evento' : 'ciclo'}`);
+  if (gabarito) console.log(`Gabarito: ${rel(gabarito.csvPath)} (e .json), uma linha por ${aleatorio ? 'evento' : 'ciclo'}`);
   console.log(`Criança: ${config.childId} · idade ${idade}${Number.isFinite(duracao) ? ` · para em ${duracao} s (--duracao)` : ''}`);
+  console.log(`Processamento: ${describeModel(modelInfoFrom(forest.meta, forest.trees.length))} + episódios + gatilho,`
+    + ' aqui na pulseira (o site é opcional)');
+  console.log(`Histórico: ${historyLine}`);
   console.log(`Broker: ${config.url} (usuário ${config.username})`);
-  console.log(`Tópicos: ${topicReadings} (QoS 0) · ${topicStatus} (retain)`);
+  console.log(`Publica: ${base}/{leituras, estado (retain), alertas (QoS 1), historico (retain), status (retain)}`);
+  console.log(`Assina:  ${base}/{ack, avaliacao${controle ? ', controle' : ''}}${recoverFromRetained ? ` e, só na partida, ${base}/historico (recuperação)` : ''}`);
   console.log('Conectando...');
 
-  const ticks = programTicks({ cenario, umaVez, ciclos, pausa, seed, idade });
+  const ticks = controle ? controlTicks(control) : programTicks({ cenario, umaVez, ciclos, pausa, seed, idade });
   const sensorRandom = seeded(seed); // ruido dos sensores (generateReading usa Math.random)
   let current = null; // evento em andamento: { ciclo, inicio, fisiologia }
   let lastTime = null;
@@ -316,13 +406,17 @@ function main() {
     will: { topic: topicStatus, payload: 'offline', qos: 1, retain: true },
   });
 
+  // (a ligacao com a borda e criada depois do handler de 'connect' abaixo,
+  // para o terminal mostrar "Conectado" antes do que ela publica)
+  let link = null;
+
   let timer = null;
   let stopping = false;
   let wasConnected = false;
 
   // Evento interrompido (Ctrl+C, --duracao): grava o que se sabe
   function flushCurrent(reason) {
-    if (!current) return;
+    if (!current || !gabarito) return;
     gabarito.add(gabaritoEntry(current.ciclo, { ...current, fim: lastTime, observacao: `interrompido (${reason})` }));
     current = null;
   }
@@ -330,18 +424,23 @@ function main() {
   async function shutdown(reason, exitCode = 0) {
     if (stopping) {
       console.log('Saindo sem esperar o broker.');
+      historyFile.storage.flush();
       process.exit(exitCode || 1);
     }
     stopping = true;
     clearInterval(timer);
     flushCurrent(reason);
     console.log(`\nEncerrando (${reason})...`);
-    console.log(`Gabarito: ${gabarito.csvPath}`);
+    if (gabarito) console.log(`Gabarito: ${gabarito.csvPath}`);
     const forceExit = setTimeout(() => {
       console.error('O broker não respondeu a tempo; saindo mesmo assim (o Last Will publica "offline").');
+      historyFile.storage.flush();
       process.exit(exitCode || 1);
     }, 5000);
     try {
+      await link.close(); // fecha o episodio aberto e publica o historico final
+      historyFile.storage.flush();
+      console.log(`Histórico gravado em ${historyFile.storage.path}`);
       if (client.connected) {
         await client.publishAsync(topicStatus, 'offline', { qos: 1, retain: true });
         console.log(`status: offline (retain) em ${topicStatus}`);
@@ -353,6 +452,7 @@ function main() {
       console.log('Desconectado.');
     } catch (err) {
       console.error(`Erro ao encerrar: ${describeError(err)}`);
+      historyFile.storage.flush();
       exitCode = exitCode || 1;
     }
     clearTimeout(forceExit);
@@ -378,11 +478,11 @@ function main() {
     if (current && s.t === current.ciclo.tFisiologia) current.fisiologia = now;
 
     const reading = withRandom(sensorRandom, () => generateReading({ ...s.alvos, timestamp: now.toISOString() }));
-    const sent = client.connected;
-    if (sent) client.publish(topicReadings, JSON.stringify(reading), { qos: 0 });
-    console.log(formatReading(s.t, reading, s.fase, sent));
+    // publica a leitura, roda o modelo/episodios/gatilho e publica estado, alertas e historico
+    const result = link.step(reading);
+    console.log(formatReading(s.t, reading, result, s.fase));
 
-    if (s.fimEvento && current) {
+    if (s.fimEvento && current && gabarito) {
       gabarito.add(gabaritoEntry(current.ciclo, { ...current, fim: now }));
       current = null;
     }
@@ -402,6 +502,23 @@ function main() {
     // A cada (re)conexao: o broker pode ter publicado o Last Will no meio tempo
     client.publish(topicStatus, 'online', { qos: 1, retain: true });
     console.log(`status: online (retain) em ${topicStatus}`);
+    if (link.recovering()) console.log(`Recuperando o histórico da mensagem retida em ${base}/historico...`);
+  });
+
+  // Processamento na borda: publica estado/alertas/historico e aplica ack,
+  // avaliacao e controle (assina e publica o historico ao conectar)
+  link = createEdgeLink({
+    client,
+    processor,
+    control,
+    recoverFromRetained,
+    log: (evento, texto) => {
+      const marca = { alerta: '▲', aviso: '!', recuperacao: '↺', controle: '⇢', ack: '✓', avaliacao: '✓' }[evento] ?? '·';
+      console.log(`  ${marca} ${texto}`);
+    },
+  });
+
+  client.on('connect', () => {
     if (!timer && !stopping) {
       // o relogio do cenario so comeca com o broker conectado
       timer = setInterval(tick, 1000);
@@ -414,7 +531,9 @@ function main() {
   });
 
   client.on('offline', () => {
-    if (!stopping && wasConnected) console.log('Conexão perdida; as leituras seguem no terminal até reconectar.');
+    if (!stopping && wasConnected) {
+      console.log('Conexão perdida; a pulseira segue processando (episódios vão para o arquivo) e republica o histórico ao reconectar.');
+    }
   });
 
   client.on('error', (err) => {

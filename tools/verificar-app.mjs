@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Verifica pelo terminal se o site e o app do cuidador conversam pelo broker
-// MQTT (sem navegador e sem emulador). Conecta COMO O APP - host, usuario,
-// senha e CHILD_ID do mobile/env.json - e:
+// Verifica pelo terminal se a pulseira e o app do cuidador conversam pelo
+// broker MQTT (sem navegador e sem emulador). Conecta COMO O APP - host,
+// usuario, senha e CHILD_ID do mobile/env.json - e:
 //   a) assina estado, alertas, historico e status e mostra o que chega;
 //   b) publica um ack ("Estou ciente") e uma avaliacao ("Confirmar gatilho")
 //      de teste, no mesmo formato do app;
 //   c) confere cada mensagem com o que o codigo Dart espera
 //      (mobile/lib/models/models.dart) e imprime OK/FALHA por campo;
-//   d) imprime o relatorio "site -> app" e "app -> site".
+//   d) imprime o relatorio "pulseira -> app" e "app -> pulseira".
 //
 // Uso (de simulator/):
 //   npm run verificar-app                    escuta 60 s (ou ate ter os 3 tipos)
@@ -15,8 +15,9 @@
 //   npm run verificar-app -- --sem-publicar  so escuta, nao publica ack/avaliacao
 // Ctrl+C durante a escuta: encerra a escuta e segue para a publicacao e o relatorio.
 //
-// O site precisa estar aberto no navegador (e ele que publica). A senha nunca
-// e impressa. Nao publica em app/status, para nao mexer no indicador
+// A pulseira precisa estar ligada (npm start ou npm run controle, em
+// simulator/): e ela que processa e publica (processamento na borda). O site
+// e opcional e pode estar fechado. A senha nunca e impressa. Nao publica em app/status, para nao mexer no indicador
 // "App do cuidador" de um app de verdade conectado ao mesmo tempo.
 // Conecta com MQTT 5 (o app usa 3.1.1) so para o broker dizer o motivo de uma
 // recusa (ACL) e se havia alguem assinando o topico; a ACL e por usuario e
@@ -148,7 +149,7 @@ const T = {
   id: { desc: 'texto não vazio', ok: (v) => typeof v === 'string' && v.trim() !== '' },
   objeto: { desc: 'objeto', ok: ehObjeto },
   lista: { desc: 'lista', ok: Array.isArray },
-  site: { desc: '"site"', ok: (v) => v === 'site' },
+  pulseira: { desc: '"pulseira"', ok: (v) => v === 'pulseira' },
 };
 const ouNull = (tipo) => ({ desc: `${tipo.desc} ou null`, ok: (v) => v === null || tipo.ok(v) });
 
@@ -184,7 +185,7 @@ const ESTADO = [
       ['visto_pelo_cuidador_em', ouNull(T.iso)],
     ],
   }],
-  ['origem', T.site, { uso: 'o site ignora o que tem origem "site" (evita laço)' }],
+  ['origem', T.pulseira, { uso: 'quem publicou: a pulseira (processamento na borda)' }],
 ];
 
 const ALERTA = [
@@ -195,7 +196,7 @@ const ALERTA = [
   ['gatilho', ouNull(T.objeto), { filhos: GATILHO }],
   ['timestamp', T.iso, { uso: 'alerta com mais de 10 min não notifica' }],
   ['fonte', T.texto],
-  ['origem', T.site],
+  ['origem', T.pulseira],
 ];
 
 const EPISODIO = [
@@ -219,7 +220,7 @@ const EPISODIO = [
 const HISTORICO = [
   ['episodios', T.lista, { obrigatorio: true }],
   ['timestamp', T.iso],
-  ['origem', T.site],
+  ['origem', T.pulseira],
 ];
 
 const resumoValor = (v) => {
@@ -290,7 +291,7 @@ const rel = {
   status: { total: 0, valor: null, retida: false, invalidas: 0 },
   assinaturas: {},
   publicacoes: [],
-  respostaSite: null,
+  respostaPulseira: null,
 };
 
 function linhaEstado(m, retida) {
@@ -330,7 +331,7 @@ function tratarEstado(m, retida) {
   const primeira = r.total === 1;
   if (primeira || r.total <= 5 || mudouNivel || mudouEpisodio || falhou || r.total % 10 === 0) {
     const sufixo = r.total > 5 && !primeira ? ` (${r.total}ª mensagem)` : '';
-    const situacao = aoVivo ? 'ao vivo' : 'VELHA (o site não está publicando agora)';
+    const situacao = aoVivo ? 'ao vivo' : 'VELHA (a pulseira não está publicando agora)';
     console.log(`[${hora()}] estado     ${situacao}${sufixo} | ${linhaEstado(m, retida)}`);
   }
   if (primeira) {
@@ -508,7 +509,7 @@ async function main() {
   });
 
   // Tudo o que interessa chegou: estado ao vivo, um alerta e um historico
-  // que ja contem o episodio do alerta (o site republica ~1 s depois).
+  // que ja contem o episodio do alerta (a pulseira republica na mesma leitura).
   const completo = () => {
     if (!rel.estado.aoVivo || !rel.alertas.total || !rel.historico.ultimo) return false;
     const idAlerta = rel.alertas.lista.at(-1)?.episodio_id;
@@ -593,11 +594,11 @@ async function publicarTeste(client, topicos, motivoPuback) {
   const episodioId = escolhido?.id ?? 'teste-verificacao';
   rel.episodioTeste = { id: episodioId, doHistorico: Boolean(escolhido) };
 
-  console.log(`\n== app → site: publicando ack e avaliação de teste ==`);
+  console.log(`\n== app → pulseira: publicando ack e avaliação de teste ==`);
   if (escolhido) {
     console.log(`episódio  ${episodioId} (${escolhido.id === idAlerta ? 'o do alerta recebido' : 'o mais recente do histórico'})`);
   } else {
-    console.log('episódio  "teste-verificacao" — nenhum histórico recebido; o site não conhece esse id e deve só republicar o histórico');
+    console.log('episódio  "teste-verificacao" — nenhum histórico recebido; a pulseira não conhece esse id e deve só republicar o histórico');
   }
 
   const agora = new Date();
@@ -619,7 +620,7 @@ async function publicarTeste(client, topicos, motivoPuback) {
       rel.publicacoes.push(resultado);
       let situacao;
       if (err) situacao = `FALHA: ${err.message} — ACL não deixa o usuário do app publicar em ${topicos[nome]}?`;
-      else if (codigo === 16) situacao = 'OK (broker aceitou, mas NINGUÉM assina este tópico agora: o site está aberto?)';
+      else if (codigo === 16) situacao = 'OK (broker aceitou, mas NINGUÉM assina este tópico agora: a pulseira está ligada?)';
       else situacao = 'OK (broker aceitou e entregou a um assinante)';
       console.log(`publicou  ${topicos[nome].padEnd(28)} QoS 1  ${situacao}`);
       console.log(`          ${JSON.stringify(mensagem)}`);
@@ -630,8 +631,8 @@ async function publicarTeste(client, topicos, motivoPuback) {
   await publicar('avaliacao', avaliacao);
   if (rel.publicacoes.some((p) => !p.ok)) return;
 
-  // O site aplica e republica o historico (~0,8 s); confere se veio com o ack e a avaliacao
-  console.log('\nAguardando o site republicar o histórico (até 8 s)...');
+  // A pulseira aplica e republica o historico na hora; confere se veio com o ack e a avaliacao
+  console.log('\nAguardando a pulseira republicar o histórico (até 8 s)...');
   const confere = () => {
     if (rel.historico.ultimoEm < desde) return null;
     const lista = rel.historico.ultimo?.episodios ?? [];
@@ -644,7 +645,7 @@ async function publicarTeste(client, topicos, motivoPuback) {
       mesmaHora(ep.avaliacao_em, avaliacao.timestamp) && ep.observacao === observacao;
     return visto && avaliado ? { republicou: true, visto, avaliado, ep } : null;
   };
-  rel.respostaSite = await new Promise((resolve) => {
+  rel.respostaPulseira = await new Promise((resolve) => {
     const inicio = Date.now();
     const timer = setInterval(() => {
       const r = confere();
@@ -654,7 +655,7 @@ async function publicarTeste(client, topicos, motivoPuback) {
       }
     }, 200);
   });
-  rel.respostaSite.observacao = observacao;
+  rel.respostaPulseira.observacao = observacao;
 }
 
 function imprimirRelatorio(opcoes, config) {
@@ -676,11 +677,11 @@ function imprimirRelatorio(opcoes, config) {
   console.log('\n================ RELATÓRIO ================');
   console.log(`criança ${config.childId} · usuário "${config.user}" · escuta de até ${opcoes.tempo} s`);
 
-  console.log('\nsite → app');
+  console.log('\npulseira → app');
   if (!e.total) {
-    console.log(`  ${marca(false)}  estado      nenhuma mensagem: o site nunca publicou (ou a ACL negou a assinatura)`);
+    console.log(`  ${marca(false)}  estado      nenhuma mensagem: a pulseira nunca publicou (ou a ACL negou a assinatura)`);
   } else if (!e.aoVivo) {
-    console.log(`  ${marca(false, true)}  estado      só o estado retido, velho (de ${horaIso(e.ultimo?.timestamp)}): o site não está aberto/conectado agora`);
+    console.log(`  ${marca(false, true)}  estado      só o estado retido, velho (de ${horaIso(e.ultimo?.timestamp)}): a pulseira não está ligada/conectada agora`);
   } else {
     const ritmo = media ? `, intervalo médio ${media.toFixed(2)} s` : '';
     console.log(`  ${marca(!e.falhas)}  estado      ${e.total} mensagem(ns), ${e.aoVivo} ao vivo${ritmo}${e.falhas ? `, ${e.falhas} com FALHA de formato` : ', formato OK'}`);
@@ -692,44 +693,42 @@ function imprimirRelatorio(opcoes, config) {
     console.log(`  ${marca(!a.falhas)}  alertas     ${a.total} alerta(s), último ${ultimo.nivel_anterior} → ${ultimo.nivel}, gatilho: ${ultimo.gatilho?.texto ? `"${ultimo.gatilho.texto}"` : '—'}${a.falhas ? ', com FALHA de formato' : ', formato OK'}`);
   }
   if (!h.total) {
-    console.log(`  ${marca(false)}  historico   nenhuma mensagem: o site nunca publicou (é retido, chegaria na hora)`);
+    console.log(`  ${marca(false)}  historico   nenhuma mensagem: a pulseira nunca publicou (é retido, chegaria na hora)`);
   } else {
     const n = h.ultimo?.episodios?.length ?? 0;
     const origem = h.retidas === h.total ? ` (só a retida, de ${horaIso(h.ultimo?.timestamp)})` : ` (${h.total - h.retidas} nova(s) nesta execução)`;
     console.log(`  ${marca(!h.falhas)}  historico   ${n} episódio(s)${origem}${h.falhas ? ', com FALHA de formato' : ', formato OK'}`);
   }
-
-  console.log('\npulseira → app');
-  if (!s.total) console.log(`  ${marca(false, true)}  status      nenhum (o simulador nunca conectou com este CHILD_ID)`);
+  if (!s.total) console.log(`  ${marca(false, true)}  status      nenhum (a pulseira nunca conectou com este CHILD_ID)`);
   else console.log(`  ${marca(!s.invalidas)}  status      ${s.valor ?? 'inválido'}${s.retida ? ' (retido)' : ''}`);
 
-  console.log('\napp → site');
+  console.log('\napp → pulseira');
   if (!opcoes.publicar) {
     console.log('  —      não publicado (--sem-publicar)');
   } else {
     for (const p of rel.publicacoes) {
-      const ninguem = p.codigo === 16 ? ' — mas ninguém assinava (site fechado?)' : '';
+      const ninguem = p.codigo === 16 ? ' — mas ninguém assinava (pulseira desligada?)' : '';
       console.log(`  ${marca(p.ok)}  ${p.nome.padEnd(10)}  ${p.ok ? `publicado (PUBACK)${ninguem}` : `RECUSADO: ${p.erro}`}`);
     }
-    const r = rel.respostaSite;
+    const r = rel.respostaPulseira;
     const id = rel.episodioTeste?.id;
     if (!r) {
       // publicacao recusada: ja reportado acima
     } else if (rel.episodioTeste?.doHistorico) {
       if (r.visto && r.avaliado) {
-        console.log(`  OK     resposta    o site aplicou o ack e a avaliação e republicou o histórico (episódio ${id})`);
+        console.log(`  OK     resposta    a pulseira aplicou o ack e a avaliação e republicou o histórico (episódio ${id})`);
       } else if (r.republicou) {
-        console.log(`  ${marca(false)}  resposta    o site republicou o histórico, mas sem o ack/avaliação deste teste`);
+        console.log(`  ${marca(false)}  resposta    a pulseira republicou o histórico, mas sem o ack/avaliação deste teste`);
       } else {
-        console.log('  AVISO  resposta    o site não republicou o histórico em 8 s (o site está aberto e conectado?)');
+        console.log('  AVISO  resposta    a pulseira não republicou o histórico em 8 s (ela está ligada e conectada?)');
       }
     } else {
       console.log(r.republicou
-        ? '  OK     resposta    o site recebeu e republicou o histórico (não conhece "teste-verificacao")'
-        : '  AVISO  resposta    o site não respondeu em 8 s (o site está aberto e conectado?)');
+        ? '  OK     resposta    a pulseira recebeu e republicou o histórico (não conhece "teste-verificacao")'
+        : '  AVISO  resposta    a pulseira não respondeu em 8 s (ela está ligada e conectada?)');
     }
     if (rel.episodioTeste?.doHistorico) {
-      console.log('\n  Confira no site (histórico de episódios):');
+      console.log('\n  Confira no app, no painel do site (se estiver aberto) ou em simulator/data/historico_<id>.json:');
       console.log(`    - episódio ${id}: "✓ confirmado pelo cuidador", etiqueta "avaliado pelo app às HH:MM"`);
       console.log(`      e a observação "${r?.observacao ?? ''}" (pode apagar ou reavaliar depois);`);
       console.log('    - "Alerta visto pelo cuidador às HH:MM" no episódio e, se ele ainda estiver em andamento, no banner.');

@@ -2,6 +2,8 @@ const TIER_INFO = {
   baixo_risco: { color: 'var(--status-good)', ink: 'var(--status-good-ink)', icon: '●', label: 'Sem sinais de crise' },
   atencao: { color: 'var(--status-warning)', ink: 'var(--status-warning-ink)', icon: '▲', label: 'Atenção' },
   alto_risco: { color: 'var(--status-critical)', ink: 'var(--status-critical-ink)', icon: '⛔', label: 'Possível crise' },
+  // sem estado ao vivo da pulseira (desligada, ou o estado retido e velho)
+  sem_dados: { color: 'var(--baseline)', ink: 'var(--text-muted)', icon: '○', label: 'Sem estado ao vivo da pulseira' },
 };
 
 export default function RiskBadge({ tier, probability }) {

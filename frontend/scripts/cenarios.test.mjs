@@ -17,7 +17,7 @@ for (const [name, scenario] of Object.entries(SCENARIOS)) {
   });
 }
 
-test('crise_ruido em velocidade 4x (4 leituras por tick) da o mesmo resultado', () => {
+test('crise_ruido processado em lotes de 4 leituras da o mesmo resultado', () => {
   for (let seed = 1; seed <= 5; seed += 1) {
     const result = runScenario('crise_ruido', seed, { speed: 4 });
     assert.equal(result.episodes.length, 1);

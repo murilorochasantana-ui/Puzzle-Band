@@ -1,112 +1,94 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import './App.css';
 import StatTile from './components/StatTile';
 import RiskBadge from './components/RiskBadge';
 import BpmChart from './components/BpmChart';
-import ManualControls from './components/ManualControls';
+import BandControls from './components/BandControls';
 import AlertBanner from './components/AlertBanner';
 import ConnectionStatus from './components/ConnectionStatus';
 import EpisodeHistory from './components/EpisodeHistory';
 import ThemeToggle from './components/ThemeToggle';
-import useMqttReadings from './hooks/useMqttReadings';
-import useEpisodeMonitor from './hooks/useEpisodeMonitor';
-import useCaregiverSync from './hooks/useCaregiverSync';
-import { buildAlertMessage } from './hooks/buildMessages';
-import { generateReading, GYRO_ACTIONS } from './model/simulate';
-import { computeFeatures, predictCrisisProbability, riskTierFromProbability, MIN_HISTORY_REQUIRED } from './model/predict';
-import { describeModel } from './model/modelInfo';
+import { formatClock } from './components/formatTime';
+import useBandLink from './hooks/useBandLink';
+import useControlSender from './hooks/useControlSender';
+import { CALM_CONTROL, GYRO_ACTIONS, REGULARIDADE } from './model/simulate';
+import { MODEL_DESCRIPTION } from './modelMeta';
 
-const TICK_MS = 1000; // 1 "segundo simulado" por tick, como um sensor real a 1Hz
+// PAINEL do desenvolvedor: so visualizacao e controle. Quem processa e a
+// pulseira (simulator/, processamento na borda): ela roda o modelo, os
+// episodios e o gatilho e publica estado, alertas e historico. O painel
+// assina esses topicos (e as leituras, para os graficos) e publica so
+// controle e avaliacao. O app do cuidador funciona com o painel fechado.
+
 const CHART_WINDOW = 60; // segundos exibidos no grafico
-const MAX_BUFFER = 300; // limite de memoria (5 min de historico)
+const MAX_BUFFER = 300; // leituras guardadas na memoria do painel (5 min)
+const STATE_LIVE_MS = 6000; // mesma regra do app: estado com ate 6 s e "ao vivo"
+const PENDING_MS = 10000; // avaliacao enviada sem resposta da pulseira: para de mostrar "aguardando"
+
+const TIER_LABEL = { baixo_risco: 'Sem sinais de crise', atencao: 'Atenção', alto_risco: 'Possível crise' };
+
+// Relogio de 1 s: o estado "ao vivo" vira "velho" mesmo sem mensagem nova
+function useNow(intervalMs) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
+
+// Situacao da pulseira para o "Controle da pulseira"
+function controlNotice({ connected, bandStatus, live }) {
+  if (!connected) return { tone: 'warning', text: 'Sem conexão com o broker: os controles não chegam à pulseira.' };
+  if (bandStatus !== 'online') return { tone: 'warning', text: 'Inicie a pulseira com npm run controle para usar estes controles.' };
+  if (!live) return { tone: 'warning', text: 'Pulseira online; aguardando o estado ao vivo dela...' };
+  if (live.fonte !== 'manual') {
+    return {
+      tone: 'warning',
+      text: 'A pulseira está rodando um cenário e ignora estes controles. Para usá-los, reinicie-a com npm run controle.',
+    };
+  }
+  return { tone: 'ok', text: 'Pulseira no modo controle: as leituras seguem estes valores.' };
+}
 
 function App() {
-  const [bpmTarget, setBpmTarget] = useState(78);
-  const [edaTarget, setEdaTarget] = useState(4);
-  const [gyroAction, setGyroAction] = useState('repouso');
-  const [hrvTarget, setHrvTarget] = useState(55);
-  const [movimentoRepetitivo, setMovimentoRepetitivo] = useState(false);
-  const [luzTarget, setLuzTarget] = useState(300);
-  const [ruidoTarget, setRuidoTarget] = useState(45);
-  const [idade, setIdade] = useState(8);
+  const link = useBandLink({ maxBuffer: MAX_BUFFER });
+  const now = useNow(1000);
+  const { readings, state, history, lastAlert, childId } = link;
 
-  const [isRunning, setIsRunning] = useState(true);
-  const [speed, setSpeed] = useState(1);
-  const [simBuffer, setBuffer] = useState([]);
+  // Estado publicado pela pulseira; retido e velho (pulseira desligada) nao conta
+  const stateTime = state?.timestamp ? Date.parse(state.timestamp) : Number.NaN;
+  const live = state && now - stateTime <= STATE_LIVE_MS ? state : null;
+  const tier = live ? live.nivel : 'sem_dados';
+  const probability = live ? live.probabilidade : null;
+  const controlMode = live?.fonte === 'manual';
+  const canEvaluate = link.connected && link.bandStatus === 'online';
 
-  // Fonte dos dados: 'manual' (simulador no navegador) ou 'mqtt' (pulseira via broker).
-  // O broker fica conectado nos dois modos: o site publica o estado para o app
-  // do cuidador; as leituras da pulseira so entram no buffer no modo 'mqtt'.
-  const [source, setSource] = useState('manual');
-  const mqttMode = source === 'mqtt';
-  const link = useMqttReadings({ readingsEnabled: mqttMode, maxBuffer: MAX_BUFFER });
-  const { publishAlert } = link;
-  const buffer = mqttMode ? link.readings : simBuffer;
+  // Controle da pulseira: valores-alvo publicados em controle (no maximo 2x/s)
+  const [control, setControl] = useState(CALM_CONTROL);
+  const lastSentAt = useControlSender({
+    values: control,
+    publishControl: link.publishControl,
+    connected: link.connected,
+    bandStatus: link.bandStatus,
+    connectionId: link.connectionId,
+  });
 
-  const changeSource = (next) => {
-    if (next === source) return;
-    setSource(next);
-    setBuffer([]); // o buffer do MQTT e zerado pelo proprio hook ao ligar/desligar
+  // Confirmar / Descartar: publica em avaliacao; a pulseira aplica e republica o historico
+  const [pending, setPending] = useState({}); // { id: { at, historyTs } }
+  const evaluate = (id, avaliacao, observacao) => {
+    const sent = link.publishEvaluation({ episodioId: id, avaliacao, observacao });
+    if (sent) setPending((prev) => ({ ...prev, [id]: { at: Date.now(), historyTs: history?.timestamp ?? null } }));
   };
+  const pendingIds = Object.fromEntries(Object.entries(pending)
+    .filter(([, p]) => p.historyTs === (history?.timestamp ?? null) && now - p.at < PENDING_MS)
+    .map(([id]) => [id, true]));
 
-  const controlsRef = useRef();
-  useEffect(() => {
-    controlsRef.current = {
-      bpmTarget, edaTarget, gyroAction, idade,
-      hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
-    };
-  });
-
-  useEffect(() => {
-    if (!isRunning || mqttMode) return undefined;
-
-    const interval = setInterval(() => {
-      setBuffer((prev) => {
-        const next = [...prev];
-        for (let i = 0; i < speed; i += 1) {
-          next.push(
-            generateReading({
-              ...controlsRef.current,
-              timestamp: new Date().toISOString(),
-            }),
-          );
-        }
-        return next.length > MAX_BUFFER ? next.slice(next.length - MAX_BUFFER) : next;
-      });
-    }, TICK_MS);
-
-    return () => clearInterval(interval);
-  }, [isRunning, speed, mqttMode]);
-
-  const current = buffer[buffer.length - 1];
-  const chartPoints = buffer.slice(-CHART_WINDOW);
-  const statHistory = buffer.slice(-30);
-
-  let tier = 'baixo_risco';
-  let probability = null;
-  if (buffer.length >= MIN_HISTORY_REQUIRED) {
-    const features = computeFeatures(buffer.slice(-MIN_HISTORY_REQUIRED));
-    if (features) {
-      probability = predictCrisisProbability(features);
-      tier = riskTierFromProbability(probability);
-    }
-  }
-
-  // Episodios + provavel gatilho + historico. Tambem publica em
-  // puzzleband/<id>/alertas (nos dois modos, com o broker conectado) quando o
-  // nivel MUDA para atencao/alto_risco, com o objeto do gatilho junto.
-  const childId = mqttMode ? (link.childId || 'desconhecida') : 'simulada';
-  const monitor = useEpisodeMonitor({
-    readings: buffer,
-    source,
-    childId,
-    onAlert: (alert) => publishAlert(buildAlertMessage(alert, { source, childId: link.childId })),
-  });
-
-  // Estado (1x/s) e historico para o app; avaliacao e "Estou ciente" do app
-  useCaregiverSync({ link, monitor, source, tier, probability, readings: buffer });
-
-  const gyroLabel = GYRO_ACTIONS.find((a) => a.id === gyroAction)?.label ?? gyroAction;
+  const current = readings[readings.length - 1];
+  const chartPoints = readings.slice(-CHART_WINDOW);
+  const statHistory = readings.slice(-30);
+  const gyroLabel = GYRO_ACTIONS.find((a) => a.base === control.movimento)?.label ?? `${control.movimento} dps`;
+  const alertClock = lastAlert ? formatClock(lastAlert.timestamp) : null;
 
   return (
     <div className="dashboard">
@@ -114,33 +96,11 @@ function App() {
         <div>
           <h1>Puzzle Band</h1>
           <p className="dashboard__subtitle">
-            {mqttMode
-              ? `Pulseira (MQTT) · leituras recebidas do broker, criança ${link.childId ?? '—'}`
-              : 'Simulador manual · teste o modelo com cenários que você define, fora do dataset'}
+            Painel do desenvolvedor · a pulseira processa (modelo, episódios e gatilho); este site só mostra e
+            controla · criança {childId ?? '—'}
           </p>
         </div>
         <div className="dashboard__header-controls">
-          <div className="source-select" role="group" aria-label="Fonte dos dados">
-            <span className="source-select__label">Fonte dos dados</span>
-            <div className="source-select__options">
-              <button
-                type="button"
-                className={`manual-controls__toggle-btn ${!mqttMode ? 'is-active' : ''}`}
-                aria-pressed={!mqttMode}
-                onClick={() => changeSource('manual')}
-              >
-                Simulador manual
-              </button>
-              <button
-                type="button"
-                className={`manual-controls__toggle-btn ${mqttMode ? 'is-active' : ''}`}
-                aria-pressed={mqttMode}
-                onClick={() => changeSource('mqtt')}
-              >
-                Pulseira (MQTT)
-              </button>
-            </div>
-          </div>
           <ThemeToggle />
         </div>
       </header>
@@ -155,20 +115,30 @@ function App() {
       <AlertBanner
         tier={tier}
         probability={probability}
-        childLabel={mqttMode ? `Criança ${childId}` : 'Criança simulada'}
-        trigger={monitor.openEpisode?.gatilho}
-        seenAt={monitor.openEpisode?.visto_pelo_cuidador_em}
+        childLabel={`Criança ${childId ?? '—'}`}
+        trigger={live?.gatilho}
+        seenAt={live?.episodio?.visto_pelo_cuidador_em}
       />
 
       <section className="dashboard__status">
         <div className="dashboard__status-col">
-          <span className="dashboard__status-label">Previsão do modelo (IA)</span>
+          <span className="dashboard__status-label">Previsão do modelo (IA), calculada na pulseira</span>
           <RiskBadge tier={tier} probability={probability} />
         </div>
-        {!mqttMode && (
+        {live && (
           <span className="dashboard__activity">
-            Ação simulada: <strong>{gyroLabel}</strong>
-            {movimentoRepetitivo && ' · movimento repetitivo'}
+            {controlMode ? (
+              <>
+                Modo controle · ação simulada: <strong>{gyroLabel}</strong>
+                {control.regularidade >= REGULARIDADE.repetitivo && ' · movimento repetitivo'}
+              </>
+            ) : 'Pulseira rodando um cenário'}
+          </span>
+        )}
+        {lastAlert && (
+          <span className="dashboard__activity">
+            Último alerta{alertClock && ` às ${alertClock}`}: <strong>{TIER_LABEL[lastAlert.nivel] ?? lastAlert.nivel}</strong>
+            {Number.isFinite(lastAlert.probabilidade) && ` (${Math.round(lastAlert.probabilidade * 100)}%)`}
           </span>
         )}
         {current && (
@@ -231,60 +201,41 @@ function App() {
       </section>
 
       <section className="dashboard__chart-card">
-        <h2>Frequência cardíaca — últimos {CHART_WINDOW}s {mqttMode ? 'recebidos da pulseira' : 'da simulação'}</h2>
+        <h2>Frequência cardíaca — últimos {CHART_WINDOW}s recebidos da pulseira</h2>
         {chartPoints.length >= 2 ? (
           <BpmChart points={chartPoints} />
         ) : (
-          <p className="dashboard__chart-note">
-            {mqttMode ? 'Aguardando leituras da pulseira...' : 'Aguardando leituras da simulação...'}
-          </p>
+          <p className="dashboard__chart-note">Aguardando leituras da pulseira...</p>
         )}
       </section>
 
       <EpisodeHistory
-        episodes={monitor.episodes}
-        storageOk={monitor.storageOk}
-        onEvaluate={monitor.evaluate}
-        onObservation={monitor.setObservation}
-        onClear={monitor.clearHistory}
+        episodes={history?.episodios ?? []}
+        total={history?.total ?? 0}
+        received={Boolean(history)}
+        live={live?.episodio ? { episodioId: live.episodio.id, timestamp: live.timestamp } : null}
+        canEvaluate={canEvaluate}
+        pending={pendingIds}
+        onEvaluate={evaluate}
       />
 
-      {!mqttMode && (
-        <section className="dashboard__sim-card">
-          <h2>Controle manual</h2>
-          <ManualControls
-            bpmTarget={bpmTarget}
-            onChangeBpm={setBpmTarget}
-            edaTarget={edaTarget}
-            onChangeEda={setEdaTarget}
-            gyroAction={gyroAction}
-            onChangeGyroAction={setGyroAction}
-            hrvTarget={hrvTarget}
-            onChangeHrv={setHrvTarget}
-            movimentoRepetitivo={movimentoRepetitivo}
-            onToggleMovimentoRepetitivo={setMovimentoRepetitivo}
-            luzTarget={luzTarget}
-            onChangeLuz={setLuzTarget}
-            ruidoTarget={ruidoTarget}
-            onChangeRuido={setRuidoTarget}
-            idade={idade}
-            onChangeIdade={setIdade}
-            isRunning={isRunning}
-            onToggleRunning={() => setIsRunning((r) => !r)}
-            onReset={() => setBuffer([])}
-            speed={speed}
-            onChangeSpeed={setSpeed}
-            bufferLength={buffer.length}
-          />
-        </section>
-      )}
+      <section className="dashboard__sim-card">
+        <h2>Controle da pulseira</h2>
+        <BandControls
+          values={control}
+          onChange={(field, value) => setControl((prev) => ({ ...prev, [field]: value }))}
+          onReset={() => setControl(CALM_CONTROL)}
+          notice={controlNotice({ connected: link.connected, bandStatus: link.bandStatus, live })}
+          lastSentAt={lastSentAt}
+        />
+      </section>
 
       <footer className="dashboard__footer">
         <p>
           Protótipo acadêmico (TCC). Este sistema não tem finalidade médica ou diagnóstica: as
           indicações são apenas um apoio ao cuidador e não substituem avaliação profissional.
         </p>
-        <p className="dashboard__model-info">{describeModel()}</p>
+        <p className="dashboard__model-info">{MODEL_DESCRIPTION}</p>
       </footer>
     </div>
   );

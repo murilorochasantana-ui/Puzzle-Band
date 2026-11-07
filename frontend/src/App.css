@@ -195,7 +195,6 @@
   margin-bottom: 10px;
 }
 
-.sim-controls__play,
 .sim-controls__reset {
   font: inherit;
   padding: 8px 14px;
@@ -204,39 +203,6 @@
   background: var(--page-plane);
   color: var(--text-primary);
   cursor: pointer;
-}
-
-.sim-controls__speed {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-left: auto;
-}
-
-.sim-controls__speed-btn {
-  font: inherit;
-  font-size: 13px;
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--control-border);
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.sim-controls__speed-btn.is-active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--on-accent);
-}
-
-.manual-controls__buffer {
-  margin-left: auto;
-  font-size: 12px;
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
 }
 
 .manual-controls__grid {
@@ -326,11 +292,45 @@
   color: var(--on-accent);
 }
 
+/* Controle da pulseira: situacao da pulseira (offline, rodando cenario, modo controle) */
+.band-controls__notice {
+  margin: 0;
+  flex: 1 1 320px;
+  font-size: 13px;
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.band-controls__notice--warning {
+  background: color-mix(in srgb, var(--status-warning) 18%, transparent);
+}
+
+.band-controls__notice--warning span {
+  color: var(--status-warning-ink);
+}
+
+.band-controls__notice--ok {
+  background: color-mix(in srgb, var(--status-good) 14%, transparent);
+}
+
+.band-controls__notice--ok span {
+  color: var(--status-good-ink);
+}
+
+.band-controls__hint {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.episode-history__hint code {
+  font-size: 11px;
+}
+
 /* Foco visivel em todos os botoes do painel (teclado) */
 .manual-controls__toggle-btn:focus-visible,
 .manual-controls__gyro-btn:focus-visible,
-.sim-controls__speed-btn:focus-visible,
-.sim-controls__play:focus-visible,
 .sim-controls__reset:focus-visible {
   outline: 2px solid var(--series-1);
   outline-offset: 2px;
@@ -385,6 +385,7 @@
   text-align: center;
 }
 
+/* Grupo de botoes com rotulo (seletor de tema) */
 .source-select {
   display: flex;
   flex-direction: column;
@@ -496,18 +497,6 @@
   background: color-mix(in srgb, var(--series-1) 12%, transparent);
 }
 
-.episode-btn--danger {
-  color: var(--status-critical-ink);
-  border-color: var(--status-critical-ink);
-}
-
-.episode-btn--danger-solid {
-  background: var(--danger-fill);
-  border-color: var(--danger-fill);
-  color: var(--on-danger);
-  font-weight: 600;
-}
-
 .episode-history {
   background: var(--surface-1);
   border: 1px solid var(--border);
@@ -538,23 +527,10 @@
   max-width: 520px;
 }
 
-.episode-history__tools,
-.episode-history__confirm-actions {
+.episode-history__tools {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.episode-history__confirm {
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--status-critical) 45%, transparent);
-  background: color-mix(in srgb, var(--status-critical) 8%, transparent);
-}
-
-.episode-history__confirm p {
-  margin: 0 0 10px;
-  font-size: 13px;
 }
 
 .episode-history__warning {
@@ -736,6 +712,11 @@
 .episode__observation label {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.episode__observation input:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .episode__observation input {

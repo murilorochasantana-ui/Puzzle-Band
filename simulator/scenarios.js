@@ -30,7 +30,7 @@
 // So leitura de um limite da regra (nao altera o trigger.js)
 import { BASELINE_WINDOW_S } from '../frontend/src/model/trigger.js';
 
-// Valores calmos (os mesmos padroes do simulador manual do dashboard)
+// Valores calmos (os mesmos de CALM_CONTROL, o estado calmo do modo controle)
 export const CALMO = {
   bpm: 78, // bpm
   eda: 4, // uS
@@ -624,7 +624,7 @@ export function seeded(seed) {
 export const routineSeed = (seed) => Math.imul((seed >>> 0) ^ 0x9e3779b9, 0x85ebca6b) >>> 0;
 
 // Roda fn() com Math.random trocado por rng (o gerador de leituras do
-// dashboard usa Math.random)
+// simulate.js usa Math.random)
 export function withRandom(rng, fn) {
   const original = Math.random;
   Math.random = rng;

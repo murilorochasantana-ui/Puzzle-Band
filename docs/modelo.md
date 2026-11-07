@@ -12,7 +12,7 @@ Como rodar o treino: seção "Treinando o modelo" do [README](../README.md).
 
 ## Qual modelo está em produção
 
-O `frontend/src/model/forest.json` oficial (o que o dashboard usa) é gerado
+O `frontend/src/model/forest.json` oficial (o que a pulseira usa) é gerado
 pelo **`model/train.py`**: 60 árvores, profundidade máxima 6, dataset v4, com
 validação GroupKFold por criança. As métricas desta página vêm dele.
 
@@ -21,11 +21,11 @@ usada só por ele:
 
 - `forest_state.pkl` — a floresta acumulada (objeto do scikit-learn),
   necessária para continuar treinando em rodadas futuras. **Não apague** se
-  quiser continuar os experimentos; o dashboard não usa esse arquivo.
+  quiser continuar os experimentos; a pulseira não usa esse arquivo.
 - `training_history.json` — uma entrada por rodada (dataset, amostras,
   árvores).
 
-Essa floresta é **separada** do modelo do dashboard: tem 80 árvores (uma
+Essa floresta é **separada** do modelo da pulseira: tem 80 árvores (uma
 rodada com o dataset v4, registrada em 19/09/2026 02:42 UTC) e **não
 corresponde** ao `forest.json` atual.
 
@@ -41,9 +41,9 @@ Para não confundir de novo:
 
 - os dois scripts gravam no `forest.json` um campo `meta` (script de origem,
   dataset, número de árvores, data do treino). O `predict.js` ignora esse
-  campo, e o rodapé do dashboard mostra "Modelo: 60 árvores, treinado em …
-  (model/train.py)";
-- rodar o `train_incremental.py` **substitui** o modelo do dashboard pelo
+  campo; a pulseira mostra no início, e o rodapé do painel do site também,
+  "Modelo: 60 árvores, treinado em … (model/train.py)";
+- rodar o `train_incremental.py` **substitui** o modelo da pulseira pelo
   experimental (o script avisa no fim). Para voltar ao oficial:
   `python model/train.py`.
 
@@ -54,9 +54,12 @@ pip install pandas scikit-learn openpyxl numpy
 python model/train.py
 ```
 
-Isso reescreve `frontend/src/model/forest.json`, consumido pelo dashboard
-(`frontend/src/model/predict.js`) — sem precisar de backend, a inferência
-roda inteira no navegador.
+Isso reescreve `frontend/src/model/forest.json`, consumido pela pulseira
+(`frontend/src/model/predict.js`, chamado por `simulator/borda.js`) — sem
+precisar de backend, a inferência roda na própria pulseira (processamento na
+borda; num ESP32 real, o modelo teria de ser convertido para C, o que fica
+como trabalho futuro). O site não carrega as árvores: lê só o campo `meta`
+para o rodapé.
 
 ## Treino incremental (experimental) — treinar com vários datasets sem esquecer os anteriores
 
@@ -92,8 +95,8 @@ Cada rodada:
 **Limitações a saber:**
 - O AUC impresso após cada rodada é *in-sample* (medido nos mesmos dados usados pra treinar) — serve só como sanity check, não é validação real. Para validação séria (GroupKFold por criança, held-out), use `train.py` num dataset específico.
 - O aviso do scikit-learn sobre `class_weight="balanced"` com `warm_start` é esperado: o balanceamento é calculado só com os dados da rodada atual, não com o histórico acumulado. Não é um erro, mas significa que rodadas com prevalência de estresse muito diferente entre si podem desbalancear o peso relativo das árvores.
-- `forest.json` cresce a cada rodada (mais árvores = arquivo maior, carregado inteiro pelo navegador) — não adicione árvores indefinidamente sem necessidade.
-- Não apague `model/state/forest_state.pkl` se quiser continuar treinando depois — é ele que guarda o modelo em si (o `.json` exportado é só a versão pro navegador consumir, não dá pra continuar o treino a partir dele).
+- `forest.json` cresce a cada rodada (mais árvores = arquivo maior e inferência mais lenta na pulseira; num ESP32, também mais memória) — não adicione árvores indefinidamente sem necessidade.
+- Não apague `model/state/forest_state.pkl` se quiser continuar treinando depois — é ele que guarda o modelo em si (o `.json` exportado é só a versão pra pulseira consumir, não dá pra continuar o treino a partir dele).
 
 ## Decisões de design
 
@@ -101,7 +104,7 @@ Cada rodada:
 Testamos multiclasse (nenhum/leve/moderado/alto) primeiro — a fronteira
 entre "leve" e "nenhum" é muito ruidosa (F1 chegou a 0.12 em alguns folds).
 O binário com probabilidade de saída é uma base mais confiável para um
-alerta que vai para um cuidador real; o dashboard converte a probabilidade
+alerta que vai para um cuidador real; a pulseira converte a probabilidade
 em 3 faixas de risco (baixo / atenção / possível crise).
 
 **Feature de "batimento sobe de repente" (jerk) — histórico.**

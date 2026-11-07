@@ -1,28 +1,38 @@
 # Testes e roteiro de demonstração
 
-Há dois conjuntos de testes automáticos, ambos rodados pelo terminal:
+Os testes rodam pelo terminal. Desde que o processamento passou para a
+pulseira (processamento na borda, ver [mqtt.md](mqtt.md#por-que-o-processamento-fica-na-pulseira)),
+eles cobrem também a pulseira publicando sem o site e o app conversando com
+ela com o site fechado:
 
 | Onde | Comando | O que testa |
 |---|---|---|
-| `frontend/` | `npm test` | Regra do gatilho (casos sintéticos), histórico de episódios, CSV e cenários de ponta a ponta com transições rápidas (38 testes, `node:test`). Detalhes em [gatilho.md](gatilho.md#resultado-dos-testes) |
-| `simulator/` | `npm run verificar` | Os 11 cenários do simulador da pulseira em loop (3 ciclos) e o `eventos_aleatorios` (gabarito × episódios detectados), com o modelo real (tabelas abaixo) |
+| `frontend/` | `npm test` | Regra do gatilho (casos sintéticos), histórico de episódios, CSV, cenários de ponta a ponta com transições rápidas e as mensagens MQTT: formatos que o app lê, parsers do painel, controle, avaliação com origem `site` e o limite de 2 envios/s do controle (63 testes, `node:test`). Detalhes do gatilho em [gatilho.md](gatilho.md#resultado-dos-testes) |
+| `simulator/` | `npm test` | A pulseira sem broker e sem site, com um cliente MQTT falso (14 testes): publica estado, alertas e histórico; aplica ack e avaliação; recupera o histórico do arquivo e da mensagem retida; o modo controle segue os valores-alvo (ver [Testes da pulseira](#testes-da-pulseira-simulatortestes)) |
+| `simulator/` | `npm run verificar` | Os 11 cenários da pulseira em loop (3 ciclos) e o `eventos_aleatorios` (gabarito × episódios detectados), com o modelo real e o mesmo processamento que a pulseira roda ao vivo (tabelas abaixo) |
+| `simulator/` | `npm run verificar-app` | Com a pulseira ligada: faz o papel do app pelo broker e confere os formatos e a ida e volta do ack e da avaliação (ver [App do cuidador sem o site](#app-do-cuidador-sem-o-site-verificar-app)) |
 
 ## Como o `verificar.js` funciona
 
 `simulator/verificar.js` roda cada cenário **offline**, sem conectar no
-broker. Ele gera em memória as mesmas leituras que o simulador publicaria
+broker. Ele gera em memória as mesmas leituras que a pulseira publicaria
 (o mesmo `programTicks` de `simulator/scenarios.js` e o mesmo
-`generateReading` de `frontend/src/model/simulate.js`) e as passa pelo
-mesmo caminho do dashboard:
+`generateReading` de `frontend/src/model/simulate.js`). Depois, as passa pelo
+**mesmo processador que a pulseira roda ao vivo** (`createEdgeProcessor`, em
+`simulator/borda.js`):
 
-1. buffer de 300 leituras, como no `App.jsx`;
+1. buffer de 300 leituras;
 2. `classifyAt` (`frontend/src/model/classify.js`), que chama
    `computeFeatures`, `predictCrisisProbability` e `riskTierFromProbability`
-   do `predict.js`, nas mesmas 31 leituras que o dashboard usa;
-3. episódios com histerese de 30 s (`episodes.js`, a mesma função
-   `ingestReadings` usada pelo hook do dashboard);
+   do `predict.js` nas 31 leituras mais recentes;
+3. episódios com histerese de 30 s (`episodes.js`, `ingestReadings`);
 4. gatilho provável (`trigger.js`) no início de cada episódio e na
    reavaliação durante o episódio.
+
+Quando o processamento saiu do site e foi para a pulseira, a saída do
+`verificar.js` foi comparada com a de antes, com as mesmas sementes. As
+tabelas do loop, do `--uma-vez --sementes 20` e do `--markdown` ficaram
+idênticas; só mudou a linha que diz por qual caminho as leituras passam.
 
 Cada execução usa uma semente (a mesma `--seed` do simulador). Ela controla o
 ruído dos sensores e o sorteio do roteiro (variação entre ciclos, tipo e
@@ -249,7 +259,7 @@ O cenário `eventos_aleatorios` sorteia eventos de 8 tipos (tabela no
 240 s. O `verificar.js` faz duas coisas:
 
 1. roda 20 eventos com a seed 42 e compara o gabarito do sorteio com os
-   episódios detectados pelas mesmas funções do site;
+   episódios detectados pelo mesmo processamento da pulseira;
 2. repete o teste com as seeds 1 a 50 (1000 eventos), para todos os tipos e
    intensidades terem amostra.
 
@@ -391,45 +401,87 @@ indicar o ruído como gatilho.
 
 ### Repetir ao vivo e comparar com o gabarito
 
-1. `frontend/.env` e `simulator/.env` configurados, com o mesmo `CHILD_ID`.
-   Terminal 1: `cd frontend` e `npm run dev`. Abra o site, escolha
-   **Pulseira (MQTT)** e confira "Broker: conectado".
-2. No histórico do site, exporte o CSV anterior (se quiser guardar) e use
-   **Limpar histórico**.
-3. Terminal 2: `cd simulator` e
-   `npm run eventos-aleatorios -- --ciclos 20 --seed 42`. O simulador imprime
-   o caminho do gabarito (`logs/eventos_<data-hora>.csv`). Deixe o site
-   aberto durante todo o teste: é ele que roda o modelo. O simulador para
-   sozinho depois do 20º evento e de uma pausa final, para o último episódio
-   fechar (cerca de 1 h 55 min).
-4. No site, clique em **Exportar CSV** no histórico.
-5. Abra os dois CSVs no Excel (os dois usam `;` e vírgula decimal). As datas
+1. `simulator/.env` configurado. O site não é necessário: quem roda o modelo
+   é a pulseira.
+2. Terminal: `cd simulator` e
+   `npm run eventos-aleatorios -- --ciclos 20 --seed 42 --limpar-historico`.
+   O `--limpar-historico` começa o histórico vazio, só com os episódios do
+   teste. A pulseira imprime o caminho do gabarito
+   (`logs/eventos_<data-hora>.csv`) e para sozinha depois do 20º evento e de
+   uma pausa final, para o último episódio fechar (cerca de 1 h 55 min).
+3. Para ter o histórico em CSV, abra o painel do site (`npm run dev` em
+   `frontend/`) e clique em **Exportar CSV** no histórico. Ele recebe da
+   pulseira os 50 episódios mais recentes. Os episódios completos ficam em
+   `simulator/data/historico_<id>.json`.
+4. Abra os dois CSVs no Excel (os dois usam `;` e vírgula decimal). As datas
    estão no mesmo horário local. O gabarito usa ISO 8601
-   (`2026-11-04T14:03:12-03:00`) e o site usa `2026-11-04 14:03:12`; para
+   (`2026-11-04T14:03:12-03:00`) e o CSV do histórico usa `2026-11-04 14:03:12`; para
    converter a coluna do gabarito, use
    `=VALOR(SUBSTITUIR(ESQUERDA(D2;19);"T";" "))`.
-6. Para cada linha do gabarito, procure no histórico os episódios cujo
+5. Para cada linha do gabarito, procure no histórico os episódios cujo
    `inicio` fica entre o `inicio` do evento e 60 s depois do `fim`:
-   - `crise_real` = sim: precisa haver episódio, e o `gatilho_tipo` do site
-     deve ser igual ao `gatilho_esperado`;
+   - `crise_real` = sim: precisa haver episódio, e o `gatilho_tipo` do
+     histórico deve ser igual ao `gatilho_esperado`;
    - `crise_real` = não: um episódio ali é alerta falso;
    - tempo até o alerta = `inicio` do episódio − `fisiologia_inicio` do
      gabarito; a duração está em `duracao_s`.
 
-Com a mesma seed, as leituras ao vivo são as mesmas da verificação offline,
-então o esperado é a tabela da seed 42 acima, evento por evento. Pode haver
-diferença se leituras se perderem no caminho (QoS 0, rede instável) ou se o
-site for aberto depois de o simulador começar. Nesse caso, a linha de base
-dos primeiros minutos fica mais curta. Outra seed (`--seed 7`) dá outra
+Com a mesma seed, as leituras ao vivo são as mesmas da verificação offline e
+passam pelo mesmo processador, então o esperado é a tabela da seed 42 acima,
+evento por evento. Como o processamento acontece na própria pulseira, uma
+leitura perdida na rede (QoS 0) não muda o resultado. Antes, quando o site
+processava, isso podia acontecer, e também abrir o site depois de o
+simulador começar encurtava a linha de base. Outra seed (`--seed 7`) dá outra
 sequência; a tabela esperada dela sai de
 `node verificar.js --cenario eventos_aleatorios --seed 7 --agregado 0`.
+
+## Testes da pulseira (`simulator/testes/`)
+
+`npm test` em `simulator/` testa a pulseira com um cliente MQTT falso
+(`testes/apoio.js`). Não há broker nem site do outro lado: o que o cliente
+falso registra é exatamente o que a pulseira publicaria.
+
+| Arquivo | O que confere |
+|---|---|
+| `borda.test.js` | Com `crise_ruido`, abre e fecha um episódio com gatilho "ruído". O alerta, o estado e o histórico saem com exatamente os campos que o app lê, e `origem: "pulseira"`. Sem o site, a pulseira publica `leituras` e `estado` a cada leitura (estado com retain), `alertas` com QoS 1 sem retain e `historico` com retain só quando o episódio abre, muda ou fecha. Nunca publica nos tópicos de comando. Sem conexão, continua processando e republica o histórico ao reconectar. Aplica o ack (o `estado` seguinte já traz o "visto pelo cuidador") e a avaliação do app e do site (`confirmado`, `descartado`, `pendente` para desfazer, observação), republicando o histórico. Episódio desconhecido: só republica. Mensagens malformadas ou com origem `pulseira`: ignoradas. Ao desligar, fecha o episódio aberto como "interrompido" e publica o histórico final |
+| `historico.test.js` | O histórico sobrevive entre execuções pelo arquivo `data/historico_<id>.json`; o episódio que estava aberto vira "interrompido". A gravação é agrupada, com flush no final. Um arquivo corrompido é guardado à parte. Sem arquivo, a pulseira recupera da mensagem retida em `historico` antes de publicar a sua e cancela a assinatura depois. Sem mensagem retida, começa vazia após o tempo limite |
+| `controle.test.js` | Validação campo a campo (fora da faixa ou tipo errado é ignorado). Rampa de 20 s até o novo alvo, partindo do valor atual; a idade muda na hora. Com a pulseira em modo controle, as leituras seguem os valores-alvo com o mesmo ruído de sensor e sem saltos, e o estado sai com `fonte: "manual"`. Uma crise feita pelos controles vira alerta e episódio |
+
+## App do cuidador sem o site (`verificar-app`)
+
+Para confirmar que o app não precisou de mudança, o
+`tools/verificar-app.mjs` foi rodado com a pulseira ligada e **o site
+fechado**. O verificador conecta com o usuário e a senha do app
+(`mobile/env.json`) e confere cada campo com o que o código Dart espera
+([mqtt.md](mqtt.md#verificar-pelo-terminal-verificar-app)).
+
+```bash
+cd simulator
+npm run crise-ruido -- --uma-vez --seed 1     # terminal 1: a pulseira
+npm run verificar-app -- --tempo 300          # terminal 2: o "app"
+```
+
+Resultado (06/11/2026, broker EMQX Cloud, criança `C01`):
+
+| Verificação | Resultado |
+|---|---|
+| `estado` | OK: 136 mensagens ao vivo, intervalo médio de 1,01 s, todos os campos no formato do app, `fonte: "pulseira"`, `origem: "pulseira"` |
+| `alertas` | OK: `baixo_risco → atencao` aos ~2 min 16 s, com *"Provável gatilho: ruído (45 → 89 dB, cerca de 13 s antes da alteração fisiológica)"*. O app notificaria com som |
+| `historico` | OK: na partida, sem o arquivo local, a pulseira recuperou da mensagem retida os 36 episódios anteriores e republicou; com o episódio novo, 37 episódios no formato do app |
+| `status` | OK: `online` (retido) |
+| `ack` e `avaliacao` (app → pulseira) | OK: a pulseira aplicou os dois e republicou o histórico com "visto às 23:26" e "confirmado pelo app" no episódio do alerta |
+
+Na mesma execução, o episódio fechou sozinho ("normalizou", 149 s, gatilho
+`ruido`) e ficou gravado em `simulator/data/historico_C01.json` com o gatilho
+completo. Na execução seguinte, a pulseira leu os 37 episódios do arquivo.
 
 ## Roteiro de demonstração
 
 > Com o app do cuidador no celular (notificação, "Estou ciente" e avaliação
 > pelo app), siga o roteiro em 4 passos do
-> [README](../README.md#roteiro-de-demonstração-site--app). Durante o `demo`
-> abaixo, o app aberto recebe o mesmo estado, os alertas e o histórico.
+> [README](../README.md#roteiro-de-demonstração-pulseira--app--painel). Durante o `demo`
+> abaixo, o app aberto recebe o mesmo estado, os alertas e o histórico, com
+> ou sem o painel do site aberto.
 
 O roteiro do cenário `demo` dura **10,5 minutos** (630 s), com o nome da fase
 em cada linha do log. Com `--ciclos 1` ele roda uma vez, sem variação (o 1º
@@ -443,24 +495,29 @@ ciclo é sempre o nominal), e encerra depois de uma pausa calma final:
 
 ### Antes de começar
 
-1. `frontend/.env` e `simulator/.env` configurados, com o mesmo `CHILD_ID`.
-2. Terminal 1: `cd frontend` e `npm run dev`. Abra o dashboard e escolha
-   **Pulseira (MQTT)**. O status deve mostrar "Broker: conectado".
-3. No histórico, exporte o CSV dos testes anteriores (se quiser guardar) e
-   use **Limpar histórico**, para a plateia ver só os episódios da demo.
-4. Terminal 2: `cd simulator` e `npm run demo -- --ciclos 1`. A pausa final
-   de 2 min garante que o último episódio feche antes de o simulador parar
-   (sem `--ciclos 1`, a demo recomeça em loop, já com variação). Ao parar, o
-   simulador publica "offline", e o dashboard mostra "Pulseira: offline".
+1. `simulator/.env` e `frontend/.env` configurados, com o mesmo `CHILD_ID`
+   (e o `mobile/env.json`, se for usar o app).
+2. Terminal 1: `cd frontend` e `npm run dev`. Abra o painel. O status deve
+   mostrar "Broker: conectado".
+3. Se quiser guardar os episódios anteriores, exporte o CSV no painel antes.
+4. Terminal 2: `cd simulator` e
+   `npm run demo -- --ciclos 1 --limpar-historico`.
+   - O `--limpar-historico` começa o histórico vazio, para a plateia ver só os
+     episódios da demo.
+   - A pausa final de 2 min garante que o último episódio feche antes de a
+     pulseira parar. Sem `--ciclos 1`, a demo recomeça em loop, já com
+     variação.
+   - Ao parar, a pulseira publica "offline", e o painel e o app mostram
+     "Pulseira: offline".
 
 ### Linha do tempo
 
 Os tempos são contados desde o início do simulador e variam ±3 s com o ruído
 dos sensores.
 
-| Tempo | Fase no log | O que aparece no dashboard | O que mostrar ou dizer |
+| Tempo | Fase no log | O que aparece no painel (e no app) | O que mostrar ou dizer |
 |---|---|---|---|
-| 0:00–1:00 | `demo 1/7 · calmo` | "Sem sinais de crise"; o modelo começa a avaliar após 31 s de leituras | Os 7 sensores; o modelo roda no navegador |
+| 0:00–1:00 | `demo 1/7 · calmo` | "Sem sinais de crise"; o modelo começa a avaliar após 31 s de leituras | Os 7 sensores; o modelo roda na própria pulseira (processamento na borda) |
 | 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise", mas pode aparecer **"Atenção"** e, às vezes, "Possível crise" por alguns segundos | Limitação real do modelo: a EDA também sobe no exercício. É por isso que o sistema é apoio e o cuidador avalia |
 | 2:30–3:30 | `demo 3/7 · calmo` | Volta ao normal; os alertas do exercício viram 1–2 episódios encerrados no histórico | Histerese: o episódio só fecha após 30 s calmos |
 | 3:30 | `demo 4/7 · crise com ruído: ruído subindo` | O ruído sobe para ~88 dB; o modelo continua em baixo risco | O ambiente mudou, mas a criança ainda está bem |
@@ -470,7 +527,7 @@ dos sensores.
 | ~6:50 | — | O episódio encerra no histórico (~2 min 30 s) | Clicar em **Confirmar gatilho** e escrever uma observação ("som alto na sala") |
 | 7:00 | `demo 6/7 · crise sem gatilho` | Por volta de 7:05: **"Possível crise"** + *"Sem gatilho ambiental aparente: luz e ruído estáveis. A causa pode ser outra (social, rotina, desconforto físico)."* | O sistema não inventa uma causa quando o ambiente não mudou |
 | 9:00 | `demo 7/7 · recuperação` | O alerta some por volta de 9:50; o episódio encerra por volta de 10:20 | — |
-| 9:25–11:25 | `pausa calma final · encerra em … s` | Resumo de padrões, por exemplo "Ruído como provável gatilho: 1 de 4 episódios · 1 confirmado pelo cuidador" | Clicar em **Exportar CSV** (registro de testes do TCC); dados só no navegador (LGPD) |
+| 9:25–11:25 | `pausa calma final · encerra em … s` | Resumo de padrões, por exemplo "Ruído como provável gatilho: 1 de 4 episódios · 1 confirmado pelo cuidador" | Clicar em **Exportar CSV** (registro de testes do TCC); o histórico fica guardado na pulseira (LGPD) |
 
 O total do resumo costuma ser 3 ou 4 episódios: as duas crises mais 1 ou 2
 alertas do exercício. Dá para clicar em **Descartar** nos do exercício
@@ -478,13 +535,17 @@ durante a fala sobre limitações e mostrar a avaliação do cuidador.
 
 ### Plano B (sem internet ou sem broker)
 
-O modo **Simulador manual** não depende de rede. A mesma história em 1x:
+O painel e o app dependem do broker, e a pulseira só começa a contar o
+roteiro depois de conectar. Depois de conectada, ela continua processando se
+a conexão cair. Antes, o modo "Simulador manual" rodava o modelo no próprio
+navegador, sem rede; esse modo deixou de existir, porque o site não processa
+mais nada. Sem broker, mostre os resultados offline, que passam pelo mesmo
+processamento da pulseira:
 
-1. Deixe calmo ~2 min (ou use 4x no aquecimento e volte para 1x).
-2. Suba o ruído para ~88 dB; ~10–15 s depois, suba BPM (~120), EDA (~11) e
-   baixe a HRV (~25). O alerta mostra "Provável gatilho: ruído".
-3. Volte tudo ao normal. Uns 30 s depois de o alerta sumir, o episódio
-   encerra; confirme o gatilho.
-4. Repita o passo 2 sem mexer em luz e ruído: "Sem gatilho ambiental
-   aparente".
-5. Exporte o CSV.
+1. `cd simulator` e `npm run verificar -- --cenario demo --sementes 5`: a
+   tabela mostra, para cada ciclo do `demo`, os episódios, o nível máximo e o
+   gatilho identificado.
+2. `cd frontend` e `node scripts/cenarios.mjs`: o relatório dos cenários de
+   ponta a ponta (quantas vezes o gatilho certo foi identificado).
+3. Mostre um histórico já gravado em `simulator/data/historico_<id>.json`
+   (de uma execução anterior) ou um CSV exportado antes.

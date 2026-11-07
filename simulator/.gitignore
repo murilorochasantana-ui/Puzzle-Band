@@ -2,3 +2,5 @@ node_modules/
 .env
 # gabaritos gerados pelo simulador (locais)
 logs/
+# historico de episodios da pulseira (local: dados de saude, LGPD)
+data/

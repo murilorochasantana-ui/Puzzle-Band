@@ -1,6 +1,7 @@
 // Historico de episodios (ver docs/historico.md). Funcoes puras, sem React:
-// o dashboard usa via hooks/useEpisodeMonitor.js, e os testes/simulador
-// podem usar direto em Node.
+// quem usa e a pulseira (simulator/borda.js, processamento na borda), alem
+// dos testes e do simulator/verificar.js. O site so mostra o historico que a
+// pulseira publica.
 //
 // Episodio: comeca quando o nivel sai de baixo_risco; termina quando volta
 // para baixo_risco e PERMANECE assim por EPISODE_END_CALM_S (histerese, para
@@ -105,8 +106,8 @@ export function stepMonitor(monitor, { reading, tier, probability }) {
   };
 }
 
-// Monitoramento interrompido (buffer reiniciado, troca de fonte, pagina
-// fechada): fecha o episodio aberto com o que se sabe ate aqui.
+// Monitoramento interrompido (pulseira desligada, buffer reiniciado): fecha o
+// episodio aberto com o que se sabe ate aqui.
 export function closeOpenEpisode(monitor) {
   if (!monitor?.open) return null;
   const { episode, calmSince } = monitor.open;
@@ -119,7 +120,7 @@ export function closeOpenEpisode(monitor) {
 
 const ALERT_TIERS = new Set(['atencao', 'alto_risco']);
 
-// Processa as leituras NOVAS de um buffer deslizante (o do dashboard, com no
+// Processa as leituras NOVAS de um buffer deslizante (o da pulseira, com no
 // maximo 300 leituras): tudo depois de `lastReading`. Se o buffer foi
 // esvaziado ou trocado, o episodio aberto e fechado como interrompido.
 // `classify(readings, i)` devolve { tier, probability } (ver classify.js).
@@ -175,8 +176,9 @@ export function ingestReadings(monitor, lastReading, readings, classify) {
 // Lista de episodios (mais recente primeiro)
 // ---------------------------------------------------------------------------
 
-// Campos que so o cuidador altera (no site ou pelo app via MQTT): o
-// rastreador nao os conhece, entao numa atualizacao eles sempre vem da lista.
+// Campos que so o cuidador altera (pelo app ou pelo painel do site, sempre
+// via MQTT; quem aplica e a pulseira): o rastreador nao os conhece, entao
+// numa atualizacao eles sempre vem da lista.
 //   avaliacao_origem         'site' | 'app' (quem avaliou por ultimo)
 //   avaliacao_em             quando avaliou (ISO)
 //   visto_pelo_cuidador_em   quando o cuidador tocou "Estou ciente" no app (ISO)
@@ -210,7 +212,8 @@ export function updateEpisode(list, id, changes) {
 }
 
 // ---------------------------------------------------------------------------
-// Persistencia (localStorage ou qualquer objeto com getItem/setItem)
+// Persistencia (qualquer objeto com getItem/setItem: na pulseira, o arquivo
+// simulator/data/historico_<id>.json - ver simulator/historico.js)
 // ---------------------------------------------------------------------------
 
 function normalizeEpisode(raw) {
@@ -220,12 +223,26 @@ function normalizeEpisode(raw) {
     avaliacao_cuidador: EVALUATIONS.includes(raw.avaliacao_cuidador) ? raw.avaliacao_cuidador : 'pendente',
     observacao: typeof raw.observacao === 'string' ? raw.observacao.slice(0, OBSERVATION_MAX_LENGTH) : '',
   };
-  // Ficou "em andamento" quando a pagina foi fechada: marca como interrompido
+  // Ficou "em andamento" quando o monitoramento parou (pulseira desligada sem
+  // fechar o episodio): marca como interrompido
   if (!ep.encerramento) {
     ep.encerramento = 'interrompido';
     ep.fim = ep.fim ?? ep.ultima_leitura ?? ep.inicio;
   }
   return ep;
+}
+
+// Mais recente primeiro
+export const byStartDesc = (a, b) => Date.parse(b.inicio) - Date.parse(a.inicio);
+
+// Episodios gravados (ou recuperados de outra fonte) -> lista valida, mais
+// recente primeiro, com os "em andamento" marcados como interrompidos.
+export function normalizeEpisodes(list) {
+  return list
+    .map(normalizeEpisode)
+    .filter(Boolean)
+    .sort(byStartDesc)
+    .slice(0, HISTORY_LIMIT);
 }
 
 export function loadEpisodes(storage) {
@@ -235,12 +252,7 @@ export function loadEpisodes(storage) {
     if (!raw) return { episodes: [], ok: true };
     const data = JSON.parse(raw);
     if (!Array.isArray(data)) return { episodes: [], ok: false };
-    const episodes = data
-      .map(normalizeEpisode)
-      .filter(Boolean)
-      .sort((a, b) => Date.parse(b.inicio) - Date.parse(a.inicio))
-      .slice(0, HISTORY_LIMIT);
-    return { episodes, ok: true };
+    return { episodes: normalizeEpisodes(data), ok: true };
   } catch {
     return { episodes: [], ok: false };
   }

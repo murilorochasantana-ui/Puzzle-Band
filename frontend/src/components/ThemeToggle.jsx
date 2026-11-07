@@ -9,9 +9,8 @@ const OPCOES = [
 ];
 
 /**
- * Tema do painel: Sistema (padrao), Claro ou Escuro. Mesmo padrao do grupo
- * "Fonte dos dados": botoes com aria-pressed. Salvo no localStorage e
- * aplicado no <html> (src/theme.js).
+ * Tema do painel: Sistema (padrao), Claro ou Escuro. Botoes com
+ * aria-pressed. Salvo no localStorage e aplicado no <html> (src/theme.js).
  */
 export default function ThemeToggle() {
   const [tema, setTema] = useState(lerTema);

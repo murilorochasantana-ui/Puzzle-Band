@@ -1,6 +1,7 @@
 import { formatClock } from './formatTime';
 
-// `trigger`: objeto de model/trigger.js do episodio em andamento (ou null)
+// Tudo vem do estado publicado pela pulseira (puzzleband/<id>/estado):
+// `trigger`: gatilho resumido ({ tipo, texto }) do episodio em andamento, ou null
 // `seenAt`: quando o cuidador tocou "Estou ciente" no app (ISO) ou null
 export default function AlertBanner({ tier, probability, childLabel, trigger, seenAt }) {
   if (tier !== 'atencao' && tier !== 'alto_risco') return null;

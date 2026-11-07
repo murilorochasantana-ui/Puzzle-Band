@@ -1,9 +1,16 @@
 # App do cuidador (`mobile/`)
 
 App Android em Flutter para o cuidador acompanhar a criança pelo celular. Ele
-**não roda o modelo**: recebe do site (o painel, que é o "servidor") o estado
-já processado, pelo broker MQTT, e devolve o "Estou ciente" e a avaliação do
-gatilho. Tópicos e formatos: [mqtt.md](mqtt.md).
+**não roda o modelo**: recebe da **pulseira** o estado já processado, pelo
+broker MQTT, e devolve a ela o "Estou ciente" e a avaliação do gatilho. A
+pulseira roda o modelo, os episódios e o gatilho (processamento na borda), então
+o app **funciona com o site fechado**. O site é só o painel do desenvolvedor.
+Tópicos e formatos: [mqtt.md](mqtt.md).
+
+O app não precisou de nenhuma mudança quando o processamento saiu do site e
+foi para a pulseira: os tópicos e os formatos das mensagens são os mesmos.
+Isso foi conferido com `npm run verificar-app` com a pulseira ligada e o site
+fechado ([testes.md](testes.md#app-do-cuidador-sem-o-site-verificar-app)).
 
 As telas (login, home, gráficos, configurações) vieram do repositório
 [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
@@ -18,7 +25,8 @@ escuro: [design-app.md](design-app.md).
   BPM atual e média dos últimos 5 minutos.
 - **Alerta**: quando há um episódio em andamento, a Home mostra um card com o
   provável gatilho e o botão **Estou ciente**. O toque mostra "Ciente às
-  HH:MM" por 5 s, e o botão não volta para o mesmo episódio. O site então
+  HH:MM" por 5 s, e o botão não volta para o mesmo episódio. A pulseira
+  grava o horário no episódio e, se o painel do site estiver aberto, ele
   mostra "Alerta visto pelo cuidador às HH:MM".
 - **Painel do dia**: o botão **Hoje: X episódios** abre, na própria Home,
   todos os episódios de hoje (do mais recente para o mais antigo) com um
@@ -34,15 +42,18 @@ escuro: [design-app.md](design-app.md).
   regularidade, luz, ruído e probabilidade, uma métrica por vez), com um
   balão que mostra todas as métricas do instante tocado, e as crises dos
   últimos 7 dias pela avaliação do cuidador.
-- **Histórico** dos episódios (os 50 mais recentes do site), separado por
-  dia, com um **calendário** do mês no topo. Cada episódio é um cartão
-  resumido que abre no lugar, com **Confirmar gatilho** / **Descartar** e uma
-  observação curta. A avaliação volta para o site, que mostra "avaliado pelo
-  app". A última cópia fica salva no celular para consulta offline.
-- **Indicadores de conexão**: broker, pulseira (online/offline) e painel/site
-  (ao vivo ou sem dados).
+- **Histórico** dos episódios (os 50 mais recentes que a pulseira publica),
+  separado por dia, com um **calendário** do mês no topo. Cada episódio é um
+  cartão resumido que abre no lugar, com **Confirmar gatilho** / **Descartar**
+  e uma observação curta. A avaliação volta para a pulseira, que aplica e
+  republica o histórico (o painel do site mostra "avaliado pelo app"). A
+  última cópia fica salva no celular para consulta offline.
+- **Indicadores de conexão**: broker, pulseira (online/offline) e "Painel" (ao
+  vivo ou sem dados). O nome "Painel" ficou da versão em que o site
+  processava. Hoje ele indica se o **estado publicado pela pulseira** está
+  chegando ao vivo; não depende do site estar aberto.
 - **Presença**: o app publica `online`/`offline` (com Last Will) em
-  `puzzleband/<id>/app/status`. O site mostra "App do cuidador:
+  `puzzleband/<id>/app/status`. O painel do site mostra "App do cuidador:
   conectado/desconectado".
 
 ## Telas
@@ -50,7 +61,7 @@ escuro: [design-app.md](design-app.md).
 | Tela | Conteúdo |
 |---|---|
 | Login | Só navega para a tela Início. Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
-| Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do site abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). |
+| Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do gatilho abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). |
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
 | Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com o painel parado ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
 | Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. Avisa quando está mostrando a cópia salva. |
@@ -92,8 +103,8 @@ continua no projeto e mostra "em breve".
 
 ### Estado "ao vivo"
 
-O site publica o estado 1×/s com retain. Se o site fechar, o broker guarda o
-último estado, que pode ser antigo. O app só considera o estado **ao vivo** se
+A pulseira publica o estado 1×/s com retain. Se a pulseira desligar, o broker
+guarda o último estado, que pode ser antigo. O app só considera o estado **ao vivo** se
 ele chegou nos últimos 6 s (para a mensagem retida, vale o horário dela). Fora
 disso, a Home mostra **Sem dados** (cinza, ícone de sensor desligado) e o
 horário da última atualização. Assim, um estado velho não aparece como se
@@ -168,7 +179,8 @@ sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
 - Eles **não são enviados pelo MQTT** (não há tópico nem campo novo nas
   mensagens), não aparecem no site e não vão para outro aparelho.
 - Motivo: são anotações pessoais do cuidador sobre a criança, e o broker é
-  compartilhado com o site, com uma credencial que fica dentro do APK (ver
+  compartilhado com a pulseira e o painel, com uma credencial que fica dentro
+  do APK (ver
   [Limitações](#limitações)).
 - Consequência: limpar os dados do app, desinstalar ou trocar de celular
   apaga os lembretes, e outro cuidador não vê os lembretes deste. A
@@ -229,8 +241,9 @@ confirmadas" ou "5 de novembro: 2 possíveis crises aguardando confirmação".
   vermelho, com o texto **Descartado**, e o cartão mostra o selo
   "Descartado". O episódio continua na lista, mas sai do calendário e do
   gráfico de 7 dias.
-- Dá para mudar de ideia: tocar no outro botão reenvia a avaliação ao site
-  (tópico `avaliacao`, como antes). Sem conexão, o app avisa que não enviou.
+- Dá para mudar de ideia: tocar no outro botão reenvia a avaliação à
+  pulseira (tópico `avaliacao`, como antes). Sem conexão, o app avisa que não
+  enviou.
 
 ## Configuração (`env.json`)
 
@@ -362,12 +375,13 @@ rede.
   plano recente. O Android pode encerrar o app em segundo plano (economia de
   bateria). A partir daí ele não recebe nada até ser aberto de novo. O "Sem
   restrições" de bateria ajuda, mas não garante.
-- **O site precisa estar aberto.** O modelo e a regra de gatilho rodam no
-  navegador. Sem o site aberto não há estado, alertas nem histórico novos. O
-  app mostra "Painel: sem dados".
+- **A pulseira precisa estar ligada** (o site não). O modelo e a regra de
+  gatilho rodam nela. Com a pulseira desligada não há estado, alertas nem
+  histórico novos, e o app mostra "Pulseira: offline" e "Painel: sem dados".
 - **Notificação com o app fechado** exigiria push (Firebase Cloud Messaging)
-  e um servidor sempre ligado rodando o modelo, ou pelo menos assinando os
-  alertas e enviando o push. Fica como trabalho futuro.
+  e um serviço sempre ligado assinando os alertas da pulseira e enviando o
+  push. O modelo já roda na pulseira, então esse serviço não precisaria
+  processar nada. Fica como trabalho futuro.
 - **Login sem autenticação real.** A tela de login só navega. Qualquer pessoa
   com o app vê os dados da criança configurada. Num produto real, seria
   preciso conta por cuidador e autorização por criança.
@@ -376,14 +390,14 @@ rede.
   ([mqtt.md](mqtt.md#acl-sugerida-menor-privilégio)) limita o que essa
   credencial pode fazer. A solução definitiva é a autenticação por usuário
   (tokens emitidos por um backend).
-- O histórico do app tem só os 50 episódios mais recentes que o site enviou.
+- O histórico do app tem só os 50 episódios mais recentes que a pulseira publicou.
   Por isso o calendário, o total do mês e o gráfico de 7 dias contam apenas
   esses: com muitos episódios, os meses mais antigos ficam incompletos.
-- A média de BPM é a dos últimos 5 minutos calculada pelo site, não a do dia
+- A média de BPM é a dos últimos 5 minutos calculada pela pulseira, não a do dia
   inteiro. O app guarda as leituras dos últimos 5 minutos só na memória,
   para o gráfico: fechar o app apaga essas leituras.
 - **Lembretes só no celular.** Por decisão de privacidade, eles não têm
-  cópia no site nem no broker: limpar os dados do app ou trocar de celular
+  cópia na pulseira, no site nem no broker: limpar os dados do app ou trocar de celular
   apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).
 - Só Android. A pasta `ios/` veio do projeto original e não foi configurada
   (o bundle id ainda é o de exemplo, e as notificações não foram ajustadas

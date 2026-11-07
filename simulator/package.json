@@ -2,7 +2,7 @@
   "name": "puzzleband-simulator",
   "private": true,
   "version": "1.0.0",
-  "description": "Simulador da pulseira Puzzle Band (ESP32): publica leituras sintéticas no broker MQTT",
+  "description": "Pulseira Puzzle Band simulada (ESP32): gera as leituras, roda o modelo, os episódios e o gatilho (processamento na borda) e publica no broker MQTT",
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -19,8 +19,10 @@
     "crise-e-recuperacao": "node index.js --cenario crise_e_recuperacao",
     "demo": "node index.js --cenario demo",
     "eventos-aleatorios": "node index.js --cenario eventos_aleatorios",
+    "controle": "node index.js --cenario controle",
     "verificar": "node verificar.js",
-    "verificar-app": "node ../tools/verificar-app.mjs"
+    "verificar-app": "node ../tools/verificar-app.mjs",
+    "test": "node --test"
   },
   "dependencies": {
     "dotenv": "^18.0.8",

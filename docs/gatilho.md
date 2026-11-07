@@ -7,7 +7,7 @@ Testes: `frontend/src/model/trigger.test.js` e `frontend/scripts/cenarios.mjs`.
 
 Atende ao objetivo específico (f) do TCC: auxiliar o cuidador a identificar
 o que pode ter desencadeado um episódio de estresse. Quando o modelo indica
-uma possível crise, o dashboard mostra também se houve uma mudança no
+uma possível crise, a pulseira indica também se houve uma mudança no
 ambiente (ruído ou luz) logo antes, e qual foi. Isso dá ao cuidador uma pista
 concreta para agir ("baixar o som", "sair da sala iluminada") e, com o
 histórico de episódios ([historico.md](historico.md)), permite enxergar
@@ -126,7 +126,7 @@ Limitações).
 ## Exemplo em linha do tempo
 
 Cenário `crise_ruido` (semente 1) de `scripts/cenarios.mjs`, rodando pelo
-mesmo caminho do dashboard (buffer de 300 leituras, modelo real):
+mesmo caminho da pulseira (buffer de 300 leituras, modelo real):
 
 | t (s) | O que acontece |
 |---|---|

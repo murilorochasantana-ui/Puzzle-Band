@@ -5,7 +5,7 @@
 // luz e ruido antes dela. Correlacao no tempo nao prova causa, por isso o
 // texto gerado sempre fala em "provavel" e quem decide e o cuidador.
 //
-// Funcoes puras, sem React e sem importar o forest.json: servem ao dashboard,
+// Funcoes puras, sem React e sem importar o forest.json: servem a pulseira,
 // aos testes em Node e ao simulador de linha de comando (simulator/).
 //
 // Historico de entrada: array (mais antiga -> mais recente) de

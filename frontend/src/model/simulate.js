@@ -1,5 +1,6 @@
-// Gera leituras sinteticas ao vivo a partir de controles manuais, sem
-// depender do dataset. As magnitudes-base de cada acao do giroscopio foram
+// Gera leituras sinteticas ao vivo a partir de valores-alvo, sem depender do
+// dataset. Quem gera e a pulseira simulada (simulator/): nos cenarios e no
+// modo controle (alvos enviados pelo painel do site). As magnitudes-base de cada acao do giroscopio foram
 // calibradas pelas medias observadas no dataset original, so como ponto de
 // partida realista - o ruido por leitura reproduz a variabilidade alta que
 // os sensores reais (e o dataset) mostram mesmo dentro de uma mesma
@@ -24,9 +25,8 @@ const clamp = (v, min, max) => Math.min(max, Math.max(min, v));
 // estereotipia motora (intensidade qualquer, mas bem REGULAR/periodica).
 //
 // `gyroBase` e `regularidadeBase` sao sobrescritas OPCIONAIS (numericas) de
-// gyroAction / movimentoRepetitivo, usadas pelo simulador de linha de comando
-// (simulator/) pra fazer rampas graduais entre cenarios. O dashboard nao
-// passa nenhuma das duas, entao seu comportamento nao muda.
+// gyroAction / movimentoRepetitivo, usadas pela pulseira simulada
+// (simulator/) pra fazer rampas graduais nos cenarios e no modo controle.
 export function generateReading({
   bpmTarget, edaTarget, gyroAction, idade, timestamp,
   hrvTarget, movimentoRepetitivo, luzTarget, ruidoTarget,
@@ -50,5 +50,50 @@ export function generateReading({
   return {
     timestamp, bpm, eda_uS, gyro_mag_dps, idade,
     hrv_ms, accel_mag_g, regularidade, luz_lux, ruido_db,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Controle da pulseira (topico puzzleband/<id>/controle): valores-alvo que o
+// painel do site envia para a pulseira no modo "controle" (npm run controle,
+// em simulator/). As faixas sao as dos controles do painel; a pulseira ignora
+// o valor que vier fora delas (hooks/parseMessages.js, parseControl).
+// ---------------------------------------------------------------------------
+
+export const CONTROL_LIMITS = Object.freeze({
+  bpm: Object.freeze({ min: 50, max: 190 }),
+  eda: Object.freeze({ min: 1, max: 16 }), // uS
+  hrv: Object.freeze({ min: 10, max: 90 }), // ms
+  movimento: Object.freeze({ min: 0, max: 250 }), // dps: intensidade-base do giroscopio (GYRO_ACTIONS)
+  regularidade: Object.freeze({ min: 0, max: 1 }), // regularidade do movimento
+  luz: Object.freeze({ min: 0, max: 1000 }), // lux
+  ruido: Object.freeze({ min: 20, max: 100 }), // dB
+  idade: Object.freeze({ min: 5, max: 12, inteiro: true }), // anos
+});
+
+// Regularidade do movimento nos dois botoes do painel (os mesmos valores que
+// generateReading usa para movimentoRepetitivo false/true)
+export const REGULARIDADE = Object.freeze({ livre: 0.08, repetitivo: 0.8 });
+
+// Estado calmo: os padroes do painel e de simulator/scenarios.js (CALMO)
+export const CALM_CONTROL = Object.freeze({
+  bpm: 78, eda: 4, hrv: 55, movimento: 5, regularidade: REGULARIDADE.livre, luz: 300, ruido: 45, idade: 8,
+});
+
+// Valores do controle -> argumentos de generateReading (mesmo ruido de
+// sempre). O movimento e a regularidade vao como numeros (gyroBase e
+// regularidadeBase) para a pulseira poder fazer rampas entre eles.
+export function controlTargets(control) {
+  return {
+    bpmTarget: control.bpm,
+    edaTarget: control.eda,
+    hrvTarget: control.hrv,
+    gyroAction: 'repouso',
+    gyroBase: control.movimento,
+    movimentoRepetitivo: false,
+    regularidadeBase: control.regularidade,
+    luzTarget: control.luz,
+    ruidoTarget: control.ruido,
+    idade: control.idade,
   };
 }
