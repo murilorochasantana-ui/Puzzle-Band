@@ -9,7 +9,11 @@
 //   - guarda os ultimos 5 min de leituras do estado (todas as metricas) para
 //     o grafico ao vivo;
 //   - guarda a ultima copia do historico (shared_preferences) para mostrar
-//     sem conexao.
+//     sem conexao; so aceita historico com origem "pulseira";
+//   - assina comando: a ordem "resetar" do terminal (npm run resetar) apaga
+//     os dados locais uma vez por id, confirma em comando/resposta e avisa a
+//     tela (avisos -> SnackBar). O mesmo apagarDadosLocais serve ao botao
+//     "Apagar dados deste aparelho" (Ajustes).
 // Mensagem malformada e descartada sem derrubar o app.
 
 import 'dart:async';
@@ -32,14 +36,22 @@ enum BrokerStatus { naoConfigurado, conectando, conectado, desconectado, erro }
 
 enum Presenca { online, offline, desconhecido }
 
+/// Apaga o que fica fora do MqttService (lembretes, nome, aparencia):
+/// PreferenciasLocais.apagarDados.
+typedef ApagarDadosLocais = Future<void> Function({required bool manterPreferencias});
+
 class MqttService extends ChangeNotifier {
-  MqttService({required this.config, required this.prefs, required this.notificacoes})
+  MqttService({required this.config, required this.prefs, required this.notificacoes, this.aoApagarDados})
       : _topics = Topics(config);
 
   final AppConfig config;
   final SharedPreferences prefs;
   final NotificationService notificacoes;
+  final ApagarDadosLocais? aoApagarDados;
   final Topics _topics;
+
+  /// SnackBar mostrado quando a ordem do terminal apaga os dados.
+  static const avisoDeReset = 'Dados apagados pelo painel para uma nova apresentação.';
 
   static const janelaSinais = Duration(minutes: 5); // grafico ao vivo
   static const _estadoMaxAtraso = Duration(seconds: 6); // site publica 1x/s
@@ -52,6 +64,7 @@ class MqttService extends ChangeNotifier {
   static const _chaveAlertasSonoros = 'alertas_sonoros';
   static const _chaveNotificados = 'episodios_notificados';
   static const _chaveClienteId = 'mqtt_cliente_sufixo';
+  static const _chaveResetAplicado = 'reset_aplicado_id';
 
   MqttServerClient? _client;
   StreamSubscription<List<MqttReceivedMessage<MqttMessage>>>? _updatesSub;
@@ -77,6 +90,8 @@ class MqttService extends ChangeNotifier {
   final Map<String, DateTime> _cienteLocal = {};
   final LinkedHashMap<String, NivelRisco> _notificados = LinkedHashMap();
   bool _alertasSonoros = true;
+  final StreamController<String> _avisos = StreamController<String>.broadcast();
+  Future<void>? _reset;
 
   // -------------------------------------------------------------------------
   // Leitura (telas)
@@ -108,6 +123,16 @@ class MqttService extends ChangeNotifier {
   bool get historicoAoVivo => _historicoNestaSessao && _brokerStatus == BrokerStatus.conectado;
 
   bool get alertasSonoros => _alertasSonoros;
+
+  /// Mensagens curtas para a tela (SnackBar), como o aviso do reset.
+  Stream<String> get avisos => _avisos.stream;
+
+  /// Id da ultima ordem de reset aplicada (null: nenhuma).
+  String? get resetAplicado => prefs.getString(_chaveResetAplicado);
+
+  /// Reset em andamento (apagando), para os testes esperarem.
+  @visibleForTesting
+  Future<void>? get resetEmAndamento => _reset;
 
   /// Quando o cuidador marcou "Estou ciente" (confirmado pelo site ou local).
   DateTime? cienteEm(String episodioId) {
@@ -152,7 +177,7 @@ class MqttService extends ChangeNotifier {
     _frescor?.cancel();
     final client = _client;
     if (client != null && _conectado(client)) {
-      _publicarTexto(_topics.appStatus, 'offline', MqttQos.atLeastOnce, retain: true);
+      publicarTexto(_topics.appStatus, 'offline', MqttQos.atLeastOnce, retain: true);
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
     try {
@@ -167,6 +192,7 @@ class MqttService extends ChangeNotifier {
     _presenca?.cancel();
     _frescor?.cancel();
     _updatesSub?.cancel();
+    _avisos.close();
     try {
       _client?.disconnect();
     } catch (_) {}
@@ -266,6 +292,7 @@ class MqttService extends ChangeNotifier {
       client.subscribe(_topics.alertas, MqttQos.atLeastOnce);
       client.subscribe(_topics.historico, MqttQos.atLeastOnce);
       client.subscribe(_topics.status, MqttQos.atLeastOnce);
+      client.subscribe(_topics.comando, MqttQos.atLeastOnce);
       _aoConectar();
     } else {
       // le o motivo antes do disconnect (que pode limpar o status do cliente)
@@ -355,15 +382,20 @@ class MqttService extends ChangeNotifier {
     if (mudou) _avisar();
   }
 
+  /// Como uma mensagem chegando do broker (avisa a tela se algo mudou).
   /// Devolve true se algo mudou na tela.
   @visibleForTesting
-  bool tratarMensagem(String topico, String texto, {bool retida = false}) =>
-      _tratar(topico, texto, retida: retida);
+  bool tratarMensagem(String topico, String texto, {bool retida = false}) {
+    final mudou = _tratar(topico, texto, retida: retida);
+    if (mudou) _avisar();
+    return mudou;
+  }
 
   bool _tratar(String topico, String texto, {required bool retida}) {
     if (topico == _topics.estado) return _tratarEstado(texto, retida);
     if (topico == _topics.alertas) return _tratarAlerta(texto);
     if (topico == _topics.historico) return _tratarHistorico(texto);
+    if (topico == _topics.comando) return _tratarComando(texto);
     if (topico == _topics.status) {
       final online = parseOnline(texto);
       if (online == null) return false;
@@ -401,6 +433,8 @@ class MqttService extends ChangeNotifier {
   }
 
   bool _tratarHistorico(String texto) {
+    // So a pulseira publica o historico: outra origem nao substitui a copia
+    if (!historicoDaPulseira(texto)) return false;
     final lista = parseHistorico(texto);
     if (lista == null) return false;
     _historico = lista;
@@ -408,6 +442,62 @@ class MqttService extends ChangeNotifier {
     _historicoNestaSessao = true;
     _salvarHistorico();
     return true;
+  }
+
+  // -------------------------------------------------------------------------
+  // Ordem de reset (npm run resetar) e "Apagar dados deste aparelho"
+  // -------------------------------------------------------------------------
+
+  /// A ordem e retida: chega a cada conexao. So a de id novo apaga; o id e
+  /// gravado ANTES de apagar, para uma repeticao (QoS 1, reconexao) no meio
+  /// da limpeza nao aplicar de novo. A limpeza avisa a tela sozinha.
+  bool _tratarComando(String texto) {
+    final comando = ComandoResetar.tryParse(texto);
+    if (comando == null || comando.id == resetAplicado) return false;
+    prefs.setString(_chaveResetAplicado, comando.id);
+    _reset = _aplicarReset(comando);
+    return false;
+  }
+
+  Future<void> _aplicarReset(ComandoResetar comando) async {
+    await apagarDadosLocais(manterPreferencias: comando.manterPreferencias);
+    publicarTexto(_topics.comandoResposta, respostaDoComando(comando.id), MqttQos.atLeastOnce);
+    if (!_descartado) _avisos.add(avisoDeReset);
+    // O historico (ou estado) retido de DEPOIS do reset pode ter chegado
+    // antes da ordem e acabou de ser apagado: assinar de novo faz o broker
+    // reentregar os retidos atuais.
+    final client = _client;
+    if (client != null && _conectado(client)) {
+      try {
+        client.resubscribe();
+      } catch (e) {
+        debugPrint('Falha ao assinar de novo depois do reset: $e');
+      }
+    }
+  }
+
+  /// Apaga o que este celular guarda: a copia do historico, os episodios ja
+  /// notificados, os alertas recebidos, o "Estou ciente" local, o buffer dos
+  /// graficos e o estado, e (via [aoApagarDados]) os lembretes com os avisos
+  /// agendados. Com `manterPreferencias` false, tambem volta ao padrao os
+  /// alertas sonoros, o nome da crianca e a aparencia.
+  Future<void> apagarDadosLocais({required bool manterPreferencias}) async {
+    _historico = const [];
+    _historicoRecebidoEm = null;
+    _historicoNestaSessao = false;
+    _notificados.clear();
+    _alertas.clear();
+    _cienteLocal.clear();
+    _sinais.limpar();
+    _estado = null;
+    _estadoEm = null;
+    _aoVivoAnterior = false;
+    if (!manterPreferencias) _alertasSonoros = true;
+    _avisar();
+    await prefs.remove(_chaveHistorico);
+    await prefs.remove(_chaveNotificados);
+    if (!manterPreferencias) await prefs.remove(_chaveAlertasSonoros);
+    await aoApagarDados?.call(manterPreferencias: manterPreferencias);
   }
 
   void _verificarFrescor() {
@@ -462,7 +552,10 @@ class MqttService extends ChangeNotifier {
   // Publicacao
   // -------------------------------------------------------------------------
 
-  bool _publicarTexto(String topico, String texto, MqttQos qos, {bool retain = false}) {
+  /// Publica se conectado; false sem conexao. Os testes sobrescrevem para
+  /// ver o que seria publicado.
+  @protected
+  bool publicarTexto(String topico, String texto, MqttQos qos, {bool retain = false}) {
     final client = _client;
     if (client == null || !_conectado(client)) return false;
     final builder = MqttClientPayloadBuilder()..addUTF8String(texto);
@@ -476,7 +569,7 @@ class MqttService extends ChangeNotifier {
   }
 
   void _publicarPresenca() {
-    _publicarTexto(_topics.appStatus, 'online', MqttQos.atLeastOnce, retain: true);
+    publicarTexto(_topics.appStatus, 'online', MqttQos.atLeastOnce, retain: true);
   }
 
   String _agoraIso(DateTime agora) => agora.toUtc().toIso8601String();
@@ -484,7 +577,7 @@ class MqttService extends ChangeNotifier {
   /// "Estou ciente" -> `puzzleband/<id>/ack`. Devolve false sem conexao.
   bool enviarCiente(String episodioId) {
     final agora = DateTime.now();
-    final ok = _publicarTexto(
+    final ok = publicarTexto(
       _topics.ack,
       jsonEncode({'episodio_id': episodioId, 'timestamp': _agoraIso(agora), 'origem': 'app'}),
       MqttQos.atLeastOnce,
@@ -503,7 +596,7 @@ class MqttService extends ChangeNotifier {
     var obs = observacao.trim();
     if (obs.length > _maxObservacao) obs = obs.substring(0, _maxObservacao);
     final agora = DateTime.now();
-    final ok = _publicarTexto(
+    final ok = publicarTexto(
       _topics.avaliacao,
       jsonEncode({
         'episodio_id': episodio.id,

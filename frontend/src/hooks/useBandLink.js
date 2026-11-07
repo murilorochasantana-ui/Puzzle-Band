@@ -6,6 +6,7 @@ import {
   parseBandStatus,
   parseHistory,
   parseReading,
+  parseResetCommand,
   parseState,
 } from './parseMessages';
 import { buildControlMessage, buildEvaluationMessage, topicsFor } from './buildMessages';
@@ -17,9 +18,15 @@ import { buildControlMessage, buildEvaluationMessage, topicsFor } from './buildM
 //   controle   valores-alvo do "Controle da pulseira" (modo npm run controle)
 //   avaliacao  "Confirmar gatilho" / "Descartar" do historico, com origem "site"
 //
-// Assinaturas: leituras (QoS 0), status, app/status, estado, alertas e
-// historico (QoS 1). O painel NAO publica estado, alertas nem historico: a
-// pulseira e a unica dona desses topicos.
+// Assinaturas: leituras (QoS 0), status, app/status, estado, alertas,
+// historico e comando (QoS 1). O painel NAO publica estado, alertas nem
+// historico: a pulseira e a unica dona desses topicos.
+//
+// comando: a ordem "resetar" do terminal (npm run resetar). Ao vivo, o painel
+// limpa o que tem em memoria (leituras, estado, historico, ultimo alerta),
+// mostra um aviso e assina de novo os retidos (o historico vazio volta). A
+// ordem retida entregue ao conectar e ignorada: o que esta em memoria acabou
+// de vir do broker e ja e posterior ao reset.
 //
 // Status do broker: conectando | conectado | desconectado | erro
 // Status da pulseira e do app: online | offline | desconhecido (sem mensagem ainda)
@@ -56,6 +63,7 @@ export default function useBandLink({ maxBuffer }) {
   const [state, setState] = useState(null); // ultimo estado (parseState)
   const [history, setHistory] = useState(null); // ultimo historico (parseHistory)
   const [lastAlert, setLastAlert] = useState(null); // ultimo alerta (parseAlert)
+  const [resetNotice, setResetNotice] = useState(null); // { id, at }: ultima ordem de reset recebida ao vivo
   // +1 a cada (re)conexao: o painel reenvia os valores do controle
   const [connectionId, setConnectionId] = useState(0);
   const clientRef = useRef(null);
@@ -85,7 +93,7 @@ export default function useBandLink({ maxBuffer }) {
       // topicos com retain (status, app/status, estado, historico) entregam o
       // ultimo valor logo apos a assinatura.
       client.subscribe(topics.leituras, { qos: 0 });
-      client.subscribe([topics.status, topics.appStatus, topics.estado, topics.alertas, topics.historico], { qos: 1 });
+      client.subscribe([topics.status, topics.appStatus, topics.estado, topics.alertas, topics.historico, topics.comando], { qos: 1 });
       setConnectionId((n) => n + 1);
     });
     client.on('reconnect', () => {
@@ -131,6 +139,20 @@ export default function useBandLink({ maxBuffer }) {
       } else if (topic === topics.appStatus) {
         const status = parseAppStatus(text);
         if (status) setAppStatus(status);
+      } else if (topic === topics.comando) {
+        if (packet?.retain) return; // retida, ao conectar: a memoria ja e posterior ao reset
+        const order = parseResetCommand(text);
+        if (!order) return;
+        setReadings([]);
+        setState(null);
+        setHistory(null);
+        setLastAlert(null);
+        setResetNotice({ id: order.id, at: Date.now() });
+        // assina de novo para o broker reentregar os retidos atuais (o
+        // historico vazio que o reset publicou, ou o que a pulseira ja publicou)
+        const retained = [topics.status, topics.appStatus, topics.estado, topics.historico];
+        client.unsubscribe(retained);
+        client.subscribe(retained, { qos: 1 });
       }
     });
 
@@ -142,6 +164,7 @@ export default function useBandLink({ maxBuffer }) {
       setState(null);
       setHistory(null);
       setLastAlert(null);
+      setResetNotice(null);
       setBrokerStatus('conectando');
       setBandStatus('desconhecido');
       setAppStatus('desconhecido');
@@ -177,6 +200,8 @@ export default function useBandLink({ maxBuffer }) {
     state: configured ? state : null,
     history: configured ? history : null,
     lastAlert: configured ? lastAlert : null,
+    resetNotice: configured ? resetNotice : null,
+    dismissResetNotice: () => setResetNotice(null),
     brokerStatus: configured ? brokerStatus : 'erro',
     bandStatus: configured ? bandStatus : 'desconhecido',
     appStatus: configured ? appStatus : 'desconhecido',

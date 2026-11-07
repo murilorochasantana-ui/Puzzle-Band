@@ -1,7 +1,9 @@
 // Dados que o cuidador escreve e que ficam SO neste celular
 // (shared_preferences): o nome da crianca, os lembretes (de um episodio ou
 // do dia) e a aparencia (claro, escuro ou seguir o sistema). Decisao de privacidade (docs/app.md): nada disto vai para o MQTT,
-// para o painel (site) nem para outro aparelho.
+// para o painel (site) nem para outro aparelho. A ordem de reset do terminal
+// (npm run resetar) e o botao "Apagar dados deste aparelho" apagam os
+// lembretes (e, com --tudo, o nome e a aparencia): apagarDados.
 
 import 'dart:convert';
 
@@ -191,6 +193,41 @@ class PreferenciasLocais extends ChangeNotifier {
     notifyListeners();
     if (anterior.avisoPendente(relogio()) != null) await aviso.cancelar(idDoAviso(chave));
     await _salvar();
+  }
+
+  // -------------------------------------------------------------------------
+  // Apagar (reset para uma apresentacao)
+  // -------------------------------------------------------------------------
+
+  int _geracao = 0;
+
+  /// Muda a cada [apagarDados]: campos de texto que guardam uma copia do
+  /// valor (o "Nome da criança" em Ajustes) usam como chave e recomecam.
+  int get geracao => _geracao;
+
+  /// Apaga os lembretes e cancela os avisos agendados deles. Com
+  /// `manterPreferencias` false, tambem volta o nome da crianca e a
+  /// aparencia ao padrao. Chamado pela ordem do terminal (npm run resetar,
+  /// via MqttService) e pelo botao "Apagar dados deste aparelho".
+  Future<void> apagarDados({required bool manterPreferencias}) async {
+    final chaves = _lembretes.keys.toList();
+    _lembretes.clear();
+    if (!manterPreferencias) {
+      _nome = '';
+      _aparencia = Aparencia.sistema;
+    }
+    _geracao++;
+    notifyListeners();
+    // Cancela todos (nao so os pendentes): um aviso agendado nao fica para
+    // tras por diferenca de relogio.
+    for (final chave in chaves) {
+      await aviso.cancelar(idDoAviso(chave));
+    }
+    await prefs.remove(_chaveLembretes);
+    if (!manterPreferencias) {
+      await prefs.remove(_chaveNome);
+      await prefs.remove(_chaveAparencia);
+    }
   }
 
   // -------------------------------------------------------------------------

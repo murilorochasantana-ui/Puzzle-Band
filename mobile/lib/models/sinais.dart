@@ -205,6 +205,12 @@ class JanelaDeSinais {
     _amostras.add(AmostraSinais.de(estado, agora));
     return true;
   }
+
+  /// Esvazia a janela (reset para uma nova apresentacao).
+  void limpar() {
+    _amostras.clear();
+    _ultimaLeitura = null;
+  }
 }
 
 /// Atual, minima, maxima e media de uma metrica (null sem nenhum valor).

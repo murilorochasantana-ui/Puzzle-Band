@@ -65,7 +65,7 @@ escuro: [design-app.md](design-app.md).
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
 | Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com o painel parado ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
 | Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. Avisa quando está mostrando a cópia salva. |
-| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), **Aparência** (Seguir o sistema, Claro ou Escuro), versão e licenças. |
+| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), **Aparência** (Seguir o sistema, Claro ou Escuro), **Apagar dados deste aparelho** (ver [Apagar os dados](#apagar-os-dados-reset-para-uma-apresentação)), versão e licenças. |
 
 O app respeita a fonte ampliada e o "Remover animações" do Android. Detalhes
 em [design-app.md](design-app.md).
@@ -185,6 +185,40 @@ sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
 - Consequência: limpar os dados do app, desinstalar ou trocar de celular
   apaga os lembretes, e outro cuidador não vê os lembretes deste. A
   notificação do aviso não leva o nome da criança.
+
+### Apagar os dados (reset para uma apresentação)
+
+Há três jeitos de apagar o que o app guarda, do mais completo ao mais local:
+
+- **Pelo terminal, sem mexer no celular:** `npm run resetar` em
+  `simulator/`, com a pulseira desligada (passo a passo no README, "Resetar
+  para uma apresentação"). O app assina `puzzleband/<id>/comando`. Ao receber
+  a ordem `resetar` com um `id` que ainda não aplicou:
+  - apaga a cópia do histórico, os episódios já notificados, os alertas
+    recebidos, os lembretes (e cancela os avisos agendados deles) e o buffer
+    dos gráficos;
+  - com `manter_preferencias: false` (`npm run resetar -- --tudo`), também
+    volta ao padrão o nome da criança, a aparência e os alertas sonoros;
+  - mostra o SnackBar "Dados apagados pelo painel para uma nova
+    apresentação." e confirma em `comando/resposta`, e o terminal mostra
+    "App limpo".
+
+  O id aplicado fica salvo (`reset_aplicado_id`). Como a ordem é retida, ela
+  chega a cada conexão, mas só é aplicada uma vez. Com o app fechado durante
+  o reset, ele aplica quando abrir. Detalhes em
+  [mqtt.md](mqtt.md#ordem-de-reset-npm-run-resetar).
+- **Pelo app:** **Ajustes → Dados deste aparelho → Apagar dados deste
+  aparelho**. Faz a mesma limpeza local, depois de uma confirmação na tela.
+  A opção "Também voltar as preferências ao padrão" vem desmarcada. Não
+  publica nada, então os episódios guardados na pulseira voltam a aparecer
+  quando ela publicar de novo.
+- **Pelo cabo:** `adb shell pm clear br.unimar.puzzleband` (o
+  `applicationId` de `android/app/build.gradle.kts`). Apaga tudo, como uma
+  reinstalação.
+
+O app só aceita um `historico` com `"origem": "pulseira"`. Uma lista de
+outra origem, como a de uma aba antiga do site que republicava o
+`localStorage`, não substitui a cópia salva.
 
 ### Calendário do Histórico
 
@@ -397,8 +431,8 @@ rede.
   inteiro. O app guarda as leituras dos últimos 5 minutos só na memória,
   para o gráfico: fechar o app apaga essas leituras.
 - **Lembretes só no celular.** Por decisão de privacidade, eles não têm
-  cópia na pulseira, no site nem no broker: limpar os dados do app ou trocar de celular
-  apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).
+  cópia na pulseira, no site nem no broker: limpar os dados do app (ou o
+  `npm run resetar`) ou trocar de celular apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).
 - Só Android. A pasta `ios/` veio do projeto original e não foi configurada
   (o bundle id ainda é o de exemplo, e as notificações não foram ajustadas
   para iOS).

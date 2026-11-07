@@ -80,8 +80,9 @@ function App() {
     const sent = link.publishEvaluation({ episodioId: id, avaliacao, observacao });
     if (sent) setPending((prev) => ({ ...prev, [id]: { at: Date.now(), historyTs: history?.timestamp ?? null } }));
   };
+  const resetAt = link.resetNotice?.at ?? 0; // avaliacao enviada antes do reset nao conta mais
   const pendingIds = Object.fromEntries(Object.entries(pending)
-    .filter(([, p]) => p.historyTs === (history?.timestamp ?? null) && now - p.at < PENDING_MS)
+    .filter(([, p]) => p.historyTs === (history?.timestamp ?? null) && now - p.at < PENDING_MS && p.at > resetAt)
     .map(([id]) => [id, true]));
 
   const current = readings[readings.length - 1];
@@ -111,6 +112,19 @@ function App() {
         appStatus={link.appStatus}
         error={link.error}
       />
+
+      {link.resetNotice && (
+        <div className="reset-notice" role="status">
+          <p>
+            <strong>Dados apagados pelo terminal para uma nova apresentação</strong>
+            {' '}(npm run resetar, às {formatClock(new Date(link.resetNotice.at).toISOString())}). A tela foi limpa:
+            daqui em diante aparece só o que a pulseira publicar.
+          </p>
+          <button className="sim-controls__reset" type="button" onClick={link.dismissResetNotice}>
+            Fechar aviso
+          </button>
+        </div>
+      )}
 
       <AlertBanner
         tier={tier}

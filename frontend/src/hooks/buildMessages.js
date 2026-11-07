@@ -2,10 +2,11 @@
 // em Node):
 //   - a pulseira (simulator/borda.js) publica estado, alertas e historico
 //     para o app do cuidador (e para o painel do site, que so mostra);
-//   - o painel do site publica controle e avaliacao para a pulseira.
+//   - o painel do site publica controle e avaliacao para a pulseira;
+//   - o terminal (simulator/resetar.js) publica a ordem de reset em comando.
 // Quem publica decide QUANDO; o QUE vai em cada mensagem fica aqui.
 
-import { BAND_ORIGIN, SITE_ORIGIN } from './parseMessages.js';
+import { BAND_ORIGIN, RESET_ACTION, SITE_ORIGIN } from './parseMessages.js';
 import { CONTROL_LIMITS } from '../model/simulate.js';
 
 export const STATE_INTERVAL_MS = 1000; // estado: 1 vez por segundo
@@ -27,6 +28,8 @@ export function topicsFor(childId) {
     ack: `${base}/ack`,
     controle: `${base}/controle`,
     appStatus: `${base}/app/status`,
+    comando: `${base}/comando`,
+    comandoResposta: `${base}/comando/resposta`,
   };
 }
 
@@ -189,4 +192,16 @@ export function buildEvaluationMessage({ episodioId, avaliacao, observacao, time
   message.origem = SITE_ORIGIN;
   message.timestamp = timestamp;
   return message;
+}
+
+// ---------------------------------------------------------------------------
+// Terminal (npm run resetar, simulator/resetar.js) -> pulseira, app e site
+// ---------------------------------------------------------------------------
+
+// puzzleband/<id>/comando (QoS 1, retain): ordem de apagar os dados antes de
+// uma apresentacao. Retida: quem estava desligado aplica ao conectar; cada
+// um guarda o `id` aplicado para nao repetir. `manterPreferencias` false
+// (npm run resetar -- --tudo) tambem volta as preferencias do app ao padrao.
+export function buildResetCommand({ id, timestamp, manterPreferencias }) {
+  return { acao: RESET_ACTION, id, timestamp, manter_preferencias: Boolean(manterPreferencias) };
 }

@@ -1,6 +1,8 @@
 // Testes de tela: o que o cuidador ve e consegue fazer, e as regras de
 // acessibilidade (leitor de tela, alvos de toque, contraste, fonte ampliada,
 // movimento). Os cenarios estao em test/apoio/cenarios.dart.
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -11,6 +13,8 @@ import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/login_screen.dart';
 import 'package:puzzleband/services/app_scope.dart';
+import 'package:puzzleband/services/mqtt_service.dart';
+import 'package:puzzleband/services/notification_service.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
 import 'package:puzzleband/utils/formatters.dart';
@@ -29,6 +33,39 @@ import 'package:syncfusion_flutter_charts/charts.dart';
 import 'apoio/cenarios.dart';
 import 'apoio/fontes.dart';
 import 'apoio/servico_falso.dart';
+
+/// MqttService de verdade (historico, ordem de reset, limpeza), so com o
+/// estado ao vivo fixo: o que as telas mostram vem da lista real.
+class ServicoComLimpeza extends MqttService {
+  ServicoComLimpeza({required super.prefs, required this.estadoFixo})
+      : super(config: configSemSenha, notificacoes: NotificationService());
+
+  final EstadoAtual estadoFixo;
+
+  /// Faz o papel do aoApagarDados (PreferenciasLocais.apagarDados).
+  ApagarDadosLocais? limpezaExtra;
+
+  @override
+  BrokerStatus get brokerStatus => BrokerStatus.conectado;
+  @override
+  String? get ultimoErro => null;
+  @override
+  Presenca get pulseira => Presenca.online;
+  @override
+  EstadoAtual? get estado => estadoFixo;
+  @override
+  bool get estadoAoVivo => true;
+
+  @override
+  Future<void> apagarDadosLocais({required bool manterPreferencias}) async {
+    await super.apagarDadosLocais(manterPreferencias: manterPreferencias);
+    await limpezaExtra?.call(manterPreferencias: manterPreferencias);
+  }
+}
+
+/// Historico como a pulseira publica (origem "pulseira").
+String mensagemDaPulseira(List<Episodio> episodios) =>
+    jsonEncode({'origem': 'pulseira', 'episodios': [for (final e in episodios) e.toJson()]});
 
 /// Rola ate [alvo] e toca nele (o que fica abaixo da tela nao recebe toque).
 Future<void> tocarVisivel(WidgetTester tester, Finder alvo) async {
@@ -950,6 +987,119 @@ void main() {
       await mostrar(tester, await erroDeConfiguracao(), aba: 3, altura: 1100);
       expect(find.text('Servidor: não configurado'), findsOneWidget);
       expect(find.textContaining('Configuração ausente: MQTT_PASS'), findsOneWidget);
+    });
+
+    testWidgets('"Apagar dados deste aparelho": pede confirmação; cancelar não apaga; as preferências só com a opção marcada',
+        (tester) async {
+      final servico = await calmo();
+      await mostrar(tester, servico, aba: 3, altura: 1400);
+      final botao = find.byKey(const ValueKey('apagar-dados'));
+      expect(find.text('Dados deste aparelho'), findsOneWidget);
+
+      // Cancelar: nada muda
+      await tocarVisivel(tester, botao);
+      expect(find.text('Apagar dados deste aparelho?'), findsOneWidget);
+      expect(find.textContaining('Não dá para desfazer'), findsOneWidget);
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      expect(servico.apagamentos, isEmpty);
+      expect(servico.episodios, isNotEmpty);
+
+      // Apagar (padrão): mantém as preferências
+      await tocarVisivel(tester, botao);
+      await tester.tap(find.byKey(const ValueKey('confirmar-apagar')));
+      await tester.pumpAndSettle();
+      expect(servico.apagamentos, [true]);
+      expect(servico.episodios, isEmpty);
+      expect(find.text('Dados deste aparelho apagados.'), findsOneWidget);
+
+      // Com a opção marcada: também as preferências
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tocarVisivel(tester, botao);
+      await tester.tap(find.byKey(const ValueKey('apagar-preferencias')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('confirmar-apagar')));
+      await tester.pumpAndSettle();
+      expect(servico.apagamentos, [true, false]);
+    });
+
+    testWidgets('"Apagar dados" com preferências: o campo do nome recomeça vazio e o nome volta ao CHILD_ID', (tester) async {
+      final servico = ServicoComLimpeza(prefs: (await calmo()).prefs, estadoFixo: (await calmo()).estadoAtual!);
+      final preferencias = preferenciasDe(servico);
+      servico.limpezaExtra = preferencias.apagarDados;
+      await preferencias.definirNomeCrianca('Ana');
+      await mostrar(tester, servico, aba: 3, altura: 1400, preferencias: preferencias);
+      expect(find.widgetWithText(TextField, 'Ana'), findsOneWidget);
+
+      await tocarVisivel(tester, find.byKey(const ValueKey('apagar-dados')));
+      await tester.tap(find.byKey(const ValueKey('apagar-preferencias')));
+      await tester.pump();
+      await tester.tap(find.byKey(const ValueKey('confirmar-apagar')));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(TextField, 'Ana'), findsNothing, reason: 'o campo recomeça vazio');
+      expect(preferencias.nomeCrianca, 'C01');
+    });
+  });
+
+  group('Histórico vazio da pulseira e ordem de reset (serviço real)', () {
+    testWidgets('lista vazia da pulseira: calendário, "Hoje", 7 dias e último episódio ficam vazios', (tester) async {
+      final base = await calmo();
+      final servico = ServicoComLimpeza(prefs: base.prefs, estadoFixo: base.estadoAtual!);
+      await servico.iniciar();
+      // Cópia antiga (de antes do --limpar-historico), como a que fica salva no celular
+      servico.tratarMensagem('puzzleband/C01/historico', mensagemDaPulseira(base.episodios));
+
+      await mostrar(tester, servico, aba: 2);
+      expect(find.byType(CalendarioCrises), findsOneWidget);
+      await mostrar(tester, servico);
+      expect(find.text('Hoje: 2 episódios'), findsOneWidget);
+      expect(find.textContaining('Último episódio:'), findsOneWidget);
+
+      // Chega o histórico vazio publicado pela pulseira
+      expect(servico.tratarMensagem('puzzleband/C01/historico', mensagemDaPulseira(const [])), isTrue);
+      await tester.pumpAndSettle();
+      expect(find.text('Hoje: nenhum episódio'), findsOneWidget);
+      expect(find.text('Nenhum episódio registrado ainda.'), findsOneWidget);
+      await mostrar(tester, servico, aba: 2);
+      expect(find.byType(CalendarioCrises), findsNothing);
+      expect(find.text('Nenhum episódio ainda'), findsOneWidget);
+      await mostrar(tester, servico, aba: 1);
+      expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
+
+      // Uma aba antiga do site republicando a lista velha não traz os episódios de volta
+      final doSite = jsonEncode({'origem': 'site', 'episodios': [for (final e in base.episodios) e.toJson()]});
+      expect(servico.tratarMensagem('puzzleband/C01/historico', doSite), isFalse);
+      await tester.pumpAndSettle();
+      expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
+    });
+
+    testWidgets('ordem de reset no app aberto: SnackBar discreto "Dados apagados pelo painel..."', (tester) async {
+      final servico = await calmo();
+      tester.view.physicalSize = const Size(393 * 2, 852 * 2);
+      tester.view.devicePixelRatio = 2;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(AppScope(
+        service: servico,
+        child: PreferenciasScope(preferencias: preferenciasDe(servico), child: const PuzzleBandApp(rotaInicial: '/historico')),
+      ));
+      await carregarImagens(tester);
+      await tester.pumpAndSettle();
+
+      servico.tratarMensagem('puzzleband/C01/comando', '{"acao":"resetar","id":"r1","manter_preferencias":true}');
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Dados apagados pelo painel para uma nova apresentação.'), findsOneWidget);
+      expect(servico.apagamentos, [true]);
+      expect(servico.resetAplicado, 'r1');
+
+      // a mesma ordem (retida) numa reconexão: nada de novo
+      await tester.pump(const Duration(seconds: 7));
+      await tester.pumpAndSettle();
+      servico.tratarMensagem('puzzleband/C01/comando', '{"acao":"resetar","id":"r1"}');
+      await tester.pump(const Duration(milliseconds: 500));
+      expect(find.text('Dados apagados pelo painel para uma nova apresentação.'), findsNothing);
+      expect(servico.apagamentos, [true]);
     });
   });
 

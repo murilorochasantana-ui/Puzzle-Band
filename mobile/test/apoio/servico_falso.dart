@@ -87,6 +87,18 @@ class ServicoFalso extends MqttService {
     sonoros = ligado;
     notifyListeners();
   }
+
+  /// `manterPreferencias` de cada "Apagar dados deste aparelho".
+  final apagamentos = <bool>[];
+
+  @override
+  Future<void> apagarDadosLocais({required bool manterPreferencias}) async {
+    apagamentos.add(manterPreferencias);
+    episodios = const [];
+    sinais = const [];
+    if (!manterPreferencias) sonoros = true;
+    notifyListeners();
+  }
 }
 
 /// Aviso de lembrete sem plugin: guarda o que seria agendado.

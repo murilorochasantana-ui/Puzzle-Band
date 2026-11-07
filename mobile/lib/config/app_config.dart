@@ -57,7 +57,9 @@ class Topics {
         status = config.topic('status'),
         avaliacao = config.topic('avaliacao'),
         ack = config.topic('ack'),
-        appStatus = config.topic('app/status');
+        appStatus = config.topic('app/status'),
+        comando = config.topic('comando'),
+        comandoResposta = config.topic('comando/resposta');
 
   final String estado;
   final String alertas;
@@ -66,4 +68,10 @@ class Topics {
   final String avaliacao;
   final String ack;
   final String appStatus;
+
+  /// Ordem do terminal (npm run resetar): o app assina.
+  final String comando;
+
+  /// Confirmacao do app para o terminal: o app publica.
+  final String comandoResposta;
 }

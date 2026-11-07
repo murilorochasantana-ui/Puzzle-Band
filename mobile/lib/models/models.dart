@@ -349,6 +349,38 @@ List<Episodio>? parseHistorico(String text) {
   return episodios;
 }
 
+/// So a pulseira publica o historico (`"origem": "pulseira"`). Uma lista de
+/// outra origem (ex.: uma aba antiga do site, de quando ele era o
+/// "servidor", republicando o localStorage) e ignorada: ela sobrescreveria o
+/// historico da pulseira com episodios velhos.
+bool historicoDaPulseira(String text) => decodeObject(text)?['origem'] == 'pulseira';
+
+/// Ordem do terminal em `puzzleband/<id>/comando` (npm run resetar):
+/// `{"acao": "resetar", "id", "timestamp", "manter_preferencias"}`. Sem
+/// `manter_preferencias` (ou com valor que nao e booleano), vale true.
+class ComandoResetar {
+  const ComandoResetar({required this.id, required this.manterPreferencias, this.timestamp});
+
+  final String id;
+  final bool manterPreferencias;
+  final DateTime? timestamp;
+
+  static ComandoResetar? tryParse(String text) {
+    final m = decodeObject(text);
+    if (m == null || m['acao'] != 'resetar') return null;
+    final id = _nonEmpty(m['id'])?.trim();
+    if (id == null) return null;
+    return ComandoResetar(
+      id: id,
+      manterPreferencias: m['manter_preferencias'] != false,
+      timestamp: _date(m['timestamp']),
+    );
+  }
+}
+
+/// Confirmacao em `puzzleband/<id>/comando/resposta`.
+String respostaDoComando(String id) => jsonEncode({'id': id, 'status': 'aplicado'});
+
 /// Status de presenca (pulseira e app): texto puro "online" | "offline".
 bool? parseOnline(String text) {
   final v = text.trim().toLowerCase();

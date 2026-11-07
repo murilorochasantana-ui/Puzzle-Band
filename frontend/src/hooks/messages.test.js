@@ -1,18 +1,22 @@
 // Testes do protocolo MQTT (node:test). Rode com: npm test
 //   pulseira -> app e painel: estado, alertas, historico (origem "pulseira")
 //   app e painel -> pulseira: avaliacao, ack, controle
+//   terminal (npm run resetar) -> pulseira, app e site: comando (e a resposta do app)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   BAND_ORIGIN,
+  RESET_ACTION,
   SITE_ORIGIN,
   parseAck,
   parseAlert,
   parseAppStatus,
   parseBandStatus,
+  parseCommandResponse,
   parseControl,
   parseEvaluation,
   parseHistory,
+  parseResetCommand,
   parseState,
 } from './parseMessages.js';
 import {
@@ -22,6 +26,7 @@ import {
   buildControlMessage,
   buildEvaluationMessage,
   buildHistoryMessage,
+  buildResetCommand,
   buildStateMessage,
   historyEntryToEpisode,
   historySignature,
@@ -72,6 +77,46 @@ test('topicos de uma crianca', () => {
   assert.equal(t.ack, 'puzzleband/C01/ack');
   assert.equal(t.controle, 'puzzleband/C01/controle');
   assert.equal(t.appStatus, 'puzzleband/C01/app/status');
+  assert.equal(t.comando, 'puzzleband/C01/comando');
+  assert.equal(t.comandoResposta, 'puzzleband/C01/comando/resposta');
+});
+
+// ---------- terminal (npm run resetar) -> pulseira, app e site ----------
+
+test('comando resetar: ida e volta, com e sem manter as preferencias', () => {
+  const ts = '2026-11-07T14:00:00.000Z';
+  const manter = buildResetCommand({ id: 'a1b2', timestamp: ts, manterPreferencias: true });
+  assert.deepEqual(manter, { acao: RESET_ACTION, id: 'a1b2', timestamp: ts, manter_preferencias: true });
+  assert.deepEqual(parseResetCommand(JSON.stringify(manter)), manter);
+
+  const tudo = parseResetCommand(JSON.stringify(buildResetCommand({ id: 'c3', timestamp: ts, manterPreferencias: false })));
+  assert.equal(tudo.manter_preferencias, false);
+});
+
+test('comando resetar: invalido vira null; sem manter_preferencias vale true', () => {
+  assert.equal(parseResetCommand(''), null, 'retido apagado (payload vazio)');
+  assert.equal(parseResetCommand('quebrado'), null);
+  assert.equal(parseResetCommand('{"acao":"reiniciar","id":"x"}'), null, 'outra acao');
+  assert.equal(parseResetCommand('{"acao":"resetar"}'), null, 'sem id');
+  assert.equal(parseResetCommand('{"acao":"resetar","id":"  "}'), null);
+  const semCampo = parseResetCommand('{"acao":"resetar","id":" x ","timestamp":"ontem"}');
+  assert.deepEqual(semCampo, { acao: 'resetar', id: 'x', timestamp: null, manter_preferencias: true });
+  assert.equal(parseResetCommand('{"acao":"resetar","id":"x","manter_preferencias":"nao"}').manter_preferencias, true);
+});
+
+test('resposta do app ao comando', () => {
+  assert.deepEqual(parseCommandResponse('{"id":"a1b2","status":"aplicado"}'), { id: 'a1b2', status: 'aplicado' });
+  assert.equal(parseCommandResponse('{"status":"aplicado"}'), null);
+  assert.equal(parseCommandResponse('{"id":"a1b2"}'), null);
+  assert.equal(parseCommandResponse(''), null);
+});
+
+test('historico: a origem vem junto (so a da pulseira vale para o app e para a recuperacao)', () => {
+  const daPulseira = parseHistory(JSON.stringify(buildHistoryMessage([], { childId: 'C01', timestamp: '2026-11-07T14:00:00.000Z' })));
+  assert.equal(daPulseira.origem, BAND_ORIGIN);
+  assert.deepEqual(daPulseira.episodios, []);
+  assert.equal(parseHistory('{"origem":"site","episodios":[]}').origem, SITE_ORIGIN);
+  assert.equal(parseHistory('{"episodios":[]}').origem, null);
 });
 
 // ---------- app e painel -> pulseira ----------

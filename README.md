@@ -125,7 +125,10 @@ puzzle-band/
 ├── simulator/              # a pulseira (ESP32 simulado), com processamento na borda
 │   ├── index.js             # linha de comando: cenários (loop, --ciclos, --seed), modo controle, broker
 │   ├── borda.js             # processamento: modelo + episódios + gatilho; publica estado/alertas/historico
-│   ├── historico.js         # histórico em data/historico_<id>.json (gravação atômica)
+│   ├── historico.js         # histórico em data/historico_<id>.json (gravação atômica) e último reset aplicado
+│   ├── resetar.js           # npm run resetar: apaga tudo antes de uma apresentação (pulseira, broker, app, site)
+│   ├── trava.js             # data/pulseira_<id>.lock: o reset recusa apagar com a pulseira rodando
+│   ├── config.js            # leitura do simulator/.env (pulseira e reset)
 │   ├── controle.js          # modo controle: segue os valores do painel, com rampa de 20 s
 │   ├── scenarios.js         # cenários, variação entre ciclos e eventos_aleatorios
 │   ├── gabarito.js          # gabarito dos testes: logs/eventos_<data-hora>.csv e .json
@@ -213,7 +216,8 @@ npm test          # testes automatizados (node:test, sem dependências extras)
 histórico de episódios, das mensagens MQTT e os cenários de ponta a ponta com
 o modelo real. `npm test` dentro de `simulator/` testa a pulseira sem broker
 (publica estado, alertas e histórico sem o site, aplica ack e avaliação,
-recupera o histórico do arquivo e da mensagem retida, modo controle). Pra ver
+recupera o histórico do arquivo e da mensagem retida, modo controle, ordem de
+reset) e o `npm run resetar` com um cliente MQTT falso. Pra ver
 o relatório completo dos cenários (quantas vezes o gatilho certo foi
 identificado):
 
@@ -303,13 +307,22 @@ A pasta `simulator/` faz o papel do ESP32. A cada segundo ela:
 
 Ela assina `ack` e `avaliacao` (e `controle` no modo controle) e aplica no
 histórico o "Estou ciente" e a avaliação que chegam do app ou do painel.
+Também assina `comando`, a ordem de reset do `npm run resetar` (ver
+[Resetar para uma apresentação](#resetar-para-uma-apresentação)).
 
 **Histórico local.** Os episódios ficam em `simulator/data/historico_<id>.json`
 (fora do Git). Ao iniciar sem esse arquivo, a pulseira recupera o histórico da
-mensagem retida em `historico`. Ao encerrar com Ctrl+C, fecha o episódio
-aberto como "interrompido" e publica o histórico final. Para começar do zero:
-`npm start -- --limpar-historico` (apaga a lista e publica a lista vazia,
-também para o app).
+mensagem retida em `historico`, mas só se ela tiver sido publicada pela
+própria pulseira (`origem: "pulseira"`). Ao encerrar com Ctrl+C, fecha o
+episódio aberto como "interrompido" e publica o histórico final. Para começar
+do zero:
+- `npm start -- --limpar-historico`: apaga a lista e publica a lista vazia,
+  também para o app;
+- `npm run resetar`: apaga também os dados do app e do site, com a pulseira
+  desligada.
+
+Enquanto roda, a pulseira mantém a trava `data/pulseira_<id>.lock`, que é
+removida ao encerrar.
 
 Configuração (uma vez), dentro de `simulator/`:
 
@@ -333,7 +346,8 @@ npm run crise-ruido -- --uma-vez --idade 10           # só o roteiro nominal, u
 npm run eventos-aleatorios -- --ciclos 20 --seed 42   # 20 eventos sorteados (teste do TCC)
 npm run demo -- --ciclos 1                            # sequência da apresentação (10,5 min + pausa final)
 npm run controle                                      # modo controle: segue o "Controle da pulseira" do painel
-npm test                                              # testes da pulseira (sem broker)
+npm run resetar                                       # apaga tudo antes de uma apresentação (pulseira desligada)
+npm test                                              # testes da pulseira e do reset (sem broker)
 ```
 
 Cada leitura impressa no terminal traz o nível calculado na pulseira
@@ -401,7 +415,7 @@ Cada leitura continua com o nome da fase (trecho real de
 | `--seed N` | Semente do sorteio e do ruído dos sensores: a mesma seed repete a mesma sequência de ciclos ou eventos e as mesmas leituras. Sem `--seed`, uma é sorteada e impressa no início |
 | `--idade A` | Idade da criança, de 5 a 12 anos (padrão 8) |
 | `--duracao S` | Para depois de S segundos, em qualquer modo |
-| `--limpar-historico` | Começa com o histórico de episódios vazio (apaga a lista do `data/historico_<id>.json` e publica a lista vazia) |
+| `--limpar-historico` | Começa com o histórico de episódios vazio (apaga a lista do `data/historico_<id>.json` e publica a lista vazia). Para apagar também o app e o site: `npm run resetar` |
 
 O `barulho_sem_crise` (e o `ambiente_sem_crise` do `eventos_aleatorios`) usa
 pausa de pelo menos **300 s** depois dele. Como a criança fica calma, as
@@ -531,7 +545,10 @@ Emulador, celular físico (depuração USB), telas, notificações e limitaçõe
 ## Roteiro de demonstração (pulseira + app + painel)
 
 Antes: `simulator/.env`, `frontend/.env` e `mobile/env.json` preenchidos,
-internet no computador e no celular, e notificações do app permitidas.
+internet no computador e no celular, e notificações do app permitidas. Para
+começar sem episódios nem lembretes de demonstrações anteriores, rode o
+[reset](#resetar-para-uma-apresentação) com a pulseira desligada e o app
+aberto.
 
 Para conferir a troca de mensagens sem o celular, use
 `npm run verificar-app` em `simulator/`. Ele faz o papel do app pelo
@@ -578,6 +595,89 @@ terminal (ver [docs/mqtt.md](docs/mqtt.md#verificar-pelo-terminal-verificar-app)
      aberto.
    - Ctrl+C na pulseira: "Pulseira: offline" no app.
 
+## Resetar para uma apresentação
+
+`npm run resetar` (em `simulator/`) apaga os episódios e os dados de
+demonstrações anteriores na pulseira, no broker, no app do cuidador e no site.
+Não é preciso mexer no celular. Usa as credenciais do `simulator/.env`.
+
+**Ordem certa:**
+
+1. **Encerre a pulseira** com Ctrl+C no terminal dela. Com a pulseira
+   rodando, o reset recusa, porque ela regravaria o arquivo e republicaria o
+   histórico. Ele confere a trava `data/pulseira_<id>.lock` e o `status`
+   retido.
+2. **Deixe o app aberto no celular**, conectado, para ver a confirmação. Se o
+   app estiver fechado, ele aplica o reset quando abrir, porque a ordem fica
+   guardada no broker.
+3. Rode o reset:
+
+   ```bash
+   cd simulator
+   npm run resetar -- --simular   # opcional: só mostra o que vai apagar
+   npm run resetar                # mostra, pede para digitar RESETAR e apaga
+   ```
+
+4. Espere a mensagem **"App limpo"** (até 30 s). No celular aparece "Dados
+   apagados pelo painel para uma nova apresentação.". Se aparecer "O app não
+   respondeu", abra o app: ele aplica ao conectar.
+5. **Inicie a pulseira** para a apresentação, por exemplo
+   `npm run demo -- --ciclos 1` ou `npm run controle`. O site, se estiver
+   aberto, limpa a tela sozinho.
+
+**O que é apagado:**
+
+| Onde | Sempre | Também com `--tudo` |
+|---|---|---|
+| Pulseira (`simulator/`) | `data/historico_<id>.json` (e as cópias `.corrompido-*` e `.tmp`) | `logs/` (gabaritos) |
+| Broker | as mensagens retidas `estado`, `historico`, `status` e `app/status`. Depois, `historico` volta retido com a lista vazia e a ordem fica retida em `comando` | — |
+| App do cuidador | cópia do histórico, episódios já notificados, alertas recebidos, lembretes (e os avisos agendados deles) e gráficos | preferências: nome da criança, aparência e alertas sonoros voltam ao padrão |
+| Site (painel) | o que está na tela | — |
+
+**Opções:**
+
+| Opção | O que faz |
+|---|---|
+| `--simular` | Só mostra o que seria apagado (e quantos episódios há no broker). Não apaga nem publica nada |
+| `--sim` | Não pede para digitar `RESETAR` |
+| `--tudo` | Também apaga os logs/gabaritos e volta as preferências do app ao padrão (`manter_preferencias: false`) |
+| `--id C05` | Outra criança (padrão: `CHILD_ID` do `simulator/.env`) |
+| `--forcar` | Não confere se a pulseira está rodando. Útil se a trava ou o `status` ficaram de uma queda. Se ela estiver rodando de verdade, também aplica a ordem e republica a lista vazia |
+
+**Como funciona.** A ordem `{"acao": "resetar", "id": "<uuid>", ...}` vai
+retida em `puzzleband/<id>/comando`. Cada um a aplica **uma vez por id**:
+- a pulseira guarda o id em `data/reset_<id>.json`;
+- o app guarda o id no `shared_preferences`.
+
+Assim a ordem não é reaplicada a cada conexão. Ao iniciar, a pulseira espera
+até 5 s pela ordem retida: se o id for novo (por exemplo, o reset rodou em
+outro computador), ela começa com o histórico vazio. O app confirma em
+`comando/resposta`. Detalhes, QoS e a ACL necessária:
+[docs/mqtt.md](docs/mqtt.md#comando-terminal--pulseira-app-e-site). Se o
+broker recusar uma publicação (ACL), o reset para ali e diz o que já foi
+feito.
+
+**Sem terminal.** No app, **Ajustes → Dados deste aparelho → Apagar dados
+deste aparelho** faz a mesma limpeza, só no celular, com uma confirmação na
+tela. A opção "Também voltar as preferências ao padrão" vem desmarcada. Os
+episódios guardados na pulseira voltam a aparecer quando ela publicar de
+novo.
+
+**Pelo cabo (sem MQTT).** Com o celular em depuração USB e o `adb` do Android
+SDK (platform-tools):
+
+```bash
+adb shell pm clear br.unimar.puzzleband
+```
+
+O `applicationId` está em `mobile/android/app/build.gradle.kts`. O comando
+apaga **todos** os dados do app, como uma reinstalação: histórico, lembretes
+(o Android cancela os avisos agendados junto), preferências, o registro de
+que a permissão de notificação já foi pedida (o app volta a pedir na
+primeira abertura) e o id do último reset. Por isso, na próxima conexão o app aplica a ordem retida mais uma vez,
+sem efeito, porque já está vazio. O comando não mexe na pulseira nem no
+broker.
+
 ## Documentação
 
 Este é o README principal do projeto; os detalhes ficam em `docs/`:
@@ -589,7 +689,7 @@ Este é o README principal do projeto; os detalhes ficam em `docs/`:
 | [docs/historico.md](docs/historico.md) | Histórico de episódios: campos, avaliação do cuidador, CSV e privacidade (LGPD) |
 | [docs/testes.md](docs/testes.md) | Testes automatizados, cenários da pulseira × resultado esperado × obtido (uma vez e em loop), teste com eventos aleatórios, verificação com o app e roteiro da apresentação |
 | [docs/avaliacao_dataset.md](docs/avaliacao_dataset.md) | Avaliação do dataset sintético |
-| [docs/mqtt.md](docs/mqtt.md) | Processamento na borda (por quê), diagrama, tópicos (quem publica/assina, QoS, retain), formatos das mensagens (incluindo `controle`) e ACL sugerida |
+| [docs/mqtt.md](docs/mqtt.md) | Processamento na borda (por quê), diagrama, tópicos (quem publica/assina, QoS, retain), formatos das mensagens (incluindo `controle` e a ordem de reset em `comando`) e ACL sugerida |
 | [docs/app.md](docs/app.md) | App do cuidador: telas, `env.json`, como rodar (emulador e celular) e limitações |
 | [docs/design-app.md](docs/design-app.md) | Design do app (UX/UI): direção visual, paleta com contrastes, tipografia, acessibilidade para o TEA e antes/depois de cada tela |
 

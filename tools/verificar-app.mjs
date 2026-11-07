@@ -220,7 +220,8 @@ const EPISODIO = [
 const HISTORICO = [
   ['episodios', T.lista, { obrigatorio: true }],
   ['timestamp', T.iso],
-  ['origem', T.pulseira],
+  // o app descarta historico de outra origem (ex.: aba antiga do site)
+  ['origem', T.pulseira, { obrigatorio: true }],
 ];
 
 const resumoValor = (v) => {

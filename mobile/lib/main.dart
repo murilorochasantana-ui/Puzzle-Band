@@ -29,19 +29,22 @@ Future<void> main() async {
   final notificacoes = NotificationService();
   await notificacoes.init();
 
-  // Servico MQTT unico, vivo enquanto o processo do app estiver vivo
-  final config = AppConfig.fromEnvironment();
-  final service = MqttService(
-    config: config,
-    prefs: prefs,
-    notificacoes: notificacoes,
-  );
-
   // Nome da crianca e lembretes: so neste celular (nao vao para o MQTT)
+  final config = AppConfig.fromEnvironment();
   final preferencias = PreferenciasLocais(
     prefs: prefs,
     nomePadrao: config.childId,
     aviso: AvisoDeLembreteLocal(),
+  );
+
+  // Servico MQTT unico, vivo enquanto o processo do app estiver vivo. A
+  // ordem de reset (npm run resetar) tambem apaga os lembretes e, com
+  // --tudo, o nome e a aparencia (preferencias.apagarDados).
+  final service = MqttService(
+    config: config,
+    prefs: prefs,
+    notificacoes: notificacoes,
+    aoApagarDados: preferencias.apagarDados,
   );
 
   runApp(AppScope(
@@ -67,6 +70,11 @@ class PuzzleBandApp extends StatefulWidget {
 }
 
 class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserver {
+  // SnackBar de qualquer tela (o aviso do reset chega pelo servico, nao por
+  // um toque do cuidador)
+  final _mensageiro = GlobalKey<ScaffoldMessengerState>();
+  StreamSubscription<String>? _avisos;
+
   @override
   void initState() {
     super.initState();
@@ -74,7 +82,21 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _avisos ??= AppScope.read(context).avisos.listen(_mostrarAviso);
+  }
+
+  /// Discreto: some sozinho, sem acao.
+  void _mostrarAviso(String texto) {
+    _mensageiro.currentState
+      ?..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(texto), duration: const Duration(seconds: 6)));
+  }
+
+  @override
   void dispose() {
+    _avisos?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -97,6 +119,7 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
     return MaterialApp(
       title: 'Puzzle Band',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: _mensageiro,
       // Tema unico (lib/theme/): claro e escuro
       theme: AppTheme.claro(),
       darkTheme: AppTheme.escuro(),

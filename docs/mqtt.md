@@ -15,6 +15,11 @@ O Puzzle Band usa um broker MQTT na nuvem (**EMQX Cloud Serverless**,
   controle para o desenvolvedor: mostra tudo o que a pulseira publica e,
   pelo "Controle da pulseira", envia os valores-alvo dos sensores simulados.
   Não roda o modelo e não publica estado, alertas nem histórico.
+- **Terminal** (`npm run resetar`, `simulator/resetar.js`, com o usuário da
+  pulseira): antes de uma apresentação, limpa as mensagens retidas e publica
+  a ordem de reset em `comando`. A pulseira, o app e o site aplicam a ordem,
+  e o app confirma em `comando/resposta`. Ver
+  [Ordem de reset](#ordem-de-reset-npm-run-resetar).
 
 ```mermaid
 flowchart LR
@@ -22,13 +27,16 @@ flowchart LR
     B[("Broker EMQX Cloud<br/>8883 MQTT/TLS<br/>8084 WebSocket/TLS em /mqtt")]
     APP["App do cuidador<br/>mobile/ · usuário app"]
     SITE["Site = painel do desenvolvedor (opcional)<br/>frontend/ · usuário dashboard"]
+    RES["Terminal: npm run resetar<br/>simulator/resetar.js · usuário simulador"]
 
     PUL -- "leituras · status<br/>estado · alertas · historico" --> B
-    B -- "ack · avaliacao · controle" --> PUL
-    B -- "estado · alertas · historico · status" --> APP
-    APP -- "avaliacao · ack · app/status" --> B
-    B -- "leituras · status · app/status<br/>estado · alertas · historico" --> SITE
+    B -- "ack · avaliacao · controle · comando" --> PUL
+    B -- "estado · alertas · historico · status · comando" --> APP
+    APP -- "avaliacao · ack · app/status<br/>comando/resposta" --> B
+    B -- "leituras · status · app/status<br/>estado · alertas · historico · comando" --> SITE
     SITE -- "controle · avaliacao" --> B
+    RES -- "comando (retain)<br/>limpa os retidos" --> B
+    B -- "comando/resposta" --> RES
 ```
 
 Em resumo: pulseira → broker → app, e o app devolve a avaliação e o "Estou
@@ -80,17 +88,22 @@ aberto em algum navegador. Agora o processamento fica na própria pulseira
 | `puzzleband/<id>/ack` | app ("Estou ciente") | pulseira | 1 | não | Mesmo motivo da avaliação. |
 | `puzzleband/<id>/controle` | site ("Controle da pulseira") | pulseira, só no modo controle | 1 | não | Comando de desenvolvimento. Sem retain: a pulseira começa calma e o site reenvia os valores quando ela fica online. |
 | `puzzleband/<id>/app/status` | app: `online` ao conectar (e a cada 60 s), `offline` ao sair ou como Last Will | site | 1 | sim | Indicador "App do cuidador: conectado/desconectado" no site. |
+| `puzzleband/<id>/comando` | só o terminal (`npm run resetar`, usuário `simulador`) | pulseira, app, site | 1 | sim | A ordem de reset não pode se perder, e quem estiver desligado (o app fechado no celular, a pulseira em outro computador) recebe ao conectar. Cada um aplica **uma vez por `id`**, então a ordem retida não é reaplicada a cada conexão. |
+| `puzzleband/<id>/comando/resposta` | app, ao aplicar uma ordem | terminal (`npm run resetar`, espera até 30 s) | 1 | não | Confirmação "App limpo". Sem retain: só interessa a quem está esperando agora. |
 
 `status` e `app/status` são texto puro (`online` / `offline`). Os demais são
-JSON em UTF-8.
+JSON em UTF-8. Um payload **vazio** com retain apaga a mensagem retida no
+broker (é o que o `npm run resetar` faz). Quem está conectado recebe esse
+payload vazio, que é descartado como mensagem inválida.
 
 ## Formato das mensagens
 
 Os campos com `null` aparecem sempre (o tipo não muda). As datas estão em ISO
 8601 (UTC). O formato de `estado`, `alertas`, `historico`, `avaliacao` e
-`ack` é o mesmo de quando o site era o servidor. O app não precisou de
-nenhuma mudança. O único valor que mudou foi `origem`, que agora é
-`"pulseira"`; o app não lê esse campo.
+`ack` é o mesmo de quando o site era o servidor. O único valor que mudou foi
+`origem`, que agora é `"pulseira"`. O app e a recuperação da pulseira leem
+esse campo **só no `historico`**: uma lista com outra origem é ignorada (ver
+abaixo).
 
 ### `estado` (pulseira → app e site)
 
@@ -181,6 +194,16 @@ que o episódio está em andamento. `total` é quantos episódios a pulseira
 guarda (pode ser mais que os 50 enviados). O gatilho completo, com os sinais de
 ruído e luz, fica só no arquivo da pulseira (`simulator/data/historico_<id>.json`).
 
+**Só vale o histórico da pulseira.** O app só substitui a sua cópia, e a
+pulseira só recupera da mensagem retida, quando `origem` é `"pulseira"`.
+Mensagens de outra origem, ou sem o campo, são descartadas. Motivo: antes do
+processamento na borda, o site publicava `historico` retido a partir do
+`localStorage` do navegador, a cada (re)conexão. Uma aba antiga dessa versão
+aberta em algum lugar sobrescrevia a lista vazia da pulseira
+(`--limpar-historico`) com os episódios velhos, e o calendário do app voltava
+a mostrar dias com crises. A lista vazia (`"episodios": []`) da pulseira
+substitui a cópia do app normalmente.
+
 ### `avaliacao` (app e site → pulseira)
 
 ```json
@@ -245,6 +268,35 @@ roda com `npm run controle` (`--cenario controle`).
   último valor (`frontend/src/hooks/throttle.js`). Ele reenvia os valores
   atuais quando conecta ou quando a pulseira volta a ficar online.
 
+### `comando` (terminal → pulseira, app e site)
+
+```json
+{ "acao": "resetar", "id": "5f0c1e8a-2b7d-4c1e-9a3f-0d6b8e2f4a11", "timestamp": "2026-11-07T14:00:00.000Z", "manter_preferencias": true }
+```
+
+- `acao`: por enquanto só `resetar`. Outra ação, JSON inválido, `id` vazio ou
+  payload vazio são descartados.
+- `id`: UUID novo a cada `npm run resetar`. Quem aplica guarda o id e ignora
+  a mesma ordem depois. Ela é retida e chega de novo a cada conexão.
+- `manter_preferencias`: `true` (padrão) apaga só os dados. `false` (com
+  `npm run resetar -- --tudo`) também volta as preferências do app ao padrão:
+  nome da criança, aparência e alertas sonoros. Sem o campo, ou com um valor
+  que não é booleano, vale `true`.
+
+Validação: `parseResetCommand` (`frontend/src/hooks/parseMessages.js`, usado
+pela pulseira e pelo site) e `ComandoResetar.tryParse`
+(`mobile/lib/models/models.dart`).
+
+### `comando/resposta` (app → terminal)
+
+```json
+{ "id": "5f0c1e8a-2b7d-4c1e-9a3f-0d6b8e2f4a11", "status": "aplicado" }
+```
+
+O app publica a resposta depois de apagar os dados. Ela sai só quando o app
+aplica uma ordem nova; a mesma ordem recebida de novo não gera resposta. O
+terminal só aceita a resposta com o `id` que acabou de publicar.
+
 ### Validação
 
 Todos validam o que recebem. JSON malformado, campo obrigatório ausente ou
@@ -263,10 +315,17 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
    `alertas`. Ela só assina `historico` na partida, sem arquivo local, e
    cancela a assinatura assim que recebe a mensagem retida (ou depois de 5 s).
    O site não assina `controle` nem `avaliacao`. O app não assina
-   `avaliacao`, `ack` nem `app/status`. Ninguém usa curingas (`+`, `#`) nas
-   assinaturas.
+   `avaliacao`, `ack`, `app/status` nem `comando/resposta`. O terminal
+   publica `comando` e assina só `comando/resposta` (e, antes de apagar,
+   lê os retidos `status`, `historico` e `comando`). Ninguém usa curingas
+   (`+`, `#`) nas assinaturas.
 2. **Um só dono por tópico.** Só a pulseira publica `estado`, `alertas` e
-   `historico`. O site deixou de publicá-los.
+   `historico`. O site deixou de publicá-los, e o app e a recuperação da
+   pulseira descartam um `historico` sem `"origem": "pulseira"`. A
+   exceção é o terminal (`npm run resetar`), que usa o usuário da pulseira
+   para apagar os retidos e publicar a lista vazia com a pulseira
+   desligada. Só o terminal publica `comando`, e só o app publica
+   `comando/resposta`.
 3. **Origem nas mensagens.** A pulseira põe `"origem": "pulseira"` no que
    publica, o site põe `"site"` e o app põe `"app"`. A pulseira descarta
    `avaliacao` e `ack` com origem `pulseira`.
@@ -275,6 +334,11 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
    avaliado ou visto), e não a cada segundo de duração. Também republica a
    cada (re)conexão e depois de cada `ack`/`avaliacao`. Quem recebe o
    histórico não publica nada de volta.
+5. **A ordem retida não se repete.** `comando` é retido e chega a cada
+   conexão, mas cada um guarda o `id` aplicado. A pulseira e o app só
+   respondem a uma ordem com `id` novo (o app grava o id **antes** de apagar,
+   para uma repetição de QoS 1 no meio da limpeza não aplicar de novo). O
+   site só age na ordem que chega ao vivo.
 
 ## Histórico na pulseira
 
@@ -286,14 +350,71 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
   - Se o arquivo existir, a pulseira recupera dele.
   - Se não existir, assina `historico`, importa a mensagem retida (espera até
     5 s) e só então publica o seu histórico. Assim não apaga o retido com uma
-    lista vazia.
+    lista vazia. Só importa um histórico com `"origem": "pulseira"`.
+  - Assina `comando` e, antes de publicar o histórico, espera até 5 s pela
+    ordem de reset retida. Com um `id` diferente do último aplicado
+    (`data/reset_<id>.json`), começa com o histórico vazio, sem importar o
+    retido (ver [Ordem de reset](#ordem-de-reset-npm-run-resetar)).
   - Um episódio que estava "em andamento" quando a pulseira caiu vira
     "interrompido".
   - Um arquivo corrompido é guardado como `historico_<id>.corrompido-<data>.json`.
+  - Cria a trava `data/pulseira_<id>.lock` (com o PID), que é apagada ao
+    encerrar.
 - **Ao encerrar (Ctrl+C):** fecha o episódio aberto como "interrompido",
   grava o arquivo e publica o histórico final.
-- **Para começar do zero:** `npm start -- --limpar-historico`. Isso apaga a
-  lista do arquivo e publica a lista vazia, também para o app.
+- **Para começar do zero:**
+  - `npm start -- --limpar-historico` apaga a lista do arquivo e publica a
+    lista vazia, também para o app;
+  - `npm run resetar` apaga também os dados do app e do site.
+
+## Ordem de reset (`npm run resetar`)
+
+Passo a passo para a apresentação, opções e o que é apagado: README,
+"Resetar para uma apresentação". Aqui, o que cada parte faz com as
+mensagens:
+
+1. **Terminal** (`simulator/resetar.js`, credenciais do `simulator/.env`):
+   1. Recusa se a pulseira estiver rodando, a menos que use `--forcar`. Os
+      sinais são a trava `data/pulseira_<id>.lock` de um processo vivo e o
+      `status` retido igual a `online`. Uma trava de um processo morto é
+      ignorada.
+   2. Mostra o plano e pede para digitar `RESETAR`.
+   3. Apaga `data/historico_<id>.json` (e `logs/` com `--tudo`).
+   4. Publica payload vazio retido (QoS 1) em `estado`, `historico`, `status`
+      e `app/status`. Depois publica `historico` retido com a lista vazia
+      (`origem: "pulseira"`), e quem conectar depois recebe "sem episódios".
+   5. Assina `comando/resposta` e publica a ordem em `comando` (QoS 1,
+      retain).
+   6. Espera até 30 s e mostra "App limpo" ou "O app não respondeu: abra o
+      app no celular para ele aplicar o reset (a ordem fica guardada no
+      broker)".
+
+   Ele conecta com **MQTT 5** só para o broker informar o motivo de uma
+   recusa da ACL no PUBACK/SUBACK. Assim, um erro de permissão aparece no
+   terminal em vez de a mensagem sumir em silêncio.
+2. **Pulseira** (`simulator/borda.js`):
+   - na partida, aplica a ordem retida de `id` novo e começa vazia;
+   - com a pulseira rodando (`--forcar`), aplica do mesmo jeito: descarta o
+     episódio em andamento sem gravá-lo e republica a lista vazia. A memória
+     dos sinais continua, então, se o nível seguir alto, um episódio novo
+     começa na leitura seguinte.
+3. **App** (`mobile/lib/services/mqtt_service.dart`), com uma ordem de `id`
+   novo:
+   1. grava o id (`reset_aplicado_id`);
+   2. apaga a cópia do histórico, os episódios notificados, os alertas, o
+      "Estou ciente" local, o buffer dos gráficos e o estado;
+   3. apaga os lembretes e cancela os avisos agendados deles;
+   4. com `manter_preferencias: false`, também apaga o nome da criança, a
+      aparência e os alertas sonoros;
+   5. publica `comando/resposta` e mostra o SnackBar "Dados apagados pelo
+      painel para uma nova apresentação.";
+   6. assina de novo os tópicos: se o `historico` retido de depois do reset
+      chegou antes da ordem (app que estava fechado), o broker o reentrega.
+4. **Site** (`frontend/src/hooks/useBandLink.js`): só age na ordem **ao
+   vivo**. Limpa o que está em memória (leituras, estado, histórico, último
+   alerta e avaliações aguardando), mostra um aviso e assina de novo os
+   retidos. A ordem retida entregue ao conectar é ignorada, porque o que
+   acabou de chegar do broker já é posterior ao reset.
 
 ## Conexões e Last Will
 
@@ -302,6 +423,7 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
 | Pulseira (`simulator/index.js` + `simulator/borda.js`) | `mqtts://…:8883` | limpa | 15 s | `status` = `offline` (retain) | a cada 3 s; continua processando offline e republica o histórico ao reconectar |
 | Site (`frontend/src/hooks/useBandLink.js`) | `wss://…:8084/mqtt` | limpa | padrão do mqtt.js (60 s) | não tem | a cada 3 s; só publica conectado |
 | App (`mobile/lib/services/mqtt_service.dart`) | `mqtts://…:8883` | limpa | 60 s | `app/status` = `offline` (retain, QoS 1) | automática; se a 1ª conexão falhar, tenta de novo em 2, 5, 10, 20 e 30 s |
+| Terminal (`simulator/resetar.js`) | `mqtts://…:8883`, MQTT 5 | limpa | padrão do mqtt.js (60 s) | não tem | não tem: roda uma vez e encerra |
 
 - O broker publica o Last Will quando a conexão cai sem DISCONNECT: na hora,
   se o socket fecha (processo morto), ou após ~1,5 × keepalive sem resposta
@@ -310,9 +432,9 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
   broker derruba a sessão antiga em vez de manter duas. O app também
   republica `online` a cada 60 s, o que corrige um `offline` atrasado de uma
   conexão antiga.
-- Sessão limpa nos três: as assinaturas são refeitas a cada conexão. Os
-  tópicos com retain (`estado`, `historico`, `status`, `app/status`) entregam
-  o último valor logo após a assinatura.
+- Sessão limpa em todos: as assinaturas são refeitas a cada conexão. Os
+  tópicos com retain (`estado`, `historico`, `status`, `app/status`,
+  `comando`) entregam o último valor logo após a assinatura.
 - A pulseira só publica `estado` e `alertas` com o broker conectado: estado
   ou alerta velho entregue depois da reconexão seria enganoso. Os episódios
   detectados offline não se perdem, porque ficam no arquivo e vão no histórico
@@ -337,7 +459,12 @@ para a criança `C01`:
 | allow | subscribe | `puzzleband/C01/ack` |
 | allow | subscribe | `puzzleband/C01/avaliacao` |
 | allow | subscribe | `puzzleband/C01/controle` |
-| allow | subscribe | `puzzleband/C01/historico` (só para recuperar o histórico retido ao iniciar sem o arquivo local) |
+| allow | subscribe | `puzzleband/C01/historico` (só para recuperar o histórico retido ao iniciar sem o arquivo local, e para o reset mostrar quantos episódios há) |
+| allow | subscribe | `puzzleband/C01/comando` (a pulseira aplica a ordem de reset; o terminal mostra a ordem retida atual) |
+| allow | publish | `puzzleband/C01/comando` (**só este usuário publica a ordem de reset**: `npm run resetar`) |
+| allow | publish | `puzzleband/C01/app/status` (só para o reset apagar o retido, com payload vazio) |
+| allow | subscribe | `puzzleband/C01/status` (o reset confere se a pulseira está online) |
+| allow | subscribe | `puzzleband/C01/comando/resposta` (o reset espera a confirmação do app) |
 | deny | publish e subscribe | `#` |
 
 **`dashboard`** (o site, painel do desenvolvedor)
@@ -350,11 +477,12 @@ para a criança `C01`:
 | allow | subscribe | `puzzleband/C01/estado` |
 | allow | subscribe | `puzzleband/C01/alertas` |
 | allow | subscribe | `puzzleband/C01/historico` |
+| allow | subscribe | `puzzleband/C01/comando` |
 | allow | publish | `puzzleband/C01/controle` |
 | allow | publish | `puzzleband/C01/avaliacao` |
 | deny | publish e subscribe | `#` |
 
-**`app`** (o celular do cuidador; não mudou)
+**`app`** (o celular do cuidador)
 
 | Permissão | Ação | Tópico |
 |---|---|---|
@@ -362,9 +490,11 @@ para a criança `C01`:
 | allow | subscribe | `puzzleband/C01/alertas` |
 | allow | subscribe | `puzzleband/C01/historico` |
 | allow | subscribe | `puzzleband/C01/status` |
+| allow | subscribe | `puzzleband/C01/comando` |
 | allow | publish | `puzzleband/C01/avaliacao` |
 | allow | publish | `puzzleband/C01/ack` |
 | allow | publish | `puzzleband/C01/app/status` |
+| allow | publish | `puzzleband/C01/comando/resposta` |
 | deny | publish e subscribe | `#` |
 
 Observações:
@@ -379,6 +509,17 @@ Observações:
   `controle` e `historico`. O `dashboard` perdeu o publish de `estado`,
   `alertas` e `historico`: agora só publica `controle` e `avaliacao`, e assina
   `estado`, `alertas` e `historico` para mostrar.
+- **O que mudou com a ordem de reset (`npm run resetar`).**
+  - **Só o `simulador` publica em `comando`.** O `app` e o `dashboard` só
+    assinam: com a senha deles, que pode ser extraída do APK ou do
+    navegador, ninguém consegue mandar apagar os dados do celular.
+  - O `app` publica em `comando/resposta`, e só o `simulador` assina.
+  - O `simulador` também ganhou publish em `app/status`, só para apagar o
+    retido. O custo é que, com a senha da pulseira, dá para publicar um
+    `app/status` falso. Ela fica só no computador da demonstração
+    (`simulator/.env`) e não vai em nenhum APK nem no site.
+  - Sem essas regras, o `npm run resetar` mostra qual publicação o broker
+    recusou e para ali.
 - **Por que isso importa aqui.** A senha do `dashboard` vai no JavaScript do
   navegador (variáveis `VITE_*`, ver abaixo) e a senha do `app` vai dentro do
   APK. As duas podem ser extraídas por quem tiver o site ou o APK. Com a ACL,

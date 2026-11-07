@@ -7,8 +7,8 @@ ela com o site fechado:
 
 | Onde | Comando | O que testa |
 |---|---|---|
-| `frontend/` | `npm test` | Regra do gatilho (casos sintéticos), histórico de episódios, CSV, cenários de ponta a ponta com transições rápidas e as mensagens MQTT: formatos que o app lê, parsers do painel, controle, avaliação com origem `site` e o limite de 2 envios/s do controle (63 testes, `node:test`). Detalhes do gatilho em [gatilho.md](gatilho.md#resultado-dos-testes) |
-| `simulator/` | `npm test` | A pulseira sem broker e sem site, com um cliente MQTT falso (14 testes): publica estado, alertas e histórico; aplica ack e avaliação; recupera o histórico do arquivo e da mensagem retida; o modo controle segue os valores-alvo (ver [Testes da pulseira](#testes-da-pulseira-simulatortestes)) |
+| `frontend/` | `npm test` | Regra do gatilho (casos sintéticos), histórico de episódios, CSV, cenários de ponta a ponta com transições rápidas e as mensagens MQTT: formatos que o app lê, parsers do painel, controle, avaliação com origem `site`, o limite de 2 envios/s do controle e a ordem de reset (`comando` e `comando/resposta`) (67 testes, `node:test`). Detalhes do gatilho em [gatilho.md](gatilho.md#resultado-dos-testes) |
+| `simulator/` | `npm test` | A pulseira e o reset sem broker e sem site, com um cliente MQTT falso (30 testes): publica estado, alertas e histórico; aplica ack e avaliação; recupera o histórico do arquivo e da mensagem retida (só com origem `pulseira`); o modo controle segue os valores-alvo; a ordem de reset na partida e com a pulseira rodando; o `npm run resetar` (ver [Testes da pulseira](#testes-da-pulseira-simulatortestes)) |
 | `simulator/` | `npm run verificar` | Os 11 cenários da pulseira em loop (3 ciclos) e o `eventos_aleatorios` (gabarito × episódios detectados), com o modelo real e o mesmo processamento que a pulseira roda ao vivo (tabelas abaixo) |
 | `simulator/` | `npm run verificar-app` | Com a pulseira ligada: faz o papel do app pelo broker e confere os formatos e a ida e volta do ack e da avaliação (ver [App do cuidador sem o site](#app-do-cuidador-sem-o-site-verificar-app)) |
 
@@ -444,7 +444,9 @@ falso registra é exatamente o que a pulseira publicaria.
 | Arquivo | O que confere |
 |---|---|
 | `borda.test.js` | Com `crise_ruido`, abre e fecha um episódio com gatilho "ruído". O alerta, o estado e o histórico saem com exatamente os campos que o app lê, e `origem: "pulseira"`. Sem o site, a pulseira publica `leituras` e `estado` a cada leitura (estado com retain), `alertas` com QoS 1 sem retain e `historico` com retain só quando o episódio abre, muda ou fecha. Nunca publica nos tópicos de comando. Sem conexão, continua processando e republica o histórico ao reconectar. Aplica o ack (o `estado` seguinte já traz o "visto pelo cuidador") e a avaliação do app e do site (`confirmado`, `descartado`, `pendente` para desfazer, observação), republicando o histórico. Episódio desconhecido: só republica. Mensagens malformadas ou com origem `pulseira`: ignoradas. Ao desligar, fecha o episódio aberto como "interrompido" e publica o histórico final |
-| `historico.test.js` | O histórico sobrevive entre execuções pelo arquivo `data/historico_<id>.json`; o episódio que estava aberto vira "interrompido". A gravação é agrupada, com flush no final. Um arquivo corrompido é guardado à parte. Sem arquivo, a pulseira recupera da mensagem retida em `historico` antes de publicar a sua e cancela a assinatura depois. Sem mensagem retida, começa vazia após o tempo limite |
+| `historico.test.js` | O histórico sobrevive entre execuções pelo arquivo `data/historico_<id>.json`; o episódio que estava aberto vira "interrompido". A gravação é agrupada, com flush no final. Um arquivo corrompido é guardado à parte. Sem arquivo, a pulseira recupera da mensagem retida em `historico` antes de publicar a sua e cancela a assinatura depois. Um histórico retido com outra origem (aba antiga do site) não é importado. Sem mensagem retida, começa vazia após o tempo limite |
+| `reset_pulseira.test.js` | Ordem de reset retida com `id` novo na partida: a pulseira espera a ordem antes de publicar, começa vazia (arquivo `[]` na hora), guarda o id e publica a lista vazia; a mesma ordem de novo não muda nada. Ordem já aplicada: mantém o histórico. Sem ordem retida: publica depois do tempo limite. Ordem chegando com a pulseira rodando (`--forcar`): apaga, descarta o episódio aberto e republica. Sem arquivo, a ordem nova vence o histórico retido. Sem a opção `reset`, o comportamento antigo |
+| `resetar.test.js` | `npm run resetar`: apaga `historico_<id>.json` e as cópias corrompidas, mas não o de outra criança nem o último reset aplicado; apaga os 4 retidos com payload vazio (QoS 1, retain), publica a lista vazia com `origem: "pulseira"` e a ordem (QoS 1, retain); assina a resposta antes e mostra "App limpo". `--tudo`: também `logs/` e `manter_preferencias: false`. Recusa com o `status` online ou com a trava de um processo vivo (trava velha não bloqueia; `--forcar` segue). `--simular` e a falta do `RESETAR` não apagam nem publicam nada. ACL recusando `app/status`: para e diz o que já foi feito. Trava criada, reconhecida e removida só pelo dono |
 | `controle.test.js` | Validação campo a campo (fora da faixa ou tipo errado é ignorado). Rampa de 20 s até o novo alvo, partindo do valor atual; a idade muda na hora. Com a pulseira em modo controle, as leituras seguem os valores-alvo com o mesmo ruído de sensor e sem saltos, e o estado sai com `fonte: "manual"`. Uma crise feita pelos controles vira alerta e episódio |
 
 ## App do cuidador sem o site (`verificar-app`)
@@ -500,10 +502,15 @@ ciclo é sempre o nominal), e encerra depois de uma pausa calma final:
 2. Terminal 1: `cd frontend` e `npm run dev`. Abra o painel. O status deve
    mostrar "Broker: conectado".
 3. Se quiser guardar os episódios anteriores, exporte o CSV no painel antes.
+   Depois, com o app aberto no celular, rode `npm run resetar` em
+   `simulator/`: apaga o histórico da pulseira, os retidos no broker e os dados
+   do app e do site, e mostra "App limpo" (ver README, "Resetar para uma
+   apresentação").
 4. Terminal 2: `cd simulator` e
    `npm run demo -- --ciclos 1 --limpar-historico`.
    - O `--limpar-historico` começa o histórico vazio, para a plateia ver só os
-     episódios da demo.
+     episódios da demo. Depois do `npm run resetar` ele não é necessário (a
+     pulseira já começa vazia), mas não atrapalha.
    - A pausa final de 2 min garante que o último episódio feche antes de a
      pulseira parar. Sem `--ciclos 1`, a demo recomeça em loop, já com
      variação.

@@ -405,6 +405,25 @@
   flex-wrap: wrap;
 }
 
+/* Ordem de reset recebida (npm run resetar): a tela foi limpa */
+.reset-notice {
+  display: flex;
+  align-items: center;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--status-good) 14%, transparent);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.reset-notice p {
+  margin: 0;
+  flex: 1 1 320px;
+}
+
 .connection-status {
   display: flex;
   align-items: center;

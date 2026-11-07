@@ -125,10 +125,21 @@ Para abrir no Python: `pd.read_csv(arquivo, sep=';', decimal=',')`.
 ## Limpar histórico
 
 O painel não apaga mais o histórico: quem guarda é a pulseira. Para começar
-do zero, rode a pulseira com `--limpar-historico` (por exemplo,
-`npm start -- --limpar-historico`). Ela esvazia o arquivo e publica a lista
-vazia em `historico`, que substitui a cópia do app. Exporte o CSV antes se
-quiser guardar.
+do zero, há dois caminhos. Exporte o CSV antes se quiser guardar.
+
+- `--limpar-historico` (por exemplo, `npm start -- --limpar-historico`): a
+  pulseira esvazia o arquivo e publica a lista vazia em `historico`, que
+  substitui a cópia do app.
+- `npm run resetar` (com a pulseira desligada), para uma apresentação: apaga
+  o arquivo, os retidos no broker e manda o app e o site apagarem os dados
+  locais pela ordem em `comando`. No app saem a cópia do histórico, os
+  episódios notificados, os lembretes e os gráficos (e, com `--tudo`, as
+  preferências). Ver README, "Resetar para uma apresentação", e
+  [mqtt.md](mqtt.md#ordem-de-reset-npm-run-resetar).
+
+O app só aceita um `historico` com `"origem": "pulseira"`. Uma aba antiga do
+site, de quando ele guardava o histórico, não traz mais os episódios velhos
+de volta.
 
 ## Persistência
 
@@ -142,7 +153,9 @@ quiser guardar.
 - **Ao iniciar sem o arquivo**, a pulseira recupera os episódios da mensagem
   retida em `puzzleband/<id>/historico` (espera até 5 s) antes de publicar a
   sua lista. Assim, nada se perde ao trocar de computador ou apagar a pasta
-  `data/`. O que vem do tópico tem o gatilho resumido.
+  `data/`. O que vem do tópico tem o gatilho resumido. Só vale a mensagem com
+  `"origem": "pulseira"`, e uma ordem de reset retida com `id` novo manda
+  começar vazia em vez de recuperar.
 - Um arquivo corrompido é guardado como
   `historico_<id>.corrompido-<data>.json` e a pulseira segue sem ele.
 - Limite de 200 episódios: ao passar disso, os mais antigos saem.
@@ -175,7 +188,10 @@ quiser guardar.
   real, isso deve ser coletado antes do monitoramento.
 - **Eliminação**: `--limpar-historico` esvazia o arquivo da pulseira e
   republica a lista vazia no broker. A cópia salva no celular é substituída
-  quando o app recebe a nova lista.
+  quando o app recebe a nova lista. `npm run resetar` apaga também as
+  mensagens retidas no broker e, pela ordem em `comando`, os dados guardados
+  no celular. No app, **Ajustes → Apagar dados deste aparelho** apaga só o
+  celular.
 - **Cuidados**: o arquivo da pulseira não é criptografado. Qualquer pessoa
   com acesso ao computador onde a pulseira simulada roda consegue ler os
   dados. Numa pulseira real, a memória do ESP32 deveria ser criptografada

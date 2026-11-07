@@ -3,10 +3,13 @@
 // pulseira. Formatos e topicos: docs/mqtt.md.
 //
 // Quem usa:
-//   pulseira (simulator/borda.js): parseAck, parseEvaluation, parseControl e
-//     parseHistory (para recuperar o historico da mensagem retida ao iniciar);
+//   pulseira (simulator/borda.js): parseAck, parseEvaluation, parseControl,
+//     parseHistory (para recuperar o historico da mensagem retida ao iniciar)
+//     e parseResetCommand;
 //   site (painel, hooks/useBandLink.js): parseReading, parseState,
-//     parseAlert, parseHistory e os status online/offline.
+//     parseAlert, parseHistory, os status online/offline e parseResetCommand;
+//   terminal (simulator/resetar.js): parseHistory, parseBandStatus e
+//     parseCommandResponse.
 
 import { EVALUATIONS, OBSERVATION_MAX_LENGTH } from '../model/episodes.js';
 import { CONTROL_LIMITS } from '../model/simulate.js';
@@ -17,6 +20,9 @@ import { CONTROL_LIMITS } from '../model/simulate.js';
 export const BAND_ORIGIN = 'pulseira';
 export const SITE_ORIGIN = 'site';
 export const APP_ORIGIN = 'app';
+
+// Unica acao de puzzleband/<id>/comando (por enquanto)
+export const RESET_ACTION = 'resetar';
 
 const TIERS = ['baixo_risco', 'atencao', 'alto_risco'];
 
@@ -151,11 +157,16 @@ function parseHistoryEntry(raw) {
 
 // puzzleband/<id>/historico (pulseira, QoS 1, retain): a lista inteira (os
 // 50 mais recentes). Episodios invalidos sao pulados, como no app.
+// `origem`: so a pulseira publica este topico ("pulseira"). A recuperacao da
+// pulseira e o app ignoram outra origem: uma aba antiga do site (de quando
+// ele era o "servidor") republicava a lista do localStorage e sobrescrevia
+// o historico da pulseira.
 export function parseHistory(text) {
   const data = parseObject(text);
   if (!data || !Array.isArray(data.episodios)) return null;
   const episodios = data.episodios.map(parseHistoryEntry).filter(Boolean);
   return {
+    origem: optionalString(data.origem),
     timestamp: optionalTimestamp(data.timestamp),
     crianca: optionalString(data.crianca),
     total: Number.isInteger(data.total) && data.total >= episodios.length ? data.total : episodios.length,
@@ -224,4 +235,31 @@ export function parseControl(text) {
     else ignorados.push(campo);
   }
   return { valores, ignorados };
+}
+
+// ---------------------------------------------------------------------------
+// Terminal (npm run resetar) -> pulseira, app e site
+// ---------------------------------------------------------------------------
+
+// puzzleband/<id>/comando (QoS 1, retain):
+//   { acao: "resetar", id, timestamp, manter_preferencias }
+// Sem `manter_preferencias` (ou com valor que nao e booleano), vale true: o
+// mais conservador. Payload vazio (retido apagado) ou outra acao: null.
+export function parseResetCommand(text) {
+  const data = parseObject(text);
+  if (!data || data.acao !== RESET_ACTION || !nonEmptyString(data.id)) return null;
+  return {
+    acao: RESET_ACTION,
+    id: data.id.trim(),
+    timestamp: optionalTimestamp(data.timestamp),
+    manter_preferencias: data.manter_preferencias !== false,
+  };
+}
+
+// puzzleband/<id>/comando/resposta (app -> terminal, QoS 1, sem retain):
+//   { id, status: "aplicado" }
+export function parseCommandResponse(text) {
+  const data = parseObject(text);
+  if (!data || !nonEmptyString(data.id) || !nonEmptyString(data.status)) return null;
+  return { id: data.id.trim(), status: data.status };
 }

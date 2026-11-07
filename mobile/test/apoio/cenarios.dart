@@ -228,14 +228,14 @@ Future<ServicoFalso> semEpisodiosHoje() async {
 
 /// Preferencias locais (nome da crianca e lembretes) no mesmo
 /// shared_preferences do servico, com o aviso falso.
-PreferenciasLocais preferenciasDe(ServicoFalso servico, {AvisoFalso? aviso}) =>
+PreferenciasLocais preferenciasDe(MqttService servico, {AvisoFalso? aviso}) =>
     PreferenciasLocais(prefs: servico.prefs, nomePadrao: servico.config.childId, aviso: aviso ?? AvisoFalso());
 
 /// Monta o app (tema real, fontes reais) e espera assentar. `aba`: 0 Inicio,
 /// 1 Graficos, 2 Historico, 3 Ajustes. `tela` substitui a navegacao (Login).
 Future<void> mostrar(
   WidgetTester tester,
-  ServicoFalso servico, {
+  MqttService servico, {
   int aba = 0,
   Widget? tela,
   bool escuro = false,

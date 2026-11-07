@@ -9,8 +9,8 @@ import '../widgets/connection_bar.dart';
 import '../widgets/secao.dart';
 
 /// Ajustes: crianca monitorada (nome mostrado no Inicio, so neste celular),
-/// conexoes (com o erro, se houver), alertas sonoros, aparencia (tema) e
-/// "sobre".
+/// conexoes (com o erro, se houver), alertas sonoros, aparencia (tema),
+/// "Apagar dados deste aparelho" e "sobre".
 class ConfiguracoesScreen extends StatelessWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -26,7 +26,8 @@ class ConfiguracoesScreen extends StatelessWidget {
         _Grupo(
           titulo: 'Criança monitorada',
           itens: [
-            const _CampoNome(),
+            // Recomeca (com o nome salvo) quando os dados sao apagados
+            _CampoNome(key: ValueKey('nome-${PreferenciasScope.of(context).geracao}')),
             ListTile(
               leading: const Icon(Icons.child_care_rounded),
               title: Text('Identificação: ${service.config.childId}'),
@@ -51,6 +52,8 @@ class ConfiguracoesScreen extends StatelessWidget {
         ),
         const SizedBox(height: Espaco.l),
         const _Grupo(titulo: 'Aparência', itens: [_EscolhaDeAparencia()]),
+        const SizedBox(height: Espaco.l),
+        const _Grupo(titulo: 'Dados deste aparelho', itens: [_ApagarDados()]),
         const SizedBox(height: Espaco.l),
         _Grupo(
           titulo: 'Sobre',
@@ -151,7 +154,7 @@ class _Grupo extends StatelessWidget {
 /// shared_preferences a cada mudanca; vazio, vale o CHILD_ID. Nao vai para
 /// o MQTT.
 class _CampoNome extends StatefulWidget {
-  const _CampoNome();
+  const _CampoNome({super.key});
 
   @override
   State<_CampoNome> createState() => _CampoNomeState();
@@ -226,6 +229,95 @@ class _EscolhaDeAparencia extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// "Apagar dados deste aparelho": a mesma limpeza local da ordem do terminal
+/// (npm run resetar), util sem computador. Pede confirmacao num dialogo; as
+/// preferencias (nome, aparencia, alertas sonoros) so saem se o cuidador
+/// marcar. Nao publica nada: o historico da pulseira continua la.
+class _ApagarDados extends StatelessWidget {
+  const _ApagarDados();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: const ValueKey('apagar-dados'),
+      leading: const Icon(Icons.delete_sweep_outlined),
+      title: const Text('Apagar dados deste aparelho'),
+      subtitle: const Text('Histórico salvo, alertas, lembretes e gráficos deste celular. Útil antes de uma nova apresentação.'),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => _confirmar(context),
+    );
+  }
+
+  static Future<void> _confirmar(BuildContext context) async {
+    final mensageiro = ScaffoldMessenger.of(context);
+    final service = AppScope.read(context);
+    // null = cancelou; true/false = tambem apagar as preferencias
+    final apagarPreferencias = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _DialogoApagarDados(),
+    );
+    if (apagarPreferencias == null) return;
+    await service.apagarDadosLocais(manterPreferencias: !apagarPreferencias);
+    mensageiro
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('Dados deste aparelho apagados.')));
+  }
+}
+
+class _DialogoApagarDados extends StatefulWidget {
+  const _DialogoApagarDados();
+
+  @override
+  State<_DialogoApagarDados> createState() => _DialogoApagarDadosState();
+}
+
+class _DialogoApagarDadosState extends State<_DialogoApagarDados> {
+  bool _preferencias = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final vermelho = CoresDados.of(context).descartado;
+    return AlertDialog(
+      title: const Text('Apagar dados deste aparelho?'),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Apaga deste celular a cópia do histórico, os alertas já recebidos, os lembretes '
+            '(e os avisos agendados deles) e os gráficos. Não dá para desfazer.',
+          ),
+          const SizedBox(height: Espaco.s),
+          const Text(
+            'Os episódios guardados na pulseira não mudam: voltam a aparecer quando ela publicar de novo. '
+            'Para zerar tudo, use "npm run resetar" no computador.',
+          ),
+          const SizedBox(height: Espaco.s),
+          CheckboxListTile(
+            key: const ValueKey('apagar-preferencias'),
+            value: _preferencias,
+            onChanged: (v) => setState(() => _preferencias = v ?? false),
+            title: const Text('Também voltar as preferências ao padrão'),
+            subtitle: const Text('Nome da criança, aparência e alertas sonoros.'),
+            controlAffinity: ListTileControlAffinity.leading,
+            contentPadding: EdgeInsets.zero,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+        FilledButton(
+          key: const ValueKey('confirmar-apagar'),
+          onPressed: () => Navigator.pop(context, _preferencias),
+          style: FilledButton.styleFrom(backgroundColor: vermelho.fundo, foregroundColor: vermelho.texto),
+          child: const Text('Apagar'),
+        ),
+      ],
     );
   }
 }
