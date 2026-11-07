@@ -24,14 +24,15 @@
 //
 // Cada evento/ciclo vira uma linha do gabarito em logs/eventos_<data-hora>.csv
 // (e .json). O historico de episodios fica em data/historico_<id>.json.
+// Enquanto roda, a pulseira mantem a trava data/pulseira_<id>.lock (o reset,
+// npm run resetar, recusa apagar com ela ativa) e aplica a ordem de reset
+// retida em comando (o id aplicado fica em data/reset_<id>.json).
 // Configuracao em simulator/.env (ver .env.example).
 
 import { randomInt } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
-import dotenv from 'dotenv';
 import mqtt from 'mqtt';
 import { CALM_CONTROL, generateReading } from '../frontend/src/model/simulate.js';
 import { describeModel, modelInfoFrom } from '../frontend/src/model/modelInfo.js';
@@ -42,7 +43,9 @@ import {
 } from './scenarios.js';
 import { createGabaritoWriter, gabaritoEntry } from './gabarito.js';
 import { createEdgeLink, createEdgeProcessor } from './borda.js';
-import { openHistoryFile } from './historico.js';
+import { openHistoryFile, readLastReset, saveLastReset } from './historico.js';
+import { AUTH_ERROR_CODES, describeError, loadConfig } from './config.js';
+import { createLock } from './trava.js';
 import { CONTROLE, CONTROLE_DESCRICAO, RAMPA_CONTROLE_S, controlTicks, createControl } from './controle.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -188,53 +191,6 @@ function parseCli() {
 }
 
 // ---------------------------------------------------------------------------
-// Configuracao (.env)
-// ---------------------------------------------------------------------------
-
-function loadConfig() {
-  const hasEnvFile = existsSync(ENV_PATH);
-  if (hasEnvFile) dotenv.config({ path: ENV_PATH, quiet: true });
-
-  const config = {
-    url: process.env.MQTT_URL?.trim(),
-    username: process.env.MQTT_USER?.trim(),
-    password: process.env.MQTT_PASS,
-    childId: process.env.CHILD_ID?.trim(),
-  };
-  const missing = [
-    ['MQTT_URL', config.url],
-    ['MQTT_USER', config.username],
-    ['MQTT_PASS', config.password],
-    ['CHILD_ID', config.childId],
-  ].filter(([, v]) => !v).map(([name]) => name);
-
-  if (missing.length && !hasEnvFile) {
-    console.error(`Erro: arquivo simulator/.env não encontrado.
-
-Crie-o a partir do modelo, dentro da pasta simulator/:
-  copy .env.example .env      (Windows)
-  cp .env.example .env        (Linux/macOS)
-
-e preencha MQTT_USER e MQTT_PASS com o usuário da pulseira no EMQX Cloud.
-O .env fica fora do Git (simulator/.gitignore): nunca commite a senha.`);
-    process.exit(1);
-  }
-  if (missing.length) fail(`faltam variáveis no simulator/.env: ${missing.join(', ')} (veja .env.example).`);
-
-  if (!/^(mqtts?|wss?):\/\//.test(config.url)) {
-    fail(`MQTT_URL inválida: "${config.url}". Use mqtts://host:8883 (ou mqtt://, ws://, wss://).`);
-  }
-  if (!/^[A-Za-z0-9_-]+$/.test(config.childId)) {
-    fail(`CHILD_ID inválido: "${config.childId}". Use só letras, números, _ ou - (vira parte do tópico MQTT).`);
-  }
-  const host = new URL(config.url).hostname;
-  if (/^(mqtt|ws):/.test(config.url) && !['localhost', '127.0.0.1', '::1'].includes(host)) {
-    console.warn('Aviso: MQTT_URL sem TLS (mqtt:// ou ws://): usuário e senha trafegam sem criptografia.');
-  }
-  return config;
-}
-
-// ---------------------------------------------------------------------------
 // Saida no terminal
 // ---------------------------------------------------------------------------
 
@@ -272,22 +228,6 @@ function formatReading(t, r, step, fase) {
 // ---------------------------------------------------------------------------
 // Simulacao
 // ---------------------------------------------------------------------------
-
-const AUTH_ERROR_CODES = new Set([4, 5, 134, 135]); // MQTT 3.1.1 e 5
-
-const NETWORK_HINTS = {
-  ECONNREFUSED: 'conexão recusada (broker fora do ar ou porta errada)',
-  ENOTFOUND: 'endereço do broker não encontrado (confira MQTT_URL e a internet)',
-  ETIMEDOUT: 'tempo esgotado (rede lenta ou firewall bloqueando a porta)',
-  ECONNRESET: 'conexão interrompida pelo broker',
-};
-
-// Erros de rede podem vir como AggregateError sem "message" (IPv6 + IPv4)
-function describeError(err) {
-  const code = err.code ?? err.errors?.[0]?.code;
-  const detail = err.message || err.errors?.map((e) => e.message).join('; ') || code || 'erro desconhecido';
-  return NETWORK_HINTS[code] ? `${NETWORK_HINTS[code]} — ${detail}` : detail;
-}
 
 const pct = (x) => `${Math.round(x * 100)}%`;
 const fmtFactor = (x) => String(x).replace('.', ',');
@@ -337,7 +277,7 @@ const rel = (path) => relative(process.cwd(), path) || path;
 function main() {
   const options = parseCli();
   const { cenario, controle, idade, duracao, umaVez, ciclos, pausa, seed } = options;
-  const config = loadConfig();
+  const config = loadConfig(ENV_PATH);
   const aleatorio = cenario === EVENTOS_ALEATORIOS;
 
   // Historico de episodios: arquivo local; sem arquivo, recupera da mensagem retida
@@ -364,6 +304,14 @@ function main() {
   }
   const recoverFromRetained = !options.limparHistorico && historyFile.status !== 'ok';
 
+  // Trava: o reset (npm run resetar) recusa apagar com a pulseira rodando.
+  // Sai em qualquer encerramento (process.exit inclusive).
+  const trava = createLock(DATA_DIR, config.childId, { cenario });
+  process.on('exit', () => trava.remove());
+
+  // Ultima ordem de reset aplicada (a ordem fica retida em comando)
+  const lastReset = readLastReset(DATA_DIR, config.childId);
+
   const control = controle ? createControl({ inicial: { ...CALM_CONTROL, idade } }) : null;
 
   const base = `puzzleband/${config.childId}`;
@@ -383,9 +331,16 @@ function main() {
   console.log(`Processamento: ${describeModel(modelInfoFrom(forest.meta, forest.trees.length))} + episódios + gatilho,`
     + ' aqui na pulseira (o site é opcional)');
   console.log(`Histórico: ${historyLine}`);
+  if (trava.anterior.estado === 'ativa') {
+    console.warn(`Aviso: outra pulseira com a criança ${config.childId} parece estar rodando (PID ${trava.anterior.dados.pid}).`
+      + ' Duas pulseiras com o mesmo CHILD_ID publicam por cima uma da outra.');
+  }
   console.log(`Broker: ${config.url} (usuário ${config.username})`);
   console.log(`Publica: ${base}/{leituras, estado (retain), alertas (QoS 1), historico (retain), status (retain)}`);
-  console.log(`Assina:  ${base}/{ack, avaliacao${controle ? ', controle' : ''}}${recoverFromRetained ? ` e, só na partida, ${base}/historico (recuperação)` : ''}`);
+  console.log(`Assina:  ${base}/{ack, avaliacao, comando${controle ? ', controle' : ''}}`
+    + `${recoverFromRetained ? ` e, só na partida, ${base}/historico (recuperação)` : ''}`);
+  console.log(`Reset:   ordem retida em ${base}/comando com id novo = começa com o histórico vazio`
+    + ` (última aplicada: ${lastReset ? `${lastReset.id}, em ${lastReset.aplicado_em}` : 'nenhuma'})`);
   console.log('Conectando...');
 
   const ticks = controle ? controlTicks(control) : programTicks({ cenario, umaVez, ciclos, pausa, seed, idade });
@@ -503,17 +458,32 @@ function main() {
     client.publish(topicStatus, 'online', { qos: 1, retain: true });
     console.log(`status: online (retain) em ${topicStatus}`);
     if (link.recovering()) console.log(`Recuperando o histórico da mensagem retida em ${base}/historico...`);
+    if (link.checkingReset()) console.log(`Conferindo se há uma ordem de reset retida em ${base}/comando...`);
   });
 
   // Processamento na borda: publica estado/alertas/historico e aplica ack,
-  // avaliacao e controle (assina e publica o historico ao conectar)
+  // avaliacao, controle e a ordem de reset (assina e publica o historico ao
+  // conectar)
   link = createEdgeLink({
     client,
     processor,
     control,
     recoverFromRetained,
+    reset: {
+      lastAppliedId: lastReset?.id ?? null,
+      onApply(order) {
+        historyFile.storage.flush(); // o arquivo vazio vai para o disco na hora
+        try {
+          saveLastReset(DATA_DIR, config.childId, order);
+        } catch (err) {
+          console.error(`Erro ao gravar a ordem de reset aplicada: ${err.message} (na próxima partida ela seria aplicada de novo)`);
+        }
+      },
+    },
     log: (evento, texto) => {
-      const marca = { alerta: '▲', aviso: '!', recuperacao: '↺', controle: '⇢', ack: '✓', avaliacao: '✓' }[evento] ?? '·';
+      const marca = {
+        alerta: '▲', aviso: '!', recuperacao: '↺', controle: '⇢', ack: '✓', avaliacao: '✓', reset: '⌫',
+      }[evento] ?? '·';
       console.log(`  ${marca} ${texto}`);
     },
   });

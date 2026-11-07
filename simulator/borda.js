@@ -12,8 +12,9 @@
 //   createEdgeProcessor  processamento puro, sem rede (usado tambem pelo
 //                        verificar.js, que roda os cenarios offline);
 //   createEdgeLink       ligacao com o broker: publica estado, alertas e
-//                        historico; aplica ack, avaliacao e controle;
-//                        recupera o historico da mensagem retida.
+//                        historico; aplica ack, avaliacao, controle e a
+//                        ordem de reset; recupera o historico da mensagem
+//                        retida.
 // Topicos e formatos: docs/mqtt.md.
 
 import { classifyAt } from '../frontend/src/model/classify.js';
@@ -36,10 +37,12 @@ import {
   historySignature,
   topicsFor,
 } from '../frontend/src/hooks/buildMessages.js';
-import { parseAck, parseControl, parseEvaluation, parseHistory } from '../frontend/src/hooks/parseMessages.js';
+import {
+  BAND_ORIGIN, parseAck, parseControl, parseEvaluation, parseHistory, parseResetCommand,
+} from '../frontend/src/hooks/parseMessages.js';
 
 export const MAX_BUFFER = 300; // 5 min de sinal a 1 Hz (o gatilho usa ate 6 min de memoria propria)
-export const RECOVERY_TIMEOUT_MS = 5000; // espera pela mensagem retida de historico ao iniciar
+export const RECOVERY_TIMEOUT_MS = 5000; // espera pelas mensagens retidas (historico, comando) ao iniciar
 
 // ---------------------------------------------------------------------------
 // Processamento (sem rede)
@@ -153,6 +156,15 @@ export function createEdgeProcessor({ childId, source = 'pulseira', storage = nu
     clear() {
       store.update(() => []);
     },
+
+    // Ordem de reset (puzzleband/<id>/comando): apaga os episodios e descarta
+    // o episodio em andamento, sem grava-lo. A memoria dos sinais (buffer,
+    // linha de base do gatilho, nivel atual) continua: se o nivel seguir
+    // alto, um episodio novo comeca na proxima leitura.
+    reset() {
+      monitor = { ...monitor, open: null };
+      store.update(() => []);
+    },
   };
 }
 
@@ -165,18 +177,28 @@ export function createEdgeProcessor({ childId, source = 'pulseira', storage = nu
 // estado dos valores-alvo (controle.js); fora dele, null (nao assina controle).
 // `recoverFromRetained`: sem arquivo local, recupera o historico da mensagem
 // retida em historico antes de publicar o seu (para nao apaga-la com uma
-// lista vazia). `log(evento, texto)` vai para o terminal.
+// lista vazia). So aceita historico com origem "pulseira".
+// `reset`: { lastAppliedId, onApply(ordem) } liga a ordem de reset do
+// terminal (npm run resetar, em puzzleband/<id>/comando): ao conectar, a
+// pulseira espera a ordem retida (ate `recoveryTimeoutMs`) antes de publicar
+// o historico; com id novo, comeca vazia. Uma ordem que chega com a pulseira
+// rodando (resetar --forcar) tambem vale. null = nao assina comando.
+// `log(evento, texto)` vai para o terminal.
 export function createEdgeLink({
   client,
   processor,
   control = null,
   recoverFromRetained = false,
   recoveryTimeoutMs = RECOVERY_TIMEOUT_MS,
+  reset = null,
   log = () => {},
 }) {
   const topics = topicsFor(processor.childId);
   let recovering = recoverFromRetained;
   let recoveryTimer = null;
+  let checkingReset = Boolean(reset); // esperando a ordem retida (so na partida)
+  let resetTimer = null;
+  let lastResetId = reset?.lastAppliedId ?? null;
   let publishedSignature = null;
 
   // So publica com o broker conectado: estado ou alerta velho entregue
@@ -189,7 +211,7 @@ export function createEdgeLink({
   };
 
   function publishHistory(reason) {
-    if (recovering) return false; // primeiro recupera o retido
+    if (recovering || checkingReset) return false; // primeiro o retido (historico e comando)
     const message = processor.history();
     if (!publishJson(topics.historico, message, { qos: 1, retain: true })) return false;
     publishedSignature = processor.signature();
@@ -197,26 +219,51 @@ export function createEdgeLink({
     return true;
   }
 
-  function finishRecovery(history) {
-    if (!recovering) return;
+  function stopRecovery() {
     recovering = false;
     clearTimeout(recoveryTimer);
     recoveryTimer = null;
     client.unsubscribe(topics.historico);
+  }
+
+  function finishRecovery(history) {
+    if (!recovering) return;
+    stopRecovery();
     if (history) {
       const n = processor.importHistory(history.episodios);
       log('recuperacao', `histórico recuperado da mensagem retida: ${n} episódio(s) importado(s)`);
     } else {
-      log('recuperacao', `nenhuma mensagem retida em ${topics.historico} em ${recoveryTimeoutMs / 1000} s: começando com histórico vazio`);
+      log('recuperacao', `nenhum histórico da pulseira retido em ${topics.historico}: começando com histórico vazio`);
     }
     publishHistory('depois da recuperação');
+  }
+
+  function finishResetCheck() {
+    if (!checkingReset) return;
+    checkingReset = false;
+    clearTimeout(resetTimer);
+    resetTimer = null;
+    publishHistory('conexão');
+  }
+
+  // Ordem de reset com id novo: historico vazio (como --limpar-historico)
+  function applyReset(order) {
+    lastResetId = order.id;
+    processor.reset();
+    reset.onApply?.(order);
+    log('reset', `ordem de reset ${order.id} aplicada: histórico de episódios apagado`
+      + `${checkingReset ? ' (começando vazia)' : ' (com a pulseira rodando)'}`);
+    // a ordem manda comecar vazia: o historico retido nao e importado
+    if (recovering) stopRecovery();
   }
 
   function onConnect() {
     const subscriptions = { [topics.ack]: { qos: 1 }, [topics.avaliacao]: { qos: 1 } };
     if (control) subscriptions[topics.controle] = { qos: 1 };
+    if (reset) subscriptions[topics.comando] = { qos: 1 };
     if (recovering) subscriptions[topics.historico] = { qos: 1 };
     client.subscribe(subscriptions);
+    if (checkingReset && !resetTimer) resetTimer = setTimeout(finishResetCheck, recoveryTimeoutMs);
     if (recovering) {
       if (!recoveryTimer) recoveryTimer = setTimeout(() => finishRecovery(null), recoveryTimeoutMs);
     } else {
@@ -229,9 +276,24 @@ export function createEdgeLink({
     if (topic === topics.historico) {
       // so assinado durante a recuperacao
       if (!recovering) return;
-      const history = parseHistory(text);
-      if (!history) log('aviso', 'mensagem retida de historico inválida: ignorada');
+      let history = parseHistory(text);
+      if (!history) {
+        log('aviso', 'mensagem retida de historico inválida: ignorada');
+      } else if (history.origem !== BAND_ORIGIN) {
+        // so a pulseira publica historico; outra origem (ex.: aba antiga do site) nao entra
+        log('aviso', `histórico retido com origem "${history.origem ?? 'sem origem'}" ignorado (só vale o da pulseira)`);
+        history = null;
+      }
       finishRecovery(history);
+    } else if (topic === topics.comando && reset) {
+      const order = parseResetCommand(text);
+      if (order && order.id !== lastResetId) {
+        applyReset(order);
+        if (!checkingReset) publishHistory('ordem de reset');
+      } else if (order && checkingReset) {
+        log('reset', `ordem de reset ${order.id} retida: já aplicada antes, nada a apagar`);
+      }
+      finishResetCheck(); // a retida (se houver) chega logo apos a assinatura
     } else if (topic === topics.ack) {
       const ack = parseAck(text);
       if (!ack) {
@@ -273,6 +335,7 @@ export function createEdgeLink({
   return {
     topics,
     recovering: () => recovering,
+    checkingReset: () => checkingReset,
 
     // Uma leitura (1x/s): publica a leitura, processa e publica o resultado.
     step(reading) {
@@ -294,9 +357,11 @@ export function createEdgeLink({
     async close() {
       clearTimeout(recoveryTimer);
       recoveryTimer = null;
+      clearTimeout(resetTimer);
+      resetTimer = null;
       const closed = processor.close();
       if (closed) log('historico', `episódio ${closed.id} encerrado como "interrompido" (pulseira desligando)`);
-      if (recovering || !client.connected) return closed;
+      if (recovering || checkingReset || !client.connected) return closed;
       const message = processor.history();
       await client.publishAsync(topics.historico, JSON.stringify(message), { qos: 1, retain: true });
       publishedSignature = processor.signature();
@@ -306,6 +371,7 @@ export function createEdgeLink({
 
     detach() {
       clearTimeout(recoveryTimer);
+      clearTimeout(resetTimer);
       client.removeListener?.('connect', onConnect);
       client.removeListener?.('message', onMessage);
     },

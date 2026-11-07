@@ -22,6 +22,7 @@
     "controle": "node index.js --cenario controle",
     "verificar": "node verificar.js",
     "verificar-app": "node ../tools/verificar-app.mjs",
+    "resetar": "node resetar.js",
     "test": "node --test"
   },
   "dependencies": {

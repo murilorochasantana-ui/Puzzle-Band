@@ -10,13 +10,19 @@ export const isoAt = (t) => new Date(T0 + t * 1000).toISOString();
 
 // Cliente MQTT falso: guarda o que foi publicado/assinado e entrega mensagens
 // como o broker entregaria. Nao ha site nenhum do outro lado.
+//   retained   { topico: payload }: entregues (retain) logo apos subscribeAsync
+//   deny       topicos que a "ACL" recusa (SUBACK 135 / PUBACK com erro)
+//   onPublish  (mensagem) => void, chamado a cada publicacao (ex.: o app responder)
 export class FakeClient extends EventEmitter {
-  constructor() {
+  constructor({ retained = {}, deny = [], onPublish = null } = {}) {
     super();
     this.connected = false;
     this.published = [];
     this.subscribed = new Set();
     this.unsubscribed = [];
+    this.retained = { ...retained };
+    this.deny = new Set(deny);
+    this.onPublish = onPublish;
   }
 
   connect() {
@@ -29,10 +35,17 @@ export class FakeClient extends EventEmitter {
   }
 
   publish(topic, payload, options = {}) {
-    this.published.push({ topic, payload: String(payload), qos: options.qos ?? 0, retain: Boolean(options.retain) });
+    const message = { topic, payload: String(payload), qos: options.qos ?? 0, retain: Boolean(options.retain) };
+    this.published.push(message);
+    this.onPublish?.(message);
   }
 
   async publishAsync(topic, payload, options) {
+    if (this.deny.has(topic)) {
+      const err = new Error('Publish error: Not authorized');
+      err.code = 135;
+      throw err;
+    }
     this.publish(topic, payload, options);
   }
 
@@ -41,9 +54,29 @@ export class FakeClient extends EventEmitter {
     for (const t of list) this.subscribed.add(t);
   }
 
+  // Como o mqtt.js com MQTT 5: devolve o "granted" (qos 135 = recusado pela
+  // ACL) e entrega os retidos dos topicos assinados logo depois.
+  async subscribeAsync(topics, options = {}) {
+    const list = typeof topics === 'string' ? [topics] : Array.isArray(topics) ? topics : Object.keys(topics);
+    const granted = list.map((topic) => ({ topic, qos: this.deny.has(topic) ? 135 : options.qos ?? 0 }));
+    for (const { topic, qos } of granted) if (qos < 128) this.subscribed.add(topic);
+    setImmediate(() => {
+      for (const { topic, qos } of granted) {
+        if (qos < 128 && topic in this.retained) this.deliver(topic, this.retained[topic], { retain: true });
+      }
+    });
+    return granted;
+  }
+
   unsubscribe(topic) {
-    this.subscribed.delete(topic);
-    this.unsubscribed.push(topic);
+    for (const t of Array.isArray(topic) ? topic : [topic]) {
+      this.subscribed.delete(t);
+      this.unsubscribed.push(t);
+    }
+  }
+
+  async unsubscribeAsync(topic) {
+    this.unsubscribe(topic);
   }
 
   // Mensagem chegando do broker (do app, do painel ou retida)

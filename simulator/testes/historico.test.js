@@ -113,6 +113,23 @@ test('sem arquivo: recupera da mensagem retida em historico antes de publicar a 
   assert.equal(processor.episodes().length, 2);
 });
 
+test('sem arquivo: historico retido de outra origem (aba antiga do site) nao e importado', () => {
+  const old = createEdgeProcessor({ childId: CHILD });
+  crisisRun(old);
+  const doSite = { ...buildHistoryMessage(old.episodes(), { childId: CHILD, timestamp: isoAt(0) }), origem: 'site' };
+
+  const client = new FakeClient();
+  const processor = createEdgeProcessor({ childId: CHILD });
+  const link = createEdgeLink({ client, processor, recoverFromRetained: true, recoveryTimeoutMs: 60_000 });
+  client.connect();
+  client.deliver(TOPIC('historico'), doSite, { retain: true });
+  assert.equal(link.recovering(), false);
+  assert.deepEqual(processor.episodes(), []);
+  const published = client.lastJson(TOPIC('historico'));
+  assert.deepEqual(published.episodios, [], 'publica o seu (vazio) por cima do retido de outra origem');
+  assert.equal(published.origem, 'pulseira');
+});
+
 test('sem arquivo e sem mensagem retida: espera o tempo limite e comeca vazio', async () => {
   const client = new FakeClient();
   const processor = createEdgeProcessor({ childId: CHILD });
