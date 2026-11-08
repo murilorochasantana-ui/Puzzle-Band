@@ -78,7 +78,7 @@ class _CartaoEpisodioAtivoState extends State<CartaoEpisodioAtivo> {
         key: const ValueKey('botao'),
         padding: const EdgeInsets.only(top: Espaco.bloco),
         child: Semantics(
-          hint: 'Avisa o painel que você viu o alerta',
+          hint: 'Avisa a pulseira que você viu o alerta',
           child: FilledButton.icon(
             onPressed: _tocarCiente,
             style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(Toque.principal)),

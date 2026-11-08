@@ -163,6 +163,6 @@ e do histórico.
 
 O frame mostra só um caso: Atenção, com um episódio em andamento que já chegou
 a Possível crise. Não há modelo para Calmo (sem episódio), sem conexão,
-painel parado, configuração incompleta, o painel "Hoje" aberto, a confirmação
+pulseira parada, configuração incompleta, o painel "Hoje" aberto, a confirmação
 do "Estou ciente" nem o tema escuro. Esses estados seguem a mesma estrutura,
 com as regras do tema.

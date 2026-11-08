@@ -138,7 +138,7 @@ class _Conteudo extends StatelessWidget {
           const EstadoVazio(
             icone: Icons.event_available_rounded,
             titulo: 'Nenhum episódio hoje',
-            texto: 'Quando o painel (site) detectar sinais de atenção ou de possível crise, '
+            texto: 'Quando a pulseira detectar sinais de atenção ou de possível crise, '
                 'o episódio aparece aqui.',
           ),
         ] else

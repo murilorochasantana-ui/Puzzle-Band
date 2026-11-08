@@ -61,11 +61,11 @@ escuro: [design-app.md](design-app.md).
 | Tela | Conteúdo |
 |---|---|
 | Login | Só navega para a tela Início. Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
-| Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do gatilho abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, painel parado, aguardando o painel, configuração incompleta). |
+| Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do gatilho abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, pulseira parou de enviar, aguardando a pulseira, configuração incompleta). |
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
-| Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com o painel parado ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
+| Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com a pulseira parada ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
 | Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. Avisa quando está mostrando a cópia salva. |
-| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e painel), opção **Alertas sonoros** (liga/desliga, salva no celular), **Aparência** (Seguir o sistema, Claro ou Escuro), **Apagar dados deste aparelho** (ver [Apagar os dados](#apagar-os-dados-reset-para-uma-apresentação)), versão e licenças. |
+| Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e análise ao vivo da pulseira), opção **Alertas sonoros** (liga/desliga, salva no celular), **Aparência** (Seguir o sistema, Claro ou Escuro), **Apagar dados deste aparelho** (ver [Apagar os dados](#apagar-os-dados-reset-para-uma-apresentação)), versão e licenças. |
 
 O app respeita a fonte ampliada e o "Remover animações" do Android. Detalhes
 em [design-app.md](design-app.md).
@@ -188,15 +188,14 @@ sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
 Há três jeitos de apagar o que o app guarda, do mais completo ao mais local:
 
 - **Pelo terminal, sem mexer no celular:** `npm run resetar` em
-  `simulator/`, com a pulseira desligada (passo a passo no README, "Resetar
-  para uma apresentação"). O app assina `puzzleband/<id>/comando`. Ao receber
+  `simulator/`, com a pulseira desligada (passo a passo em [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação)). O app assina `puzzleband/<id>/comando`. Ao receber
   a ordem `resetar` com um `id` que ainda não aplicou:
   - apaga a cópia do histórico, os episódios já notificados, os alertas
     recebidos, os lembretes (e cancela os avisos agendados deles) e o buffer
     dos gráficos;
   - com `manter_preferencias: false` (`npm run resetar -- --tudo`), também
     volta ao padrão o nome da criança, a aparência e os alertas sonoros;
-  - mostra o SnackBar "Dados apagados pelo painel para uma nova
+  - mostra o SnackBar "Dados apagados para uma nova
     apresentação." e confirma em `comando/resposta`, e o terminal mostra
     "App limpo".
 
@@ -298,7 +297,8 @@ Preencha `MQTT_PASS` com a senha do usuário `app` no EMQX Cloud:
 }
 ```
 
-- `CHILD_ID` precisa ser igual ao `VITE_CHILD_ID` do `frontend/.env`.
+- `CHILD_ID` precisa ser igual ao `CHILD_ID` da pulseira (`simulator/.env`)
+  e ao `VITE_CHILD_ID` do `frontend/.env`, se usar o painel.
 - O `env.json` está no `.gitignore` e **não vai para o Git**. O
   `env.example.json` (sem senha) vai.
 - Sem `env.json` (ou com campo vazio), o app abre normalmente, mas mostra

@@ -184,8 +184,8 @@ class _AvaliacaoEpisodioState extends State<AvaliacaoEpisodio> {
           content: Text(
             enviado
                 ? (avaliacao == Avaliacao.confirmado
-                    ? 'Gatilho confirmado e enviado ao painel.'
-                    : 'Indicação descartada e enviada ao painel.')
+                    ? 'Gatilho confirmado e enviado à pulseira.'
+                    : 'Indicação descartada e enviada à pulseira.')
                 : 'Sem conexão com o servidor: a avaliação não foi enviada. Tente de novo em instantes.',
           ),
         ),

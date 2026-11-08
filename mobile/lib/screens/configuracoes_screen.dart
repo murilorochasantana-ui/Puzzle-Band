@@ -31,7 +31,7 @@ class ConfiguracoesScreen extends StatelessWidget {
             ListTile(
               leading: const Icon(Icons.child_care_rounded),
               title: Text('Identificação: ${service.config.childId}'),
-              subtitle: const Text('Definida no env.json (CHILD_ID). Precisa ser a mesma do painel.'),
+              subtitle: const Text('Definida no env.json (CHILD_ID). Precisa ser a mesma da pulseira.'),
             ),
           ],
         ),

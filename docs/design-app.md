@@ -229,7 +229,7 @@ neutros. Nenhuma usa o vermelho, o âmbar ou o verde dos níveis.
 | Nada pisca nem pulsa; animações curtas e só como resposta | Sensibilidade sensorial e carga de atenção (WCAG 2.3.3) | Teste: a tela Início "assenta" sem animação em loop; com "reduzir movimento", as durações são zero |
 | Vermelho de crise firme, mas não agressivo; vermelho e amarelo só para risco | Alarme visual aumenta o estresse; cor com significado único é aprendida mais rápido | Paleta acima |
 | Gatilho em linguagem simples ("Provável gatilho: barulho"), com o texto técnico do site logo abaixo | O cuidador decide rápido ("baixar o som"); o texto técnico continua disponível. A manchete sempre diz "provável": a regra não afirma causa | Teste das manchetes para cada `tipo` de gatilho |
-| Cada falha diz o que aconteceu e o que fazer (conectando, sem conexão, painel parado, pulseira desconectada, configuração incompleta) | Estado ambíguo ("—" sem explicação) gera ansiedade | Testes e imagens de cada estado |
+| Cada falha diz o que aconteceu e o que fazer (conectando, sem conexão, pulseira parou de enviar, pulseira desconectada, configuração incompleta) | Estado ambíguo ("—" sem explicação) gera ansiedade | Testes e imagens de cada estado |
 | Tema escuro seguindo o sistema | O cuidador olha o celular à noite, muitas vezes no quarto da criança: menos brilho e menos luz no ambiente | Imagens no tema escuro; contraste AA verificado |
 | Navegação com rótulos sempre visíveis; nome da aba igual ao título da tela | Ícone sozinho exige memorização | Teste confere "Ajustes" na aba e no título |
 | Painel "Hoje": o botão informa ao leitor de tela se está aberto ou recolhido; cada episódio é um botão que fala o relatório inteiro | O cuidador sabe o que o toque faz e ouve o episódio sem abrir o detalhe | Teste do estado expandido (`isExpanded`) e dos rótulos; `labeledTapTargetGuideline` com o painel aberto |
@@ -282,7 +282,7 @@ Estados da tela Início:
 |---|---|---|
 | <img src="../mobile/test/goldens/inicio_painel_aberto.png" width="220"> | <img src="../mobile/test/goldens/inicio_painel_vazio.png" width="220"> | <img src="../mobile/test/goldens/episodio_detalhe.png" width="220"> |
 
-| Sem conexão | Painel (site) e pulseira offline | Configuração incompleta (`env.json`) |
+| Sem conexão | Pulseira parou de enviar e está offline | Configuração incompleta (`env.json`) |
 |---|---|---|
 | <img src="../mobile/test/goldens/inicio_sem_conexao.png" width="220"> | <img src="../mobile/test/goldens/inicio_painel_e_pulseira_offline.png" width="220"> | <img src="../mobile/test/goldens/inicio_erro_configuracao.png" width="220"> |
 
@@ -473,7 +473,7 @@ medidas novas entraram no tema.
     - faixas de fundo discretas marcam os momentos em que o nível era Atenção ou Possível crise. A legenda tem amostra, ícone e nome do nível;
     - abaixo do gráfico, a leitura atual, a mínima, a máxima e a média dos 5 minutos, em quatro colunas (duas por linha com a fonte ampliada);
     - tocar ou arrastar no gráfico mostra uma linha vertical, o marcador e um balão com o horário, o nível e **todas** as métricas daquele instante. O balão fica no canto oposto ao dedo e some 4 s depois de soltar;
-    - estados: sem dados ainda, conectando, sem conexão e painel parado. Nos dois últimos, o gráfico fica congelado, com um aviso que diz até quando há dados;
+    - estados: sem dados ainda, conectando, sem conexão e pulseira parada. Nos dois últimos, o gráfico fica congelado, com um aviso que diz até quando há dados;
   - **Crises nos últimos 7 dias**, pela avaliação do cuidador:
     - barras empilhadas, com as crises confirmadas embaixo (cor sólida) e as possíveis crises aguardando confirmação em cima (tom claro com listras diagonais), separadas por 2 dp. Os descartados não entram;
     - o total de cada dia fica na ponta da barra, e tocar numa barra mostra as duas contagens e a duração somada dos episódios encerrados do dia;
@@ -484,7 +484,7 @@ medidas novas entraram no tema.
 |---|---|
 | <img src="../mobile/test/goldens/graficos.png" width="220"> | <img src="../mobile/test/goldens/graficos_balao.png" width="220"> |
 
-| 7 dias, com o balão do dia | Painel parado (dados congelados) | Sem dados |
+| 7 dias, com o balão do dia | Pulseira parada (dados congelados) | Sem dados |
 |---|---|---|
 | <img src="../mobile/test/goldens/graficos_7dias.png" width="220"> | <img src="../mobile/test/goldens/graficos_painel_parado.png" width="220"> | <img src="../mobile/test/goldens/graficos_sem_dados.png" width="220"> |
 
@@ -691,20 +691,23 @@ têm branco nem preto puros.
 
 ### Telas no escuro
 
-As imagens `mobile/test/goldens/escuro_*.png` cobrem todas as telas e
-estados:
+As imagens `mobile/test/goldens/escuro_*.png` cobrem todas as telas, nos
+estados principais:
 
 - **Login.**
-- **Início:** calmo, atenção, possível crise, logo depois do "Estou ciente",
-  BPM 190, painel "Hoje" aberto e vazio, conectando, sem conexão, painel e
-  pulseira offline, erro de configuração.
-- **Episódio:** detalhe e editor de lembrete.
-- **Gráficos:** as oito métricas (`escuro_graficos` é o BPM;
-  `escuro_graficos_<métrica>` são as outras sete), o balão, os 7 dias, o
-  painel parado e sem dados.
-- **Histórico:** calendário, lista por dia, cartão confirmado aberto,
-  "a confirmar", descartado, filtro por dia, vazio, cópia salva.
-- **Ajustes:** com a Aparência e com erro de configuração.
+- **Início:** calmo, atenção, possível crise, painel "Hoje" aberto e sem
+  conexão.
+- **Episódio:** detalhe.
+- **Gráficos:** BPM, o balão e os 7 dias.
+- **Histórico:** calendário, cartão confirmado aberto e descartado.
+- **Ajustes:** com a Aparência.
+
+Os outros estados no escuro (painel vazio, pulseira parada, histórico a
+confirmar, filtro por dia, etc.) passam pelo teste de toque, rótulos e
+contraste AA de `telas_test.dart`, sem imagem. As outras sete métricas no
+escuro não têm imagem própria: um teste sem imagem (`telas_test.dart`,
+"tema escuro: as 8 métricas…") desenha cada uma no escuro e confere que não
+há erro e que a linha usa a cor dela em `CoresDados.escuro`.
 
 | Ajustes → Aparência | Início em atenção | Balão | Descartado | Calendário |
 |---|---|---|---|---|
@@ -740,7 +743,7 @@ estados:
       9, 90, 190 e "—", em 1,0× e 1,3×;
     - nos Gráficos: a troca de métrica (série, eixo, cor e resumo), as
       faixas de nível com legenda, o balão com todas as métricas (abrir,
-      arrastar e sumir), o painel parado, a falta de conexão e o gráfico de 7
+      arrastar e sumir), a pulseira parada, a falta de conexão e o gráfico de 7
       dias sem descartados;
     - no Histórico: as cores do calendário (0, 3 e 7 crises confirmadas: sem
       cor, amarelo e vermelho), a bolinha azul só no dia com pendentes, a

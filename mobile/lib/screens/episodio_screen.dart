@@ -46,7 +46,7 @@ class EpisodioScreen extends StatelessWidget {
                           child: EstadoVazio(
                             icone: Icons.history_rounded,
                             titulo: 'Episódio fora do histórico',
-                            texto: 'O painel (site) não mandou mais este episódio. '
+                            texto: 'A pulseira não mandou mais este episódio. '
                                 'Ele pode ter sido apagado em "Limpar histórico".',
                           ),
                         ),

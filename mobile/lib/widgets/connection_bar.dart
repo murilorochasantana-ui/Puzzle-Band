@@ -64,7 +64,7 @@ class ConnectionBar extends StatelessWidget {
 
     if (itens.isEmpty && service.estadoAoVivo) {
       return Semantics(
-        label: 'Conexões: tudo conectado. Servidor, pulseira e painel funcionando.',
+        label: 'Conexões: tudo conectado. Servidor e pulseira funcionando, com os dados ao vivo.',
         excludeSemantics: true,
         child: Row(
           children: [

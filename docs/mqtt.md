@@ -369,8 +369,8 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
 
 ## Ordem de reset (`npm run resetar`)
 
-Passo a passo para a apresentação, opções e o que é apagado: README,
-"Resetar para uma apresentação". Aqui, o que cada parte faz com as
+Passo a passo para a apresentação, opções e o que é apagado:
+[apresentacao.md](apresentacao.md#resetar-para-uma-apresentação). Aqui, o que cada parte faz com as
 mensagens:
 
 1. **Terminal** (`simulator/resetar.js`, credenciais do `simulator/.env`):
@@ -406,8 +406,8 @@ mensagens:
    3. apaga os lembretes e cancela os avisos agendados deles;
    4. com `manter_preferencias: false`, também apaga o nome da criança, a
       aparência e os alertas sonoros;
-   5. publica `comando/resposta` e mostra o SnackBar "Dados apagados pelo
-      painel para uma nova apresentação.";
+   5. publica `comando/resposta` e mostra o SnackBar "Dados apagados para
+      uma nova apresentação.";
    6. assina de novo os tópicos: se o `historico` retido de depois do reset
       chegou antes da ordem (app que estava fechado), o broker o reentrega.
 4. **Site** (`frontend/src/hooks/useBandLink.js`): só age na ordem **ao

@@ -1,6 +1,6 @@
 # Modelo preditivo
 
-Como rodar o treino: seção "Treinando o modelo" do [README](../README.md).
+Como rodar o treino: [Treino](#treino-trainpy), abaixo.
 
 ## Arquivos
 
@@ -37,6 +37,10 @@ treinado em … (model/train.py)").
 pip install pandas scikit-learn openpyxl numpy
 python model/train.py
 ```
+
+Rode na raiz do projeto. Para trocar de dataset, edite a constante `DATASET`
+no topo de `model/train.py`. Depois de treinar, reinicie a pulseira (Ctrl+C
+e rode de novo) para ela carregar o modelo novo.
 
 Isso reescreve `frontend/src/model/forest.json`, consumido pela pulseira
 (`frontend/src/model/predict.js`, chamado por `simulator/borda.js`) — sem

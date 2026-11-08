@@ -203,7 +203,7 @@ Future<ServicoFalso> conectando() async => (await calmo())
   ..recebidoEm = null
   ..sinais = const [];
 
-/// Broker conectado, mas o painel (site) parou e a pulseira caiu.
+/// Broker conectado, mas o estado parou de chegar e a pulseira caiu.
 Future<ServicoFalso> painelEPulseiraOffline() async => (await calmo())
   ..aoVivo = false
   ..presenca = Presenca.offline

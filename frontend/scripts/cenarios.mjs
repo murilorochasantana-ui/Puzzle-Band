@@ -5,8 +5,8 @@
 // (Random Forest) -> episodios + gatilho. Os "alertas" sao o que a pulseira
 // publicaria em puzzleband/<id>/alertas.
 //
-// Os cenarios reproduzem os do simulador de linha de comando descritos no
-// README (crise_ruido, crise_sem_gatilho) e acrescentam dois de controle.
+// Os cenarios reproduzem os do simulador de linha de comando descritos em
+// docs/pulseira.md (crise_ruido, crise_sem_gatilho) e acrescentam dois de controle.
 //
 //   node scripts/cenarios.mjs              # relatorio com 20 sementes por cenario
 //   node scripts/cenarios.mjs --sementes 50

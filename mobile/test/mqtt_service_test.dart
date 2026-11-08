@@ -269,7 +269,7 @@ void main() {
       expect(service.resetAplicado, 'r1');
       expect(service.publicadas.single, ('puzzleband/C01/comando/resposta', '{"id":"r1","status":"aplicado"}'));
       await Future<void>.delayed(Duration.zero);
-      expect(avisos, ['Dados apagados pelo painel para uma nova apresentação.']);
+      expect(avisos, ['Dados apagados para uma nova apresentação.']);
 
       // preferencias mantidas
       expect(preferencias.nomeCrianca, 'Ana');

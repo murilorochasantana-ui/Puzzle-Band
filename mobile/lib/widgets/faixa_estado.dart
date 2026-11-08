@@ -398,14 +398,14 @@ class _SemEstadoAoVivo extends StatelessWidget {
       SituacaoEstado.painelParado => (
           Icons.sensors_off_rounded,
           'Sem dados ao vivo',
-          'O painel (site) parou de enviar às ${horaMinuto(recebido!)}. '
-              'Ele precisa estar aberto para analisar os sinais.',
+          'A pulseira parou de enviar às ${horaMinuto(recebido!)}. '
+              'Confira se ela está ligada e conectada.',
           null,
         ),
       _ => (
           Icons.hourglass_empty_rounded,
-          'Aguardando o painel',
-          'Abra o painel (site) no computador. É ele que analisa os sinais da pulseira.',
+          'Aguardando a pulseira',
+          'Confira se ela está ligada e conectada. É ela que analisa os sinais.',
           null,
         ),
     };

@@ -107,7 +107,7 @@ class _SecaoSinaisState extends State<SecaoSinais> {
             )
             : (
               Icons.sensors_off_rounded,
-              'O painel (site) parou de enviar às ${horaMinuto(ultima)}. '
+              'A pulseira parou de enviar às ${horaMinuto(ultima)}. '
                   'O gráfico mostra os últimos 5 minutos recebidos.',
             );
     final temValor = amostras.any((a) => _metrica.valor(a) != null);
@@ -119,7 +119,7 @@ class _SecaoSinaisState extends State<SecaoSinais> {
               ? const EstadoVazio(
                 icone: Icons.cloud_sync_outlined,
                 titulo: 'Conectando ao servidor…',
-                texto: 'O gráfico aparece quando as leituras do painel (site) chegarem.',
+                texto: 'O gráfico aparece quando as leituras da pulseira chegarem.',
               )
               : semConexao
               ? const EstadoVazio(
@@ -130,7 +130,7 @@ class _SecaoSinaisState extends State<SecaoSinais> {
               : const EstadoVazio(
                 icone: Icons.monitor_heart_outlined,
                 titulo: 'Aguardando leituras ao vivo',
-                texto: 'O gráfico aparece quando o painel (site) estiver aberto e enviando o estado.',
+                texto: 'O gráfico aparece quando a pulseira estiver ligada e enviando o estado.',
               );
     } else if (!temValor) {
       corpo = EstadoVazio(

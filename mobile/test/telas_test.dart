@@ -544,7 +544,7 @@ void main() {
 
       await mostrar(tester, await painelEPulseiraOffline());
       expect(find.text('Sem dados ao vivo'), findsOneWidget);
-      expect(find.textContaining('O painel (site) parou de enviar às 14:40'), findsOneWidget);
+      expect(find.textContaining('A pulseira parou de enviar às 14:40'), findsOneWidget);
       expect(find.text('Pulseira: desconectada'), findsOneWidget);
 
       await mostrar(tester, await erroDeConfiguracao());
@@ -726,7 +726,7 @@ void main() {
 
       expect(servico.avaliacoes.single, ('ep_4', Avaliacao.confirmado, 'Sirene da escola'));
       expect(find.text('Gatilho confirmado por você às 15:00.'), findsOneWidget);
-      expect(find.text('Gatilho confirmado e enviado ao painel.'), findsOneWidget);
+      expect(find.text('Gatilho confirmado e enviado à pulseira.'), findsOneWidget);
       expect(find.text('Observação: Sirene da escola'), findsOneWidget);
       expect(find.descendant(of: cartao('ep_4'), matching: find.text('Confirmado')), findsNWidgets(2));
     });
@@ -737,7 +737,7 @@ void main() {
       await tocarNoMeio(tester, cartao('ep_4'));
       await tocarNoMeio(tester, find.text('Descartar'));
       expect(servico.avaliacoes.last, ('ep_4', Avaliacao.descartado, ''));
-      expect(find.text('Indicação descartada e enviada ao painel.'), findsOneWidget);
+      expect(find.text('Indicação descartada e enviada à pulseira.'), findsOneWidget);
 
       final botao = find.ancestor(of: find.text('Descartado'), matching: find.byWidgetPredicate((w) => w is FilledButton));
       expect(botao, findsOneWidget);
@@ -834,6 +834,23 @@ void main() {
       }
     });
 
+    // Sem imagem (os goldens das metricas no escuro sairam na limpeza): cada
+    // metrica e desenhada no tema escuro, sem erro, com a cor da paleta escura.
+    testWidgets('tema escuro: as 8 métricas desenham sem erro, cada uma com a sua cor', (tester) async {
+      await mostrar(tester, await possivelCrise(), aba: 1, escuro: true);
+      SfCartesianChart grafico() =>
+          tester.widget<SfCartesianChart>(find.descendant(of: find.byType(GraficoSinais), matching: find.byType(SfCartesianChart)));
+      expect(Metrica.values, hasLength(8));
+      for (final m in Metrica.values) {
+        await tocarNoMeio(tester, find.byKey(ValueKey('metrica-${m.name}')));
+        expect(tester.takeException(), isNull, reason: '${m.name} no escuro');
+        expect(tester.widget<ChoiceChip>(find.byKey(ValueKey('metrica-${m.name}'))).selected, isTrue);
+        final serie = grafico().series.first as SplineAreaSeries;
+        expect(serie.dataSource, isNotEmpty, reason: '${m.name} tem pontos para desenhar');
+        expect(serie.borderColor, CoresDados.escuro.metricas[m.index], reason: '${m.name} usa a cor da paleta escura');
+      }
+    });
+
     testWidgets('faixas de fundo nos momentos de Atenção e Possível crise, com legenda', (tester) async {
       final semantica = tester.ensureSemantics();
       await mostrar(tester, await possivelCrise(), aba: 1);
@@ -876,7 +893,7 @@ void main() {
 
     testWidgets('painel parado e sem conexão: gráfico congelado, com aviso', (tester) async {
       await mostrar(tester, await painelEPulseiraOffline(), aba: 1);
-      expect(find.text('O painel (site) parou de enviar às 15:00. O gráfico mostra os últimos 5 minutos recebidos.'),
+      expect(find.text('A pulseira parou de enviar às 15:00. O gráfico mostra os últimos 5 minutos recebidos.'),
           findsOneWidget);
       expect(find.byType(GraficoSinais), findsOneWidget);
 
@@ -1074,7 +1091,7 @@ void main() {
       expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
     });
 
-    testWidgets('ordem de reset no app aberto: SnackBar discreto "Dados apagados pelo painel..."', (tester) async {
+    testWidgets('ordem de reset no app aberto: SnackBar discreto "Dados apagados para uma nova apresentação."', (tester) async {
       final servico = await calmo();
       tester.view.physicalSize = const Size(393 * 2, 852 * 2);
       tester.view.devicePixelRatio = 2;
@@ -1089,7 +1106,7 @@ void main() {
       servico.tratarMensagem('puzzleband/C01/comando', '{"acao":"resetar","id":"r1","manter_preferencias":true}');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Dados apagados pelo painel para uma nova apresentação.'), findsOneWidget);
+      expect(find.text('Dados apagados para uma nova apresentação.'), findsOneWidget);
       expect(servico.apagamentos, [true]);
       expect(servico.resetAplicado, 'r1');
 
@@ -1098,7 +1115,7 @@ void main() {
       await tester.pumpAndSettle();
       servico.tratarMensagem('puzzleband/C01/comando', '{"acao":"resetar","id":"r1"}');
       await tester.pump(const Duration(milliseconds: 500));
-      expect(find.text('Dados apagados pelo painel para uma nova apresentação.'), findsNothing);
+      expect(find.text('Dados apagados para uma nova apresentação.'), findsNothing);
       expect(servico.apagamentos, [true]);
     });
   });

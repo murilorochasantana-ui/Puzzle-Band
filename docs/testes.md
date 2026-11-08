@@ -254,7 +254,7 @@ Leitura das tabelas:
 ## Teste com eventos aleatórios
 
 O cenário `eventos_aleatorios` sorteia eventos de 8 tipos (tabela no
-[README](../README.md#cenário-eventos_aleatorios)), com intensidade leve
+[pulseira.md](pulseira.md#cenário-eventos_aleatorios)), com intensidade leve
 (×0,3), moderada (×0,65) ou alta (×1) nas crises e pausas calmas de 120 a
 240 s. O `verificar.js` faz duas coisas:
 
@@ -479,80 +479,5 @@ completo. Na execução seguinte, a pulseira leu os 37 episódios do arquivo.
 
 ## Roteiro de demonstração
 
-> Com o app do cuidador no celular (notificação, "Estou ciente" e avaliação
-> pelo app), siga o roteiro em 4 passos do
-> [README](../README.md#roteiro-de-demonstração-pulseira--app--painel). Durante o `demo`
-> abaixo, o app aberto recebe o mesmo estado, os alertas e o histórico, com
-> ou sem o painel do site aberto.
-
-O roteiro do cenário `demo` dura **10,5 minutos** (630 s), com o nome da fase
-em cada linha do log. Com `--ciclos 1` ele roda uma vez, sem variação (o 1º
-ciclo é sempre o nominal), e encerra depois de uma pausa calma final:
-
-```
-0 s calmo → 60 s exercício → 150 s calmo → 210 s crise com ruído
-→ 330 s recuperação → 420 s crise sem gatilho → 540 s recuperação
-→ 565 s pausa calma final → 685 s fim
-```
-
-### Antes de começar
-
-1. `simulator/.env` e `frontend/.env` configurados, com o mesmo `CHILD_ID`
-   (e o `mobile/env.json`, se for usar o app).
-2. Terminal 1: `cd frontend` e `npm run dev`. Abra o painel. O status deve
-   mostrar "Broker: conectado".
-3. Se quiser guardar os episódios anteriores, exporte o CSV no painel antes.
-   Depois, com o app aberto no celular, rode `npm run resetar` em
-   `simulator/`: apaga o histórico da pulseira, os retidos no broker e os dados
-   do app e do site, e mostra "App limpo" (ver README, "Resetar para uma
-   apresentação").
-4. Terminal 2: `cd simulator` e
-   `npm run demo -- --ciclos 1 --limpar-historico`.
-   - O `--limpar-historico` começa o histórico vazio, para a plateia ver só os
-     episódios da demo. Depois do `npm run resetar` ele não é necessário (a
-     pulseira já começa vazia), mas não atrapalha.
-   - A pausa final de 2 min garante que o último episódio feche antes de a
-     pulseira parar. Sem `--ciclos 1`, a demo recomeça em loop, já com
-     variação.
-   - Ao parar, a pulseira publica "offline", e o painel e o app mostram
-     "Pulseira: offline".
-
-### Linha do tempo
-
-Os tempos são contados desde o início do simulador e variam ±3 s com o ruído
-dos sensores.
-
-| Tempo | Fase no log | O que aparece no painel (e no app) | O que mostrar ou dizer |
-|---|---|---|---|
-| 0:00–1:00 | `demo 1/7 · calmo` | "Sem sinais de crise"; o modelo começa a avaliar após 31 s de leituras | Os 7 sensores; o modelo roda na própria pulseira (processamento na borda) |
-| 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise", mas pode aparecer **"Atenção"** e, às vezes, "Possível crise" por alguns segundos | Limitação real do modelo: a EDA também sobe no exercício. É por isso que o sistema é apoio e o cuidador avalia |
-| 2:30–3:30 | `demo 3/7 · calmo` | Volta ao normal; os alertas do exercício viram 1–2 episódios encerrados no histórico | Histerese: o episódio só fecha após 30 s calmos |
-| 3:30 | `demo 4/7 · crise com ruído: ruído subindo` | O ruído sobe para ~88 dB; o modelo continua em baixo risco | O ambiente mudou, mas a criança ainda está bem |
-| 3:47 | `… fisiologia subindo` | BPM e EDA sobem, HRV cai | — |
-| ~3:51 | `demo 4/7 · crise com ruído` | **"Possível crise"** + *"Provável gatilho: ruído (45 → 89 dB, cerca de 12 s antes da alteração fisiológica)"*; episódio "em andamento" no histórico | Detectar a crise (modelo) × indicar o provável gatilho (regra explicável); "provável", nunca causa |
-| 5:30 | `demo 5/7 · recuperação` | Sinais voltam ao normal; o alerta some por volta de 6:20 | — |
-| ~6:50 | — | O episódio encerra no histórico (~2 min 30 s) | Clicar em **Confirmar gatilho** e escrever uma observação ("som alto na sala") |
-| 7:00 | `demo 6/7 · crise sem gatilho` | Por volta de 7:05: **"Possível crise"** + *"Sem gatilho ambiental aparente: luz e ruído estáveis. A causa pode ser outra (social, rotina, desconforto físico)."* | O sistema não inventa uma causa quando o ambiente não mudou |
-| 9:00 | `demo 7/7 · recuperação` | O alerta some por volta de 9:50; o episódio encerra por volta de 10:20 | — |
-| 9:25–11:25 | `pausa calma final · encerra em … s` | Resumo de padrões, por exemplo "Ruído como provável gatilho: 1 de 4 episódios · 1 confirmado pelo cuidador" | Clicar em **Exportar CSV** (registro de testes do TCC); o histórico fica guardado na pulseira (LGPD) |
-
-O total do resumo costuma ser 3 ou 4 episódios: as duas crises mais 1 ou 2
-alertas do exercício. Dá para clicar em **Descartar** nos do exercício
-durante a fala sobre limitações e mostrar a avaliação do cuidador.
-
-### Plano B (sem internet ou sem broker)
-
-O painel e o app dependem do broker, e a pulseira só começa a contar o
-roteiro depois de conectar. Depois de conectada, ela continua processando se
-a conexão cair. Antes, o modo "Simulador manual" rodava o modelo no próprio
-navegador, sem rede; esse modo deixou de existir, porque o site não processa
-mais nada. Sem broker, mostre os resultados offline, que passam pelo mesmo
-processamento da pulseira:
-
-1. `cd simulator` e `npm run verificar -- --cenario demo --sementes 5`: a
-   tabela mostra, para cada ciclo do `demo`, os episódios, o nível máximo e o
-   gatilho identificado.
-2. `cd frontend` e `node scripts/cenarios.mjs`: o relatório dos cenários de
-   ponta a ponta (quantas vezes o gatilho certo foi identificado).
-3. Mostre um histórico já gravado em `simulator/data/historico_<id>.json`
-   (de uma execução anterior) ou um CSV exportado antes.
+O roteiro da apresentação (com o app e o do cenário `demo`, com a linha do
+tempo e o plano B sem broker) está em [apresentacao.md](apresentacao.md).

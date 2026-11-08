@@ -86,7 +86,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     final topo = <Widget>[
       const TituloTela(
         'Histórico',
-        apoio: 'Episódios detectados pelo painel, por dia. Toque num episódio para confirmar ou descartar.',
+        apoio: 'Episódios detectados pela pulseira, por dia. Toque num episódio para confirmar ou descartar.',
       ),
       const SizedBox(height: Espaco.m),
       _FonteDosDados(service: service),
@@ -114,7 +114,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
           child: EstadoVazio(
             icone: Icons.history_rounded,
             titulo: 'Nenhum episódio ainda',
-            texto: 'Quando o painel (site) detectar sinais de atenção ou de possível crise, '
+            texto: 'Quando a pulseira detectar sinais de atenção ou de possível crise, '
                 'o episódio aparece aqui para você avaliar.',
           ),
         )
@@ -276,7 +276,7 @@ class _FonteDosDados extends StatelessWidget {
     final recebido = service.historicoRecebidoEm;
     final String frase;
     if (aoVivo) {
-      frase = 'Atualizado pelo painel${recebido != null ? ' às ${horaMinuto(recebido)}' : ''}.';
+      frase = 'Atualizado pela pulseira${recebido != null ? ' às ${horaMinuto(recebido)}' : ''}.';
     } else if (recebido != null) {
       frase = 'Sem conexão: mostrando a última cópia salva, de ${diaHora(recebido)}.';
     } else {

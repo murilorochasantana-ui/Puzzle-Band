@@ -134,7 +134,7 @@ do zero, há dois caminhos. Exporte o CSV antes se quiser guardar.
   o arquivo, os retidos no broker e manda o app e o site apagarem os dados
   locais pela ordem em `comando`. No app saem a cópia do histórico, os
   episódios notificados, os lembretes e os gráficos (e, com `--tudo`, as
-  preferências). Ver README, "Resetar para uma apresentação", e
+  preferências). Ver [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação) e
   [mqtt.md](mqtt.md#ordem-de-reset-npm-run-resetar).
 
 O app só aceita um `historico` com `"origem": "pulseira"`. Uma aba antiga do

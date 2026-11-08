@@ -10,3 +10,6 @@ mobile/env.json
 
 # Skills e configurações locais do Claude (não vão para o GitHub)
 .claude/
+
+# Saidas da linha de base da limpeza (docs/progresso.md)
+linha-de-base/

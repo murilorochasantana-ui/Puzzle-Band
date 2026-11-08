@@ -51,7 +51,7 @@ class MqttService extends ChangeNotifier {
   final Topics _topics;
 
   /// SnackBar mostrado quando a ordem do terminal apaga os dados.
-  static const avisoDeReset = 'Dados apagados pelo painel para uma nova apresentação.';
+  static const avisoDeReset = 'Dados apagados para uma nova apresentação.';
 
   static const janelaSinais = Duration(minutes: 5); // grafico ao vivo
   static const _estadoMaxAtraso = Duration(seconds: 6); // a pulseira publica 1x/s

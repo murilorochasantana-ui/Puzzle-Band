@@ -12,7 +12,9 @@ aprovação no fim de cada etapa.
 | Etapa | Situação |
 |---|---|
 | 1. Inventário (só leitura) | concluída e aprovada |
-| 2. Remoções aprovadas — parte 1 | **concluída — aguardando revisão** |
+| 2. Remoções aprovadas — parte 1 | concluída (commit `660a35e`) |
+| 2. Remoções aprovadas — parte 2 | concluída e aprovada (sem commit) |
+| 2. Remoções aprovadas — parte 3 | **concluída — aguardando revisão** (sem commit) |
 | 3. Simplificação do código | não iniciada |
 | 4. Modelo mais simples | não iniciada |
 | 5. Relatório final | não iniciada |
@@ -189,8 +191,16 @@ importáveis dos mesmos caminhos (reexport), então testes e imports não mudam:
 - **07/11/2026 — Etapa 2, parte 1:** aprovados R1–R11, S1, S4, S5, S7, S8,
   S9 e D1 (corrigir o texto de Ajustes e os 3 goldens). **Não agora:** S2,
   S3 e S6 (dividir o README).
+- **08/11/2026 — Etapa 2, parte 2:** corrigir no app todos os textos que
+  dizem que o site analisa ou precisa estar aberto (D2), com os goldens;
+  fazer o S6 (README ~150 linhas, `docs/pulseira.md`,
+  `docs/apresentacao.md`, sem perder informação); `linha-de-base/` no
+  `.gitignore`. S2 e S3 continuam fora.
+- **08/11/2026 — Etapa 2, parte 3:** parte 2 aprovada. Aviso do reset sem
+  citar o painel ("Dados apagados para uma nova apresentação."); teste sem
+  imagem para as 8 métricas no tema escuro (sem goldens novos).
 
-## Etapa 2, parte 1 — feito (sem commit)
+## Etapa 2, parte 1 — feito (commitado pelo usuário em `660a35e`)
 
 As remoções foram feitas com `git rm`/`git mv` (ficam no índice); as edições
 estão só na árvore de trabalho.
@@ -213,7 +223,7 @@ estão só na árvore de trabalho.
 | S9 | `mobile/README.md` reduzido a um atalho para `docs/app.md` |
 | D1 | Ajustes: "Painel (site): … O modelo roda no site: ele precisa estar aberto." → "Análise (pulseira): … O modelo roda na própria pulseira. O painel do site é opcional." A linha mede o estado ao vivo publicado pela pulseira (`estadoAoVivo`). `docs/app.md` e README atualizados; goldens ajustes, escuro_ajustes e fonte_130_ajustes regenerados (só eles) |
 
-Encontrado e **não** alterado (precisa de aprovação, texto visível):
+Encontrado e **não** alterado na parte 1 (corrigido na parte 2, item D2):
 `faixa_estado.dart:398-406`, Início sem dados ao vivo — "O painel (site)
 parou de enviar às HH:MM. Ele precisa estar aberto para analisar os sinais."
 e "Aguardando o painel / Abra o painel (site) no computador. É ele que analisa
@@ -251,7 +261,117 @@ inicio_painel_e_pulseira_offline e graficos_painel_parado).
 Dependências removidas: `@types/react`, `@types/react-dom`. O `.git` não
 diminui (os arquivos ficam no histórico).
 
+## Etapa 2, parte 2 — feito (sem commit)
+
+Pedido (08/11/2026): D2 (textos do app que diziam que o site analisa ou
+precisa estar aberto), S6 (README ~150 linhas + `docs/pulseira.md` e
+`docs/apresentacao.md`) e `linha-de-base/` no `.gitignore`. S2 e S3
+continuam fora.
+
+### D2 — textos visíveis do app
+
+| Onde | Antes | Depois |
+|---|---|---|
+| Início, pulseira parada (`faixa_estado.dart`) | "O painel (site) parou de enviar às HH:MM. Ele precisa estar aberto para analisar os sinais." | "A pulseira parou de enviar às HH:MM. Confira se ela está ligada e conectada." |
+| Início, aguardando (`faixa_estado.dart`) | "Aguardando o painel" / "Abra o painel (site) no computador. É ele que analisa os sinais da pulseira." | "Aguardando a pulseira" / "Confira se ela está ligada e conectada. É ela que analisa os sinais." |
+| Gráficos (`graficos_screen.dart`) | "O painel (site) parou de enviar…"; "…leituras do painel (site) chegarem."; "…quando o painel (site) estiver aberto e enviando o estado." | "A pulseira parou de enviar…"; "…leituras da pulseira chegarem."; "…quando a pulseira estiver ligada e enviando o estado." |
+| Histórico (`historico_screen.dart`) | "Episódios detectados pelo painel…"; "Quando o painel (site) detectar…"; "Atualizado pelo painel às…" | "…pela pulseira…"; "Quando a pulseira detectar…"; "Atualizado pela pulseira às…" |
+| Painel do dia vazio (`painel_do_dia.dart`) | "Quando o painel (site) detectar…" | "Quando a pulseira detectar…" |
+| Episódio fora do histórico (`episodio_screen.dart`) | "O painel (site) não mandou mais este episódio." | "A pulseira não mandou mais este episódio." |
+| Avaliação (SnackBar, `cartao_episodio.dart`) | "…enviado ao painel." / "…enviada ao painel." | "…enviado à pulseira." / "…enviada à pulseira." |
+| "Estou ciente" (dica do leitor de tela, `cartao_episodio_ativo.dart`) | "Avisa o painel que você viu o alerta" | "Avisa a pulseira que você viu o alerta" |
+| Conexões (leitor de tela, `connection_bar.dart`) | "…Servidor, pulseira e painel funcionando." | "…Servidor e pulseira funcionando, com os dados ao vivo." |
+| Ajustes, CHILD_ID (`configuracoes_screen.dart`) | "Precisa ser a mesma do painel." | "Precisa ser a mesma da pulseira." |
+
+Mantidos (corretos): "não vai para o painel" (nome e lembretes ficam só no
+celular), "confirmado no painel" (avaliação feita no site). Notificações:
+nenhum texto sobre o site. **Não alterado, fora do pedido:** o aviso do reset
+"Dados apagados pelo painel para uma nova apresentação." — o reset vem do
+terminal (`npm run resetar`), não do site; não diz que o site analisa.
+
+Testes: 4 asserts de `telas_test.dart` com os textos novos. Goldens: 13
+regenerados (ajustes, escuro_ajustes, fonte_130_ajustes, historico,
+escuro_historico, fonte_130_historico, historico_filtro_dia,
+historico_sem_conexao, historico_vazio, inicio_painel_e_pulseira_offline,
+inicio_painel_vazio, graficos_painel_parado, graficos_sem_dados); os outros 36
+e o `forest.json` idênticos (hash). Docs que descreviam esses estados
+atualizados (`app.md`, `design-app.md`, `figma/home.md`).
+
+Sobras da parte 1 corrigidas junto: `design-app.md` ainda listava as 7
+métricas no escuro e outros goldens removidos; `app.md` ainda dizia
+"pulseira e painel" nas conexões e que o CHILD_ID só precisava bater com o
+site. Ponto de atenção registrado no `design-app.md`: as cores das outras
+sete métricas no escuro não têm mais imagem nem teste próprio (removidas na
+parte 1, R9).
+
+### S6 — README e docs novos
+
+- README: 672 → 164 linhas (intro, diagrama, funcionalidades, estrutura,
+  como rodar, testes, treino, tabela de docs, créditos).
+- `docs/pulseira.md` (264 linhas): seção "Pulseira simulada" do README
+  inteira (como funciona, histórico local, configuração, modo controle, loop
+  e opções, cenários, eventos aleatórios, gabarito, verificação sem broker) +
+  a lista de arquivos do `simulator/` que estava na estrutura do README.
+- `docs/apresentacao.md` (223 linhas): "Resetar para uma apresentação" e
+  "Roteiro de demonstração" do README + o roteiro do cenário `demo` (linha
+  do tempo e plano B) que estava no `docs/testes.md`; o `testes.md` ficou
+  com um atalho.
+- Prova de que nada se perdeu: as 445 linhas movidas existem nos docs novos;
+  as 7 diferenças são títulos renomeados e links reescritos. Detalhes que só
+  estavam no README e não iam para os docs novos foram para `modelo.md`
+  (constante `DATASET`, reiniciar a pulseira), `pulseira.md` (aviso do site
+  com a pulseira desligada, 2×/s) e `app.md` (CHILD_ID igual ao da pulseira).
+- Links para seções do README em `app.md`, `historico.md`, `modelo.md`,
+  `mqtt.md`, `testes.md` e `frontend/scripts/cenarios.mjs` apontam para os
+  docs novos. Verificador de links (arquivo + âncora, em todos os `.md`):
+  0 quebrados.
+
+### `.gitignore`
+
+`linha-de-base/` adicionada.
+
+### Linha de base depois da parte 2 (`linha-de-base/etapa2-parte2/`)
+
+| Verificação | Resultado |
+|---|---|
+| Lint do site / oxlint em todo o JS | 0 / 0 avisos |
+| Testes do site | 67/67 |
+| Build do site | OK, bundle com os mesmos hashes |
+| Testes do simulador | 30/30 |
+| `verificar.js` (padrão, `--markdown`, `--uma-vez --sementes 50`) e `cenarios.mjs` | **idênticos** a `linha-de-base/etapa2/` |
+| `node --check tools/verificar-app.mjs` | OK |
+| `flutter analyze` | 0 |
+| `flutter test` | 169/169 |
+
+## Etapa 2, parte 3 — feito (sem commit)
+
+- **Aviso do reset:** `MqttService.avisoDeReset` passou de "Dados apagados
+  pelo painel para uma nova apresentação." para "Dados apagados para uma nova
+  apresentação." (o reset vem do terminal). 3 testes atualizados
+  (`mqtt_service_test.dart:272`; `telas_test.dart`: nome do teste e os dois
+  `find.text`) e os docs que citavam o texto (`app.md`, `apresentacao.md`,
+  `mqtt.md`). O aviso do site (`App.jsx`, "pelo terminal") já estava certo.
+  Nenhum golden mostra esse SnackBar.
+- **Métricas no escuro:** teste novo em `telas_test.dart`, grupo Gráficos,
+  "tema escuro: as 8 métricas desenham sem erro, cada uma com a sua cor".
+  Abre Gráficos no escuro e, para cada `Metrica`, seleciona o chip e confere:
+  nenhuma exceção ao desenhar, chip selecionado, série com pontos e linha na
+  cor de `CoresDados.escuro.metricas`. Conferido por mutação (esperar a cor
+  clara faz o teste falhar). Nota do `design-app.md` atualizada.
+
+### Linha de base depois da parte 3 (`linha-de-base/etapa2-parte3/`)
+
+| Verificação | Resultado |
+|---|---|
+| Lint do site / oxlint em todo o JS | 0 / 0 avisos |
+| Testes do site / do simulador | 67/67 · 30/30 |
+| Build do site | OK, mesmos hashes |
+| `verificar.js` (3 variantes) e `cenarios.mjs` | **idênticos** a `linha-de-base/etapa2/` |
+| `node --check tools/verificar-app.mjs` | OK |
+| `flutter analyze` / `flutter test` | 0 · 170/170 (+1 teste novo) |
+| Goldens e `forest.json` | idênticos aos da parte 2 (hash) |
+| Links dos `.md` | 0 quebrados |
+
 ## Próximo passo
 
-Aguardando revisão da parte 1. Pendentes de decisão: S2, S3, S6, o texto do
-Início citado acima, e a Etapa 4.
+Aguardando revisão da parte 3. Pendentes de decisão: S2, S3 e a Etapa 4.
