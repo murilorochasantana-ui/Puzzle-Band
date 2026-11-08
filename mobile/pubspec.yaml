@@ -1,5 +1,5 @@
 name: puzzleband
-description: "A new Flutter project."
+description: "Puzzle Band: app Android do cuidador (estado ao vivo, alertas e histórico vindos da pulseira por MQTT)."
 publish_to: 'none'
 version: 0.1.0
 

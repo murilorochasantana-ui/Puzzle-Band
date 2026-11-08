@@ -4,50 +4,34 @@ Como rodar o treino: seção "Treinando o modelo" do [README](../README.md).
 
 ## Arquivos
 
-- `model/features.py` — engenharia de features (compartilhado entre treino e avaliação)
-- `model/train.py` — treina o classificador **do zero** com um único dataset e exporta `frontend/src/model/forest.json`
-- `model/train_incremental.py` — treina **mantendo o conhecimento de rodadas anteriores** (experimental, ver abaixo)
-- `model/eda/` — scripts de análise exploratória e geradores de dataset sintético (histórico)
-- `model/state/` — estado do treino incremental (`forest_state.pkl` + `training_history.json`)
+- `model/features.py` — engenharia de features (usada pelo treino; a
+  pulseira calcula as mesmas em `frontend/src/model/predict.js`)
+- `model/train.py` — treina e valida (GroupKFold por criança) e exporta
+  `frontend/src/model/forest.json`
+- `model/gerar_dataset_v4.py` — gerador do dataset sintético v4 (semente
+  fixa)
+- `data/raw/dataset_pulseira_TEA_estresse_v4.xlsx` — o dataset do treino
 
-## Qual modelo está em produção
+## Modelo em produção
 
-O `frontend/src/model/forest.json` oficial (o que a pulseira usa) é gerado
-pelo **`model/train.py`**: 60 árvores, profundidade máxima 6, dataset v4, com
+O `frontend/src/model/forest.json` (o que a pulseira usa) é gerado pelo
+`model/train.py`: 60 árvores, profundidade máxima 6, dataset v4, com
 validação GroupKFold por criança. As métricas desta página vêm dele.
+Conferido em 02/11/2026: rodar `python model/train.py` gera um
+`forest.json` com as mesmas 60 árvores que estão versionadas.
 
-O **`model/train_incremental.py` é experimental.** A pasta `model/state/` é
-usada só por ele:
+O `forest.json` tem um campo `meta` (script de origem, dataset, número de
+árvores, data do treino). O `predict.js` ignora esse campo; a pulseira o
+mostra no início, e o rodapé do painel do site também ("Modelo: 60 árvores,
+treinado em … (model/train.py)").
 
-- `forest_state.pkl` — a floresta acumulada (objeto do scikit-learn),
-  necessária para continuar treinando em rodadas futuras. **Não apague** se
-  quiser continuar os experimentos; a pulseira não usa esse arquivo.
-- `training_history.json` — uma entrada por rodada (dataset, amostras,
-  árvores).
+> Histórico: um treino incremental experimental (`train_incremental.py`,
+> com o estado em `model/state/`) e os datasets e scripts de análise
+> anteriores (v1, v2, v3 e `model/eda/`) saíram do projeto na limpeza de
+> 11/2026. Continuam no histórico do git, por exemplo
+> `git show 9f7f8aa:data/raw/dataset_pulseira_TEA_estresse_v3.xlsx > v3.xlsx`.
 
-Essa floresta é **separada** do modelo da pulseira: tem 80 árvores (uma
-rodada com o dataset v4, registrada em 19/09/2026 02:42 UTC) e **não
-corresponde** ao `forest.json` atual.
-
-Como a inconsistência 60 × 80 aconteceu: o `train_incremental.py` rodou
-(80 árvores) e sobrescreveu o `forest.json`; depois o `train.py` rodou e o
-sobrescreveu de novo com 60 árvores. Foi essa versão que entrou no commit
-`4b7a837`, enquanto o `model/state/` continuou com a de 80. Conferido em
-02/11/2026: rodar `python model/train.py` gera um `forest.json` com as **60
-árvores idênticas** às que estavam versionadas, e o `forest_state.pkl` tem
-80 árvores.
-
-Para não confundir de novo:
-
-- os dois scripts gravam no `forest.json` um campo `meta` (script de origem,
-  dataset, número de árvores, data do treino). O `predict.js` ignora esse
-  campo; a pulseira mostra no início, e o rodapé do painel do site também,
-  "Modelo: 60 árvores, treinado em … (model/train.py)";
-- rodar o `train_incremental.py` **substitui** o modelo da pulseira pelo
-  experimental (o script avisa no fim). Para voltar ao oficial:
-  `python model/train.py`.
-
-## Treino do zero (`train.py`)
+## Treino (`train.py`)
 
 ```bash
 pip install pandas scikit-learn openpyxl numpy
@@ -61,43 +45,6 @@ borda; num ESP32 real, o modelo teria de ser convertido para C, o que fica
 como trabalho futuro). O site não carrega as árvores: lê só o campo `meta`
 para o rodapé.
 
-## Treino incremental (experimental) — treinar com vários datasets sem esquecer os anteriores
-
-> Experimental: não é a fonte oficial do `forest.json` (ver "Qual modelo
-> está em produção" acima).
-
-`RandomForestClassifier` não tem uma forma nativa de "continuar" um treino
-como uma rede neural — cada `.fit()` normalmente recria o modelo do zero.
-`train_incremental.py` contorna isso com o `warm_start` do scikit-learn:
-cada rodada **adiciona árvores novas** à floresta já existente, treinadas
-só com o dataset daquela rodada — as árvores das rodadas anteriores
-continuam exatamente como estavam. A previsão final é a média de **todas**
-as árvores acumuladas.
-
-```bash
-# primeira rodada — cria o modelo do zero com este dataset
-python model/train_incremental.py --dataset data/raw/dataset_pulseira_TEA_estresse_v3.xlsx --add-trees 60
-
-# segunda rodada — mantém as árvores da rodada anterior, soma mais árvores treinadas no dataset novo
-python model/train_incremental.py --dataset data/raw/massive --add-trees 60
-
-# aceita .xlsx (aba 'Dados'), .csv com features já calculadas, ou uma PASTA com vários .csv (concatena todos)
-
-# pra descartar tudo e recomeçar do zero:
-python model/train_incremental.py --dataset caminho.xlsx --add-trees 60 --reset
-```
-
-Cada rodada:
-- mostra o AUC do modelo **antes** desta rodada avaliado no dataset novo (indica o quanto o conhecimento anterior já generaliza)
-- soma as árvores novas e reexporta `frontend/src/model/forest.json` com a floresta **completa**
-- registra a rodada em `model/state/training_history.json` (dataset usado, quantas árvores, quando)
-
-**Limitações a saber:**
-- O AUC impresso após cada rodada é *in-sample* (medido nos mesmos dados usados pra treinar) — serve só como sanity check, não é validação real. Para validação séria (GroupKFold por criança, held-out), use `train.py` num dataset específico.
-- O aviso do scikit-learn sobre `class_weight="balanced"` com `warm_start` é esperado: o balanceamento é calculado só com os dados da rodada atual, não com o histórico acumulado. Não é um erro, mas significa que rodadas com prevalência de estresse muito diferente entre si podem desbalancear o peso relativo das árvores.
-- `forest.json` cresce a cada rodada (mais árvores = arquivo maior e inferência mais lenta na pulseira; num ESP32, também mais memória) — não adicione árvores indefinidamente sem necessidade.
-- Não apague `model/state/forest_state.pkl` se quiser continuar treinando depois — é ele que guarda o modelo em si (o `.json` exportado é só a versão pra pulseira consumir, não dá pra continuar o treino a partir dele).
-
 ## Decisões de design
 
 **Alvo binário (crise / sem crise), não os 4 rótulos do dataset.**
@@ -110,7 +57,7 @@ em 3 faixas de risco (baixo / atenção / possível crise).
 **Feature de "batimento sobe de repente" (jerk) — histórico.**
 No dataset v2 (herdado do dataset original), essa feature tinha importância
 ~0: todo episódio subia de forma igualmente gradual, sem exemplo de "salto
-súbito" nos dados. O dataset v3 (`model/eda/08_generate_dataset_v3.py`)
+súbito" nos dados. O dataset v3 (gerador histórico, ver "Modelo em produção")
 resolve isso: gera episódios com onset súbito (~70%, 5-15s) e gradual
 (~30%, 40-90s), e a subida do estresse é sempre um INCREMENTO aditivo sobre
 o que já estava acontecendo (nunca um alvo absoluto — isso é um bug real
@@ -145,9 +92,13 @@ gerador ficam "congelados" no nível de fundo).
 
 | Dataset | Features | AUC médio | Observação |
 |---|---|---|---|
-| v2 | 12 | 0.985 | mais fácil — EDA sozinha quase resolve |
-| v3 | 12 | 0.952 | mais difícil de propósito — sobreposição real entre exercício intenso e estresse leve |
+| v2 (histórico) | 12 | 0.985 | mais fácil — EDA sozinha quase resolve |
+| v3 (histórico) | 12 | 0.952 | mais difícil de propósito — sobreposição real entre exercício intenso e estresse leve |
 | **v4 (atual)** | **24** | **0.960** | mesma dificuldade do v3 + 4 grupos de sinais novos (ver abaixo) |
+
+As linhas v2 e v3 são registro histórico: esses datasets não têm as colunas
+de HRV, acelerômetro e ambiente que o `features.py` atual exige (os arquivos
+e o código da época estão no histórico do git).
 
 Recall 0.85-0.96, precisão varia bastante por criança (0.27-0.93 entre
 folds, v4; valores conferidos no retreino de 02/11/2026) — o modelo erra
@@ -158,7 +109,7 @@ física intensa" continua sendo a mais difícil de acertar com precisão).
 
 ## v4 — features novas (HRV, acelerômetro, ambiente, tempo elevado)
 
-Gerador: `model/eda/10_generate_dataset_v4.py`. Mantém a mesma dinâmica de
+Gerador: `model/gerar_dataset_v4.py`. Mantém a mesma dinâmica de
 onset súbito/gradual do v3, e adiciona:
 
 - **HRV** (`hrv_rmssd_ms`) — cai um pouco com atividade física (acoplada ao

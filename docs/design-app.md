@@ -351,9 +351,9 @@ medidas novas entraram no tema.
   - **Leitor de tela:** o grupo é lido como "Batimentos: 79 bpm", e a coluna
     como "Ao vivo. Média de 5 minutos: 88 bpm."
 
-  | BPM 79 | BPM 190 | Fonte 1,3× |
-  |---|---|---|
-  | <img src="../mobile/test/goldens/inicio_bpm_79.png" width="200"> | <img src="../mobile/test/goldens/inicio_bpm_190.png" width="200"> | <img src="../mobile/test/goldens/fonte_130_inicio_bpm_190.png" width="200"> |
+  | BPM 190 | Fonte 1,3× |
+  |---|---|
+  | <img src="../mobile/test/goldens/inicio_bpm_190.png" width="200"> | <img src="../mobile/test/goldens/fonte_130_inicio_bpm_190.png" width="200"> |
 - **Estado Calmo.** O modelo só mostra o caso Atenção com episódio. No Calmo,
   o lugar do cartão do episódio mostra "Nenhum episódio agora" e o último
   episódio real do histórico: nível, quando, duração e avaliação. Tocar abre
@@ -480,9 +480,9 @@ medidas novas entraram no tema.
     - uma frase-resumo: "Nos últimos 7 dias: 11 crises confirmadas e 2 aguardando sua confirmação. Em novembro: 11 crises confirmadas.";
   - cada gráfico tem uma descrição completa para leitor de tela.
 
-| BPM ao vivo | Ruído | Balão do instante |
-|---|---|---|
-| <img src="../mobile/test/goldens/graficos.png" width="220"> | <img src="../mobile/test/goldens/graficos_ruido.png" width="220"> | <img src="../mobile/test/goldens/graficos_balao.png" width="220"> |
+| BPM ao vivo | Balão do instante |
+|---|---|
+| <img src="../mobile/test/goldens/graficos.png" width="220"> | <img src="../mobile/test/goldens/graficos_balao.png" width="220"> |
 
 | 7 dias, com o balão do dia | Painel parado (dados congelados) | Sem dados |
 |---|---|---|
@@ -527,9 +527,9 @@ passaria sempre. O Syncfusion desenha só a linha vertical e o marcador.
   - **Selo "a confirmar"**: tocar nele abre o cartão e rola até os botões;
   - **Botão escolhido**: fica cheio e passa ao passado: "Confirmado" (azul) ou "Descartado" (vermelho tijolo, com ⊘). O outro continua disponível, e mudar de ideia reenvia a avaliação.
 
-| Calendário e lista | Lista por dia (captura longa) | Cartão aberto |
-|---|---|---|
-| <img src="../mobile/test/goldens/historico.png" width="220"> | <img src="../mobile/test/goldens/historico_lista.png" width="220"> | <img src="../mobile/test/goldens/historico_cartao_expandido.png" width="220"> |
+| Calendário e lista | Cartão aberto |
+|---|---|
+| <img src="../mobile/test/goldens/historico.png" width="220"> | <img src="../mobile/test/goldens/historico_cartao_expandido.png" width="220"> |
 
 | Possível crise a confirmar (selo tocado) | Descartado | Filtro por dia |
 |---|---|---|
@@ -763,8 +763,10 @@ estados:
     Escuro, Claro e Seguir o sistema. Ele confere o `themeMode` do
     `MaterialApp`, o brilho do tema, a preferência salva (e lida de novo),
     a semântica do rádio e as barras do Android.
-  - **`test/goldens_test.dart`**: 85 imagens das telas em `mobile/test/goldens/`,
-    36 delas no tema escuro (seção 8).
+  - **`test/goldens_test.dart`**: 49 imagens das telas em `mobile/test/goldens/`:
+    26 no tema claro, 14 no escuro (seção 8) e 9 com a fonte em 1,3×. Os
+    demais estados no escuro e em 1,3× são cobertos pelos testes de
+    contraste e de texto cortado.
     Uma mudança visual não intencional faz o teste falhar. Depois de uma
     mudança intencional, gere as imagens de novo com
     `flutter test --update-goldens test/goldens_test.dart`.

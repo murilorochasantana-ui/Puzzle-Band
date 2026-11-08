@@ -20,7 +20,7 @@
 // (8-15 s com variacao) antes do inicio da alteracao fisiologica.
 //
 // As intensidades seguem o gerador do dataset v4 em que o modelo foi
-// treinado (model/eda/10_generate_dataset_v4.py): crise = nivel "alto"
+// treinado (model/gerar_dataset_v4.py): crise = nivel "alto"
 // (BPM +38, EDA +7, HRV -30), estereotipia = nivel "moderado" com agitacao
 // motora regular, exercicio = "brincadeira_ativa" (BPM +38, EDA +2,6,
 // giroscopio ~112, HRV cai 0,35 ms por bpm).
@@ -584,12 +584,6 @@ function targetsAt(roteiro, t, idade) {
 }
 
 export const calmTargets = (idade = 8) => targetsAt(null, 0, idade);
-
-// Roteiro nominal no instante t + nome da fase atual
-export function scenarioAt(name, t, { idade = 8 } = {}) {
-  const roteiro = nominalScenario(name);
-  return { alvos: targetsAt(roteiro, t, idade), fase: phaseAt(roteiro.fases, t) };
-}
 
 // "0 s baseline (calmo) → 120 s ruído subindo → ..."
 export function describeTimeline(name) {

@@ -1,4 +1,4 @@
-// Resumos calculados a partir do historico recebido do site (funcoes puras,
+// Resumos calculados a partir do historico recebido da pulseira (funcoes puras,
 // testadas em test/models_test.dart).
 //
 // Calendario e grafico de 7 dias contam pela AVALIACAO DO CUIDADOR, nao

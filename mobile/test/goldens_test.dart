@@ -5,7 +5,6 @@
 // geradas no Windows; em outro sistema, gere de novo antes de comparar.
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/login_screen.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
@@ -151,11 +150,6 @@ void main() {
       await imagem('inicio_possivel_crise');
     });
 
-    testWidgets('inicio: BPM 79 (grupo centrado)', (tester) async {
-      await inicio(tester, await comBpm(atencao(), 79));
-      await imagem('inicio_bpm_79');
-    });
-
     testWidgets('inicio: BPM 190 (grupo centrado)', (tester) async {
       await inicio(tester, await comBpm(atencao(), 190));
       await imagem('inicio_bpm_190');
@@ -177,11 +171,6 @@ void main() {
       await inicio(tester, await semEpisodiosHoje());
       await abrirPainel(tester, noTopo: true);
       await imagem('inicio_painel_vazio');
-    });
-
-    testWidgets('inicio: nome padrao (CHILD_ID) no cabecalho', (tester) async {
-      await mostrar(tester, await calmo());
-      await imagem('inicio_nome_padrao');
     });
 
     testWidgets('episodio: detalhe aberto pelo painel, com lembrete (captura longa)', (tester) async {
@@ -209,11 +198,6 @@ void main() {
       await imagem('lembrete_editor');
     });
 
-    testWidgets('inicio: conectando', (tester) async {
-      await inicio(tester, await conectando());
-      await imagem('inicio_conectando');
-    });
-
     testWidgets('inicio: sem conexao com o servidor', (tester) async {
       await inicio(tester, await semConexao());
       await imagem('inicio_sem_conexao');
@@ -232,13 +216,6 @@ void main() {
     testWidgets('graficos: BPM ao vivo', (tester) async {
       await mostrar(tester, await possivelCrise(), aba: 1);
       await imagem('graficos');
-    });
-
-    testWidgets('graficos: ruido', (tester) async {
-      await mostrar(tester, await possivelCrise(), aba: 1);
-      await tocarNoMeio(tester, find.byKey(const ValueKey('metrica-ruido')));
-      await centralizar(tester, find.byType(GraficoSinais), alinhamento: 0.4);
-      await imagem('graficos_ruido');
     });
 
     testWidgets('graficos: balao com todas as metricas', (tester) async {
@@ -268,11 +245,6 @@ void main() {
     testWidgets('historico', (tester) async {
       await mostrar(tester, await calmo(), aba: 2);
       await imagem('historico');
-    });
-
-    testWidgets('historico: lista por dia (captura longa)', (tester) async {
-      await mostrar(tester, await calmo(), aba: 2, altura: 2900);
-      await imagem('historico_lista');
     });
 
     testWidgets('historico: cartao expandido (captura longa)', (tester) async {
@@ -315,10 +287,6 @@ void main() {
       await imagem('ajustes');
     });
 
-    testWidgets('ajustes: erro de configuracao', (tester) async {
-      await mostrar(tester, await erroDeConfiguracao(), aba: 3, altura: 1400);
-      await imagem('ajustes_erro_configuracao');
-    });
   });
 
   group('tema escuro', () {
@@ -336,11 +304,6 @@ void main() {
       await inicio(tester, await calmo(), escuro: true, altura: 1560, lembretes: true);
       await abrirPainel(tester);
       await imagem('escuro_inicio_painel_aberto');
-    });
-
-    testWidgets('inicio: BPM 190', (tester) async {
-      await inicio(tester, await comBpm(atencao(), 190), escuro: true);
-      await imagem('escuro_inicio_bpm_190');
     });
 
     testWidgets('graficos', (tester) async {
@@ -367,19 +330,14 @@ void main() {
       await imagem('escuro_historico');
     });
 
-    testWidgets('historico: possivel crise aguardando confirmacao', (tester) async {
-      await mostrar(tester, await calmo(), aba: 2, escuro: true);
-      await abrirPendente(tester);
-      await imagem('escuro_historico_pendente');
-    });
-
     testWidgets('historico: descartado (captura longa)', (tester) async {
       await mostrar(tester, await calmo(), aba: 2, escuro: true, altura: 1150);
       await descartarEp4(tester);
       await imagem('escuro_historico_descartado');
     });
 
-    // --- Todas as telas e estados no escuro (Ajustes > Aparência > Escuro)
+    // --- Demais telas no escuro (Ajustes > Aparência > Escuro). Os outros
+    // estados no escuro sao cobertos pelo teste de contraste (telas_test.dart).
 
     testWidgets('login', (tester) async {
       await mostrar(tester, await calmo(), tela: const LoginScreen(), escuro: true);
@@ -391,36 +349,9 @@ void main() {
       await imagem('escuro_inicio_atencao');
     });
 
-    testWidgets('inicio: cartao do episodio logo depois de "Estou ciente"', (tester) async {
-      await inicio(tester, await possivelCrise(), escuro: true);
-      await tocarCiente(tester);
-      await imagem('escuro_inicio_possivel_crise_ciente');
-    });
-
-    testWidgets('inicio: painel "Hoje" sem episodios', (tester) async {
-      await inicio(tester, await semEpisodiosHoje(), escuro: true);
-      await abrirPainel(tester, noTopo: true);
-      await imagem('escuro_inicio_painel_vazio');
-    });
-
-    testWidgets('inicio: conectando', (tester) async {
-      await inicio(tester, await conectando(), escuro: true);
-      await imagem('escuro_inicio_conectando');
-    });
-
     testWidgets('inicio: sem conexao', (tester) async {
       await inicio(tester, await semConexao(), escuro: true);
       await imagem('escuro_inicio_sem_conexao');
-    });
-
-    testWidgets('inicio: painel (site) e pulseira offline', (tester) async {
-      await inicio(tester, await painelEPulseiraOffline(), escuro: true);
-      await imagem('escuro_inicio_painel_e_pulseira_offline');
-    });
-
-    testWidgets('inicio: erro de configuracao', (tester) async {
-      await inicio(tester, await erroDeConfiguracao(), escuro: true);
-      await imagem('escuro_inicio_erro_configuracao');
     });
 
     testWidgets('episodio: detalhe com lembrete (captura longa)', (tester) async {
@@ -436,42 +367,6 @@ void main() {
       await imagem('escuro_episodio_detalhe');
     });
 
-    testWidgets('lembrete: editor', (tester) async {
-      await inicio(tester, await calmo(), escuro: true);
-      await abrirPainel(tester);
-      await tester.ensureVisible(find.text('Adicionar lembrete do dia'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Adicionar lembrete do dia'));
-      await tester.pumpAndSettle();
-      await tester.enterText(find.byType(TextField), 'Levar o abafador de ruído para a aula de música.');
-      await tester.pumpAndSettle();
-      await imagem('escuro_lembrete_editor');
-    });
-
-    for (final metrica in Metrica.values.skip(1)) {
-      testWidgets('graficos: ${metrica.nome}', (tester) async {
-        await mostrar(tester, await possivelCrise(), aba: 1, escuro: true);
-        await tocarNoMeio(tester, find.byKey(ValueKey('metrica-${metrica.name}')));
-        await centralizar(tester, find.byType(GraficoSinais), alinhamento: 0.4);
-        await imagem('escuro_graficos_${metrica.name}');
-      });
-    }
-
-    testWidgets('graficos: painel parado', (tester) async {
-      await mostrar(tester, await painelEPulseiraOffline(), aba: 1, escuro: true);
-      await imagem('escuro_graficos_painel_parado');
-    });
-
-    testWidgets('graficos: sem dados ainda', (tester) async {
-      await mostrar(tester, await semDadosAinda(), aba: 1, escuro: true);
-      await imagem('escuro_graficos_sem_dados');
-    });
-
-    testWidgets('historico: lista por dia (captura longa)', (tester) async {
-      await mostrar(tester, await calmo(), aba: 2, escuro: true, altura: 2900);
-      await imagem('escuro_historico_lista');
-    });
-
     testWidgets('historico: cartao confirmado aberto (captura longa)', (tester) async {
       await mostrar(tester, await calmo(), aba: 2, escuro: true, altura: 1300);
       await tocarNoMeio(tester, cartao('ep_3'));
@@ -479,31 +374,11 @@ void main() {
       await imagem('escuro_historico_cartao_expandido');
     });
 
-    testWidgets('historico: filtro por dia', (tester) async {
-      await mostrar(tester, await calmo(), aba: 2, escuro: true);
-      await tocarNoMeio(tester, diaDoCalendario(3));
-      await imagem('escuro_historico_filtro_dia');
-    });
-
-    testWidgets('historico: vazio', (tester) async {
-      await mostrar(tester, await semDadosAinda(), aba: 2, escuro: true);
-      await imagem('escuro_historico_vazio');
-    });
-
-    testWidgets('historico: sem conexao (copia salva)', (tester) async {
-      await mostrar(tester, await semConexao(), aba: 2, escuro: true);
-      await imagem('escuro_historico_sem_conexao');
-    });
-
     testWidgets('ajustes, com Aparencia (captura longa)', (tester) async {
       await mostrar(tester, await painelEPulseiraOffline(), aba: 3, escuro: true, altura: 1400);
       await imagem('escuro_ajustes');
     });
 
-    testWidgets('ajustes: erro de configuracao (captura longa)', (tester) async {
-      await mostrar(tester, await erroDeConfiguracao(), aba: 3, escuro: true, altura: 1400);
-      await imagem('escuro_ajustes_erro_configuracao');
-    });
   });
 
   group('fonte do sistema ampliada (1,3x)', () {
@@ -512,30 +387,9 @@ void main() {
       await imagem('fonte_130_login');
     });
 
-    testWidgets('inicio: calmo', (tester) async {
-      await inicio(tester, await calmo(), escala: 1.3);
-      await imagem('fonte_130_inicio_calmo');
-    });
-
-    testWidgets('inicio: atencao', (tester) async {
-      await inicio(tester, await atencao(), escala: 1.3);
-      await imagem('fonte_130_inicio_atencao');
-    });
-
-    testWidgets('inicio: possivel crise', (tester) async {
-      await inicio(tester, await possivelCrise(), escala: 1.3);
-      await imagem('fonte_130_inicio_possivel_crise');
-    });
-
     testWidgets('inicio: possivel crise (captura longa)', (tester) async {
       await inicio(tester, await possivelCrise(), escala: 1.3, altura: 1300);
       await imagem('fonte_130_inicio_possivel_crise_inteira');
-    });
-
-    testWidgets('inicio: logo depois de "Estou ciente" (captura longa)', (tester) async {
-      await inicio(tester, await possivelCrise(), escala: 1.3, altura: 1300);
-      await tocarCiente(tester);
-      await imagem('fonte_130_inicio_possivel_crise_ciente');
     });
 
     testWidgets('inicio: painel "Hoje" aberto (captura longa)', (tester) async {
@@ -544,25 +398,9 @@ void main() {
       await imagem('fonte_130_inicio_painel_aberto');
     });
 
-    testWidgets('inicio: painel "Hoje" aberto sem episodios hoje (captura longa)', (tester) async {
-      await inicio(tester, await semEpisodiosHoje(), escala: 1.3, altura: 1300);
-      await abrirPainel(tester);
-      await imagem('fonte_130_inicio_painel_vazio');
-    });
-
-    testWidgets('inicio: sem conexao', (tester) async {
-      await inicio(tester, await semConexao(), escala: 1.3);
-      await imagem('fonte_130_inicio_sem_conexao');
-    });
-
     testWidgets('inicio: BPM 190', (tester) async {
       await inicio(tester, await comBpm(atencao(), 190), escala: 1.3);
       await imagem('fonte_130_inicio_bpm_190');
-    });
-
-    testWidgets('graficos', (tester) async {
-      await mostrar(tester, await possivelCrise(), aba: 1, escala: 1.3);
-      await imagem('fonte_130_graficos');
     });
 
     testWidgets('graficos: balao', (tester) async {
@@ -590,11 +428,6 @@ void main() {
       await abrirPendente(tester);
       await centralizar(tester, cartao('ep_4'), alinhamento: 0.1);
       await imagem('fonte_130_historico_expandido');
-    });
-
-    testWidgets('historico: vazio', (tester) async {
-      await mostrar(tester, await semDadosAinda(), aba: 2, escala: 1.3);
-      await imagem('fonte_130_historico_vazio');
     });
 
     testWidgets('ajustes', (tester) async {

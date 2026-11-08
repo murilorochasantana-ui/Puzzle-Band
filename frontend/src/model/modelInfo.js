@@ -1,7 +1,6 @@
 // Origem do modelo em uso, para o terminal da pulseira e o rodape do painel.
-// O campo "meta" do forest.json e gravado por model/train.py (oficial) e
-// model/train_incremental.py (experimental); forest.json antigos nao tem esse
-// campo. Sem importar o forest.json aqui: o painel le so o "meta" (as arvores
+// O campo "meta" do forest.json e gravado por model/train.py; forest.json
+// antigos nao tem esse campo. Sem importar o forest.json aqui: o painel le so o "meta" (as arvores
 // ficam fora do bundle do site, que nao roda o modelo) e a pulseira passa o
 // numero de arvores que carregou.
 

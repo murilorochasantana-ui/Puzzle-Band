@@ -35,7 +35,7 @@ class AmostraSinais {
   final double? luzLux;
   final double? ruidoDb;
 
-  /// 0 a 1, como vem do site (null nos primeiros 30 s).
+  /// 0 a 1, como vem da pulseira (null nos primeiros 30 s).
   final double? probabilidade;
 
   static AmostraSinais de(EstadoAtual e, DateTime hora) {
@@ -193,8 +193,8 @@ class JanelaDeSinais {
   List<AmostraSinais> get amostras => List.unmodifiable(_amostras);
 
   /// Tira as amostras mais velhas que a janela e, se o estado e ao vivo e
-  /// traz leituras, guarda uma amostra. A mesma leitura repetida (site
-  /// pausado) nao entra de novo. Devolve true se guardou.
+  /// traz leituras, guarda uma amostra. A mesma leitura repetida
+  /// nao entra de novo. Devolve true se guardou.
   bool registrar(EstadoAtual estado, DateTime agora, {required bool aoVivo}) {
     _amostras.removeWhere((a) => agora.difference(a.hora) > duracao);
     final leituras = estado.leituras;

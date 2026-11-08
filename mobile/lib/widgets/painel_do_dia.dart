@@ -10,7 +10,7 @@ import 'gatilho_simples.dart';
 import 'lembrete.dart';
 import 'nivel_visual.dart';
 
-/// Fim do episodio: o `fim` do site ou, se vier vazio num episodio
+/// Fim do episodio: o `fim` enviado pela pulseira ou, se vier vazio num episodio
 /// encerrado, inicio + duracao.
 DateTime? fimDoEpisodio(Episodio ep) {
   if (ep.emAndamento) return null;

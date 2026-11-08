@@ -1,4 +1,4 @@
-// Mensagens recebidas do site (formatos em docs/mqtt.md). Todo parse e
+// Mensagens recebidas da pulseira (formatos em docs/mqtt.md). Todo parse e
 // defensivo: JSON malformado ou campo com tipo errado vira null (a mensagem
 // e descartada) - nunca lanca excecao.
 
@@ -318,7 +318,7 @@ class Episodio {
         'visto_pelo_cuidador_em': _iso(vistoEm),
       };
 
-  /// Copia com a avaliacao feita neste app (antes de o site confirmar).
+  /// Copia com a avaliacao feita neste app (antes de a pulseira confirmar).
   Episodio avaliadoPeloApp(Avaliacao nova, String obs, DateTime quando) => Episodio(
         id: id,
         crianca: crianca,

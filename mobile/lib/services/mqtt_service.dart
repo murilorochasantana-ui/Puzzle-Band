@@ -54,7 +54,7 @@ class MqttService extends ChangeNotifier {
   static const avisoDeReset = 'Dados apagados pelo painel para uma nova apresentação.';
 
   static const janelaSinais = Duration(minutes: 5); // grafico ao vivo
-  static const _estadoMaxAtraso = Duration(seconds: 6); // site publica 1x/s
+  static const _estadoMaxAtraso = Duration(seconds: 6); // a pulseira publica 1x/s
   static const _alertaMaxAtraso = Duration(minutes: 10); // alerta mais velho nao notifica
   static const _maxAlertas = 50;
   static const _maxNotificados = 100;
@@ -103,7 +103,7 @@ class MqttService extends ChangeNotifier {
   EstadoAtual? get estado => _estado;
   DateTime? get estadoRecebidoEm => _estadoEm;
 
-  /// O site esta publicando o estado agora (o modelo roda no site).
+  /// A pulseira esta publicando o estado agora (o modelo roda nela).
   bool get estadoAoVivo =>
       _brokerStatus == BrokerStatus.conectado &&
       _estadoEm != null &&
@@ -134,7 +134,7 @@ class MqttService extends ChangeNotifier {
   @visibleForTesting
   Future<void>? get resetEmAndamento => _reset;
 
-  /// Quando o cuidador marcou "Estou ciente" (confirmado pelo site ou local).
+  /// Quando o cuidador marcou "Estou ciente" (confirmado pela pulseira ou local).
   DateTime? cienteEm(String episodioId) {
     final ativo = _estado?.episodio;
     if (ativo != null && ativo.id == episodioId && ativo.vistoEm != null) return ativo.vistoEm;
@@ -409,7 +409,7 @@ class MqttService extends ChangeNotifier {
     final novo = EstadoAtual.tryParse(texto);
     if (novo == null) return false;
     final agora = DateTime.now();
-    // Mensagem retida pode ser velha (site fechado): vale o horario dela.
+    // Mensagem retida pode ser velha (pulseira desligada): vale o horario dela.
     var referencia = agora;
     if (retida) {
       final ts = novo.timestamp;
@@ -418,7 +418,7 @@ class MqttService extends ChangeNotifier {
     _estado = novo;
     _estadoEm = referencia;
     _aoVivoAnterior = estadoAoVivo;
-    // Pausado no site, o estado repete a mesma leitura: nao entra de novo
+    // Se o estado repete a mesma leitura, ela nao entra de novo
     _sinais.registrar(novo, agora, aoVivo: estadoAoVivo);
     return true;
   }
@@ -590,7 +590,7 @@ class MqttService extends ChangeNotifier {
   }
 
   /// Confirmar/descartar gatilho -> `puzzleband/<id>/avaliacao`. A copia local
-  /// ja mostra a avaliacao; o site confirma ao republicar o historico.
+  /// ja mostra a avaliacao; a pulseira confirma ao republicar o historico.
   bool enviarAvaliacao(Episodio episodio, Avaliacao avaliacao, String observacao) {
     if (avaliacao == Avaliacao.pendente) return false;
     var obs = observacao.trim();

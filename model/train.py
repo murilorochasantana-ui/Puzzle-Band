@@ -3,19 +3,19 @@ Treina o classificador de "possivel crise" do Puzzle Band e valida com
 GroupKFold por crianca (o modelo nunca ve dados da crianca em que esta
 sendo avaliado - simula o uso em uma crianca nova).
 
-Alvo binario (estresse: sim/nao), com probabilidade de saida - o dashboard
-usa essa probabilidade para classificar em faixas de risco (nenhum /
-atencao / alerta / crise), em vez de tentar prever os 4 rotulos originais
-diretamente (testamos multiclasse - ver docs/modelo.md - e a fronteira
-entre "leve" e "nenhum" e ruidosa demais pra ser confiavel; o binario com
+Alvo binario (estresse: sim/nao), com probabilidade de saida - a pulseira
+usa essa probabilidade para classificar em 3 faixas de risco (baixo_risco /
+atencao / alto_risco, em frontend/src/model/predict.js), em vez de tentar
+prever os 4 rotulos originais diretamente (testamos multiclasse - ver
+docs/modelo.md - e a fronteira entre "leve" e "nenhum" e ruidosa demais
+pra ser confiavel; o binario com
 probabilidade calibrada e uma base muito mais solida pra um alerta que vai
 para um cuidador real).
 
 Roda: python3 model/train.py
 
-Este e o script OFICIAL do frontend/src/model/forest.json (o modelo que o
-dashboard usa). O train_incremental.py e experimental - ver "Qual modelo
-esta em producao" no docs/modelo.md.
+Gera o frontend/src/model/forest.json, o modelo que a pulseira roda
+(simulator/borda.js); o site so le o campo "meta" para o rodape.
 """
 import json
 import sys

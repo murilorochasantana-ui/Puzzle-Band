@@ -24,13 +24,18 @@ desacoplado de movimento) com 4 grupos de sinais novos:
 
 O schema de bpm/eda/gyro (constantes, timing dos episodios) e o MESMO do
 v3, propositalmente, pra manter tudo que ja foi validado.
+
+Roda: python model/gerar_dataset_v4.py (semente fixa). Grava o dataset
+usado pelo model/train.py.
 """
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 
 rng = np.random.default_rng(11)
 
-OUT = '/home/user/puzzle-band/data/raw/dataset_pulseira_TEA_estresse_v4.xlsx'
+OUT = Path(__file__).resolve().parent.parent / 'data/raw/dataset_pulseira_TEA_estresse_v4.xlsx'
 
 N_CHILDREN = 12
 SESSION_SECONDS = 9000

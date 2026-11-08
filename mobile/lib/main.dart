@@ -159,7 +159,6 @@ class _MainNavigationState extends State<MainNavigation> {
     _currentIndex = widget.initialIndex;
   }
 
-  // A tela de GPS (vazia) saiu da navegacao: "em breve" (screens/gps_screen.dart)
   final List<Widget> _screens = const [
     HomeScreen(),
     GraficosScreen(),

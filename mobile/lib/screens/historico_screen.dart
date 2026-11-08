@@ -14,7 +14,7 @@ import '../widgets/cartao_episodio_resumido.dart';
 import '../widgets/estado_vazio.dart';
 import '../widgets/secao.dart';
 
-/// Episodios recebidos do site (`puzzleband/<id>/historico`), separados por
+/// Episodios recebidos da pulseira (`puzzleband/<id>/historico`), separados por
 /// dia, com o calendario do mes no topo. O calendario conta pela avaliacao
 /// do cuidador (widgets/calendario_crises.dart); tocar num dia filtra a
 /// lista. Cada cartao e resumido e expande no lugar para confirmar ou

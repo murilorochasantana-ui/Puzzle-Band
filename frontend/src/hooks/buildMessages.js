@@ -9,7 +9,6 @@
 import { BAND_ORIGIN, RESET_ACTION, SITE_ORIGIN } from './parseMessages.js';
 import { CONTROL_LIMITS } from '../model/simulate.js';
 
-export const STATE_INTERVAL_MS = 1000; // estado: 1 vez por segundo
 export const HISTORY_TOPIC_LIMIT = 50; // historico: os 50 episodios mais recentes
 
 // Leituras atuais que vao no estado (accel_mag_g e idade ficam de fora: o

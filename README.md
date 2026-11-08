@@ -114,13 +114,11 @@ PowerShell pra confirmar que ambos estão instalados e no PATH.
 
 ```
 puzzle-band/
-├── data/raw/              # datasets sintéticos (.xlsx) usados pra treinar
+├── data/raw/              # dataset sintético v4 (.xlsx) usado pra treinar
 ├── model/
-│   ├── features.py        # engenharia de features (compartilhada)
-│   ├── train.py            # treino do zero + validação (GroupKFold) — gera o forest.json OFICIAL
-│   ├── train_incremental.py # treino incremental (experimental)
-│   ├── state/               # estado do treino incremental (floresta separada, não é a da pulseira)
-│   └── eda/                 # geradores de dataset + análises exploratórias
+│   ├── features.py         # engenharia de features (compartilhada)
+│   ├── train.py            # treino + validação (GroupKFold) — gera o forest.json
+│   └── gerar_dataset_v4.py # gerador do dataset v4 (semente fixa)
 ├── docs/                   # documentação detalhada (ver "Documentação" abaixo)
 ├── simulator/              # a pulseira (ESP32 simulado), com processamento na borda
 │   ├── index.js             # linha de comando: cenários (loop, --ciclos, --seed), modo controle, broker
@@ -241,48 +239,18 @@ diferente, mais dados, etc.). Rode a partir da **raiz do projeto**
 pip install pandas numpy scikit-learn openpyxl
 ```
 
-### Opção A — treino do zero (mais simples)
-
-Treina um modelo novo com um único dataset e já valida com
-`GroupKFold` por criança (o modelo nunca vê dados da criança em que está
-sendo avaliado):
+Treina o modelo e já valida com `GroupKFold` por criança (o modelo nunca vê
+dados da criança em que está sendo avaliado):
 
 ```bash
 python model/train.py
 ```
 
-Por padrão usa `data/raw/dataset_pulseira_TEA_estresse_v4.xlsx` (o dataset
-mais completo, com HRV, acelerômetro e sensores ambientais). Pra trocar de
-dataset, edite a constante `DATASET` no topo de `model/train.py`.
+Usa `data/raw/dataset_pulseira_TEA_estresse_v4.xlsx` (com HRV, acelerômetro
+e sensores ambientais), gerado por `python model/gerar_dataset_v4.py`.
+Detalhes, validação e decisões: [docs/modelo.md](docs/modelo.md).
 
-### Opção B — treino incremental (experimental)
-
-> O `forest.json` oficial vem da Opção A. A Opção B substitui o modelo da
-> pulseira por uma floresta experimental; pra voltar, rode
-> `python model/train.py`. Ver "Qual modelo está em produção" em
-> [docs/modelo.md](docs/modelo.md#qual-modelo-está-em-produção).
-
-Treina somando árvores novas à floresta já existente, sem esquecer
-datasets treinados em rodadas anteriores (usa o `warm_start` do
-scikit-learn):
-
-```bash
-# primeira rodada — cria o modelo do zero com este dataset
-python model/train_incremental.py --dataset data/raw/dataset_pulseira_TEA_estresse_v4.xlsx --add-trees 60
-
-# rodadas seguintes — mantém as árvores anteriores, soma mais árvores treinadas no dataset novo
-python model/train_incremental.py --dataset data/raw/dataset_pulseira_TEA_estresse_v3.xlsx --add-trees 60
-
-# aceita .xlsx (aba 'Dados'), .csv com features já calculadas, ou uma PASTA com vários .csv
-
-# pra descartar o modelo acumulado e recomeçar do zero:
-python model/train_incremental.py --dataset caminho.xlsx --add-trees 60 --reset
-```
-
-Detalhes de cada opção, limitações e como interpretar o AUC impresso no
-terminal: [docs/modelo.md](docs/modelo.md).
-
-**Depois de treinar (qualquer uma das opções):** o arquivo
+**Depois de treinar:** o arquivo
 `frontend/src/model/forest.json` é sobrescrito automaticamente. Se a pulseira
 já estava rodando, reinicie-a (Ctrl+C e rode de novo) pra carregar o modelo
 novo. Ela mostra no início qual modelo está em uso (ex.: "Modelo: 60 árvores,
@@ -561,7 +529,8 @@ terminal (ver [docs/mqtt.md](docs/mqtt.md#verificar-pelo-terminal-verificar-app)
 
    O painel mostra "Pulseira: online", "App do cuidador: conectado" e, no
    "Controle da pulseira", "Pulseira no modo controle". O app mostra
-   "Broker: conectado" e "Painel: ao vivo", com **Calmo** e o BPM. Mexa no
+   **Calmo** e o BPM (em Ajustes: "Servidor: conectado" e "Análise
+   (pulseira): ao vivo"). Mexa no
    BPM no painel: o número muda no celular e no painel em poucos segundos,
    com transição de 20 s.
 2. **Crise pelos controles → notificação → "Estou ciente".**

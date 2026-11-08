@@ -48,10 +48,10 @@ escuro: [design-app.md](design-app.md).
   e uma observação curta. A avaliação volta para a pulseira, que aplica e
   republica o histórico (o painel do site mostra "avaliado pelo app"). A
   última cópia fica salva no celular para consulta offline.
-- **Indicadores de conexão**: broker, pulseira (online/offline) e "Painel" (ao
-  vivo ou sem dados). O nome "Painel" ficou da versão em que o site
-  processava. Hoje ele indica se o **estado publicado pela pulseira** está
-  chegando ao vivo; não depende do site estar aberto.
+- **Indicadores de conexão** (Ajustes): servidor, pulseira (online/offline)
+  e "Análise (pulseira)" (ao vivo ou sem dados), que indica se o **estado
+  publicado pela pulseira** está chegando ao vivo. O modelo roda na pulseira;
+  não depende do site estar aberto.
 - **Presença**: o app publica `online`/`offline` (com Last Will) em
   `puzzleband/<id>/app/status`. O painel do site mostra "App do cuidador:
   conectado/desconectado".
@@ -97,9 +97,6 @@ em [design-app.md](design-app.md).
 
 Paleta, contrastes e decisões do tema escuro:
 [design-app.md](design-app.md#8-tema-escuro).
-
-A tela de GPS (vazia) saiu da navegação. O arquivo `gps_screen.dart`
-continua no projeto e mostra "em breve".
 
 ### Estado "ao vivo"
 
@@ -390,7 +387,7 @@ mobile/
 │   │   ├── preferencias_locais.dart # nome da criança e lembretes (só no celular)
 │   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
-│   ├── screens/                # login, início, detalhe do episódio, gráficos, histórico, ajustes (+ gps "em breve")
+│   ├── screens/                # login, início, detalhe do episódio, gráficos, histórico, ajustes
 │   ├── widgets/                # faixa de estado, cartões do episódio (completo e resumido), calendário, selo da avaliação, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
 └── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)

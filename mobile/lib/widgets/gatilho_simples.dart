@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import '../models/models.dart';
 import '../theme/app_theme.dart';
 
-/// Manchete em linguagem simples a partir do `gatilho.tipo` que o site ja
-/// envia (docs/gatilho.md). O texto tecnico do site aparece logo abaixo. A
+/// Manchete em linguagem simples a partir do `gatilho.tipo` que a pulseira ja
+/// envia (docs/gatilho.md). O texto tecnico dela aparece logo abaixo. A
 /// manchete sempre diz "provavel": a regra nao afirma causa.
 ({IconData icone, String manchete}) mancheteDoGatilho(Gatilho? gatilho, {bool emAndamento = false}) {
   if (gatilho == null) {

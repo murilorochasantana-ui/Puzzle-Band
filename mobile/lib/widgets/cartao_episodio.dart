@@ -146,7 +146,7 @@ class _AvaliacaoEpisodioState extends State<AvaliacaoEpisodio> {
   static const _maxObservacao = 200;
 
   // `_obsDoSite` guarda o ultimo valor recebido: se o cuidador nao editou, o
-  // campo acompanha o site.
+  // campo acompanha o historico recebido.
   late final TextEditingController _obs = TextEditingController(text: widget.episodio.observacao);
   late String _obsDoSite = widget.episodio.observacao;
   bool _obsAberta = false;

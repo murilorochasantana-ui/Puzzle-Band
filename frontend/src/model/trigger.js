@@ -488,10 +488,3 @@ export function reviewTrigger(previous, history, config) {
     updated: true,
   });
 }
-
-// Monta o historico no formato esperado a partir de leituras e niveis
-// paralelos (util para scripts e para o simulador): t = indice * periodo.
-export function toHistory(readings, tiers, config) {
-  const cfg = withDefaults(config);
-  return readings.map((reading, i) => ({ t: i * cfg.SAMPLE_PERIOD_S, reading, tier: tiers[i] }));
-}

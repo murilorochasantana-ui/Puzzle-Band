@@ -11,8 +11,8 @@ aprovação no fim de cada etapa.
 
 | Etapa | Situação |
 |---|---|
-| 1. Inventário (só leitura) | **concluída — aguardando "aprovado"** |
-| 2. Remoções aprovadas | não iniciada |
+| 1. Inventário (só leitura) | concluída e aprovada |
+| 2. Remoções aprovadas — parte 1 | **concluída — aguardando revisão** |
 | 3. Simplificação do código | não iniciada |
 | 4. Modelo mais simples | não iniciada |
 | 5. Relatório final | não iniciada |
@@ -20,6 +20,8 @@ aprovação no fim de cada etapa.
 ## Ponto de partida
 
 - Branch `limpeza` (já existia), HEAD `9f7f8aa` ("npm run resetar").
+- Atualização: o usuário commitou essas alterações em `b8a5f14` ("Reset
+  completo: pulseira, broker e app"). A Etapa 2 parte de `b8a5f14`.
 - **Alterações não commitadas que já estavam na árvore antes da limpeza**
   (28 arquivos, +1.174/−79 linhas: configuração do broker no app, mensagens
   do site, docs, 5 goldens de Ajustes). Fazem parte da linha de base e não
@@ -65,7 +67,7 @@ que existe são exports que ninguém importa.
 | R3 | `mobile/lib/screens/gps_screen.dart` | só citado em comentário (`main.dart:162`) e em `docs/app.md:101`; fora da navegação | 23 linhas |
 | R4 | Código morto JS: `toHistory` (`trigger.js:492-497`, utilitário fora da regra: limites e textos intactos), `scenarioAt` (`scenarios.js:588-592`), `STATE_INTERVAL_MS` (`buildMessages.js:12`) | 1 ocorrência cada (só a declaração) | ~15 linhas |
 | R5 | Pastas `mobile/ios`, `linux`, `macos`, `windows`, `web` + exclusões delas no `analysis_options.yaml` | nenhum código as usa; app só Android (o código de notificação nem configura iOS/Linux) | 102 arq., ~400 KB |
-| R6 | Datasets v1, v2, v3 (`data/raw/*.xlsx`) | só lidos por `model/eda/01–08` (caminhos fixos `/home/user/...`, não rodam aqui) e citados como exemplo do treino incremental. Os números v2/v3 do `docs/modelo.md` dependem do `features.py` de 12 features, que só existe no histórico do git (antes de `4b7a837`): manter os .xlsx **não** os torna reproduzíveis | 3 arq., 19,3 MB |
+| R6 | Datasets v1, v2, v3 (`data/raw/*.xlsx`) | só lidos por `model/eda/01–08` (caminhos fixos `/home/user/...`, não rodam aqui) e citados como exemplo do treino incremental. Os números v2/v3 do `docs/modelo.md` dependem do `features.py` antigo: v2/v3 não têm as colunas de HRV, acelerômetro e ambiente que o `features.py` atual exige, então manter os .xlsx **não** os torna reproduzíveis. (Correção: a linha "12 antigas" da ablação é um subconjunto das 24 features atuais, logo **é** reproduzível no v4; só falta script — Etapa 4.) | 3 arq., 19,3 MB |
 | R7 | `model/eda/01–09` | análise do dataset original e geradores v2/v3/massivo; dependem de R6; caminhos absolutos | 9 arq., ~1.000 linhas |
 | R8 | `model/train_incremental.py` e `model/state/` | experimental; a floresta dele (80 árvores) **não** é a de produção; rodá-lo sobrescreve o `forest.json` oficial | 3 arq., 1,5 MB |
 | R9 | 36 dos 85 goldens (lista abaixo) | cobertura mantida pelos testes de acessibilidade (contraste AA, toque ≥ 48 dp, rótulos em todas as telas, claro e escuro) e de fonte 1,3× (8 estados × 4 abas, sem texto cortado) | 36 arq., 4,8 MB |
@@ -184,4 +186,72 @@ importáveis dos mesmos caminhos (reexport), então testes e imports não mudam:
 
 ## Decisões do usuário
 
-(nenhuma ainda)
+- **07/11/2026 — Etapa 2, parte 1:** aprovados R1–R11, S1, S4, S5, S7, S8,
+  S9 e D1 (corrigir o texto de Ajustes e os 3 goldens). **Não agora:** S2,
+  S3 e S6 (dividir o README).
+
+## Etapa 2, parte 1 — feito (sem commit)
+
+As remoções foram feitas com `git rm`/`git mv` (ficam no índice); as edições
+estão só na árvore de trabalho.
+
+| ID | Feito |
+|---|---|
+| R1, R2, R6 | removidos `data/processed/`, sobras do Vite e datasets v1–v3 |
+| R3 | `gps_screen.dart` removido; menções em `main.dart` e `docs/app.md` retiradas |
+| R4 | `toHistory` (trigger.js — limites e textos intactos), `scenarioAt`, `STATE_INTERVAL_MS` removidos |
+| R5 | `mobile/ios`, `linux`, `macos`, `windows`, `web` removidos (incluindo os arquivos gerados que não estavam no git); `analysis_options.yaml` sem as exclusões delas |
+| R7, S4 | `model/eda/01–09` removidos; `10_generate_dataset_v4.py` → `model/gerar_dataset_v4.py` com caminho relativo ao repo |
+| R8 | `train_incremental.py` e `model/state/` removidos; README e `modelInfo.js` sem as menções |
+| R9 | 36 goldens e os testes deles removidos do `goldens_test.dart` (49 ficam, cada um com seu teste); 3 colunas de `docs/design-app.md` e a contagem ("49 imagens") ajustadas |
+| R10 | `@types/react` e `@types/react-dom` desinstalados (`package.json` e lock) |
+| R11 | linha `Skills Claude/` saiu do `.gitignore` |
+| S1 | comentários "site" → "pulseira" em 9 arquivos do app e no docstring do `train.py` |
+| S5 | `pubspec.yaml` com descrição real |
+| S7 | `docs/modelo.md`: seções de arquivos, modelo em produção e treino reescritas; incremental removido; v2/v3 marcados como históricos |
+| S8 | nota de registro histórico no `docs/avaliacao_dataset.md` |
+| S9 | `mobile/README.md` reduzido a um atalho para `docs/app.md` |
+| D1 | Ajustes: "Painel (site): … O modelo roda no site: ele precisa estar aberto." → "Análise (pulseira): … O modelo roda na própria pulseira. O painel do site é opcional." A linha mede o estado ao vivo publicado pela pulseira (`estadoAoVivo`). `docs/app.md` e README atualizados; goldens ajustes, escuro_ajustes e fonte_130_ajustes regenerados (só eles) |
+
+Encontrado e **não** alterado (precisa de aprovação, texto visível):
+`faixa_estado.dart:398-406`, Início sem dados ao vivo — "O painel (site)
+parou de enviar às HH:MM. Ele precisa estar aberto para analisar os sinais."
+e "Aguardando o painel / Abra o painel (site) no computador. É ele que analisa
+os sinais da pulseira." Mesma ideia desatualizada do D1 (afeta os goldens
+inicio_painel_e_pulseira_offline e graficos_painel_parado).
+
+### Linha de base depois da parte 1 (`linha-de-base/etapa2/`)
+
+| Verificação | Antes | Depois |
+|---|---|---|
+| Lint do site / oxlint em todo o JS | 0 / 0 avisos | 0 / 0 avisos |
+| Testes do site | 67/67 | 67/67 |
+| Build do site | OK | OK, bundle com os mesmos hashes |
+| Testes do simulador | 30/30 | 30/30 |
+| `verificar.js` (padrão, `--markdown`, `--uma-vez --sementes 50`) | sai com 1 (falhas conhecidas) | **saídas idênticas** byte a byte |
+| `scripts/cenarios.mjs` | OK | saída idêntica |
+| `node --check tools/verificar-app.mjs` | OK | OK |
+| `flutter analyze` | 0 | 0 |
+| `flutter test` | 205/205 | 169/169 (−36 testes de golden) |
+| Goldens | 85 | 49: 46 idênticos, 3 de Ajustes regenerados (D1); `forest.json` idêntico |
+
+### Antes x depois (parte 1)
+
+| Parte | Arquivos | Tamanho | Linhas de código |
+|---|---|---|---|
+| data | 6 → 1 | 27,5 → 8,8 MB | — |
+| model | 15 → 3 | 1,55 → 0,03 MB | 1.757 → 656 |
+| frontend | 46 → 42 | 0,63 → 0,60 MB | 4.899 → 4.890 (src) |
+| simulator | 20 → 20 | 0,20 MB | 4.279 → 4.273 |
+| tools | 1 → 1 | 0,03 MB | 757 |
+| mobile | 269 → 130 | 12,8 → 7,6 MB | lib 8.084 → 8.060 · test 3.090 → 2.923 |
+| docs + READMEs | 22 → 22 | 1,2 MB | 4.127 → 4.025 linhas de Markdown |
+| **Total** | **380 → 220** | **43,8 → 18,4 MB** | — |
+
+Dependências removidas: `@types/react`, `@types/react-dom`. O `.git` não
+diminui (os arquivos ficam no histórico).
+
+## Próximo passo
+
+Aguardando revisão da parte 1. Pendentes de decisão: S2, S3, S6, o texto do
+Início citado acima, e a Etapa 4.

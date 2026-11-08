@@ -1,7 +1,10 @@
 # Avaliação do dataset sintético — alinhamento com a proposta do TCC
 
-Scripts completos em `model/eda/` (Python), reprodutíveis a partir do
-`dataset_pulseira_TEA_estresse.xlsx` original.
+> **Registro histórico.** Esta avaliação é do dataset original (v1) e da
+> correção v2, anteriores ao v4 usado hoje ([modelo.md](modelo.md)). Os
+> datasets e os scripts (`model/eda/`) saíram do projeto na limpeza de
+> 11/2026 e continuam no histórico do git, por exemplo
+> `git show 9f7f8aa:model/eda/06_augment_dataset.py`.
 
 ## O que foi avaliado
 

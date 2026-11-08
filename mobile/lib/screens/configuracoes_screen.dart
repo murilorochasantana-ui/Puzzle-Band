@@ -110,7 +110,7 @@ class ConfiguracoesScreen extends StatelessWidget {
         Presenca.offline => 'A pulseira avisou que desligou ou perdeu a conexão.',
         Presenca.desconhecido => 'Ainda sem notícia da pulseira. Com o simulador manual, isso é normal.',
       }),
-      linha('Painel (site)', painel, 'O modelo roda no site: ele precisa estar aberto.'),
+      linha('Análise (pulseira)', painel, 'O modelo roda na própria pulseira. O painel do site é opcional.'),
     ];
   }
 }
