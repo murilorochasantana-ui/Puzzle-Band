@@ -39,6 +39,16 @@ N_ESTIMATORS = 60
 MAX_DEPTH = 6
 
 
+def compactar(no):
+    """Arvore exportada com limiares e probabilidades em 4 casas (o JSON fica
+    ~25% menor; conferido em docs/modelo.md: muda 1 de 1000 eventos do
+    verificar.js)."""
+    if no['leaf']:
+        return {'leaf': True, 'proba': round(no['proba'], 4)}
+    return {'leaf': False, 'feature': no['feature'], 'threshold': round(no['threshold'], 4),
+            'left': compactar(no['left']), 'right': compactar(no['right'])}
+
+
 def export_tree(tree):
     """Converte uma arvore sklearn numa estrutura JSON simples de percorrer
     em JS: cada no tem feature/threshold/filhos, ou (se folha) a
@@ -109,7 +119,7 @@ def main():
     for name, val in sorted(zip(FEATURE_COLUMNS, final_clf.feature_importances_), key=lambda x: -x[1]):
         print(f'{name:20s} {val:.3f}')
 
-    trees = [export_tree(est) for est in final_clf.estimators_]
+    trees = [compactar(export_tree(est)) for est in final_clf.estimators_]
 
     OUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     with open(OUT_JSON, 'w') as f:
@@ -125,7 +135,7 @@ def main():
             'shortWindow': 5,
             'longWindow': 30,
             'trees': trees,
-        }, f)
+        }, f, separators=(',', ':'))  # sem espacos: arquivo menor
 
     size_kb = OUT_JSON.stat().st_size / 1024
     print()

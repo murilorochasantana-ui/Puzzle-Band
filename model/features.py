@@ -48,6 +48,73 @@ FEATURE_COLUMNS = [
     'idade',
 ]
 
+# Features com MEMORIA (hipotese da subida subita x gradual, ver
+# docs/modelo.md). Calculadas sempre; so entram no modelo se estiverem na
+# lista de features do treino. Mesmas contas em frontend/src/model/predict.js.
+MEMORY_WINDOW = 90       # segundos de memoria
+SMOOTH_WINDOW = 5        # media curta do BPM e do giroscopio
+BPM_PER_GYRO = 0.34      # bpm por dps no exercicio do dataset v4 (+38 bpm / +112 dps)
+MIN_RISE_BPM = 10.0      # subida menor que isso nao conta como subida
+MEMORY_FEATURES = ['bpm_jerk_max_90', 'bpm_excesso_mov', 'bpm_tempo_subida']
+
+
+def _mean_in_order(values: np.ndarray, window: int) -> np.ndarray:
+    """Media movel somando na ordem (mais antiga -> mais recente), igual ao
+    reduce do predict.js, para os dois darem o mesmo numero. NaN antes de
+    ter `window` amostras."""
+    n = len(values)
+    out = np.full(n, np.nan)
+    if n >= window:
+        total = np.zeros(n - window + 1)
+        for k in range(window):
+            total = total + values[k:n - window + 1 + k]
+        out[window - 1:] = total / window
+    return out
+
+
+def _memory_features(bpm: np.ndarray, gyro: np.ndarray, jerk: np.ndarray):
+    """As 3 features de memoria de uma crianca (arrays na ordem do tempo).
+    Em cada instante i, olham os ultimos MEMORY_WINDOW segundos (menos no
+    comeco da sessao, quando ha menos historico):
+      bpm_jerk_max_90  - o maior bpm_jerk da janela (a subida subita deixa
+                         marca por 90 s, nao so nos 5-15 s em que acontece);
+      bpm_excesso_mov  - quanto a media de 5 s do BPM esta acima do menor
+                         valor dela na janela, descontado o que a subida do
+                         giroscopio (mesma conta) explicaria: BPM_PER_GYRO;
+      bpm_tempo_subida - segundos entre 20% e 80% da subida ate o pico mais
+                         recente da janela (MEMORY_WINDOW se a subida for
+                         menor que MIN_RISE_BPM)."""
+    n = len(bpm)
+    s_bpm = _mean_in_order(bpm, SMOOTH_WINDOW)
+    s_gyro = _mean_in_order(gyro, SMOOTH_WINDOW)
+    jerk_max = np.full(n, np.nan)
+    excesso = np.full(n, np.nan)
+    tempo = np.full(n, np.nan)
+    for i in range(n):
+        lo = max(0, i - MEMORY_WINDOW + 1)
+        j = jerk[lo:i + 1]
+        j = j[~np.isnan(j)]
+        if len(j):
+            jerk_max[i] = j.max()
+        w = s_bpm[lo:i + 1]
+        g = s_gyro[lo:i + 1]
+        ok = ~np.isnan(w)
+        w, g = w[ok], g[ok]
+        if not len(w):
+            continue
+        excesso[i] = (w[-1] - w.min()) - BPM_PER_GYRO * (g[-1] - g.min())
+        p = len(w) - 1 - int(np.argmax(w[::-1]))  # pico mais recente
+        base = w[:p + 1].min()
+        rise = w[p] - base
+        if rise < MIN_RISE_BPM:
+            tempo[i] = MEMORY_WINDOW
+            continue
+        abaixo = np.nonzero(w[:p + 1] <= base + 0.2 * rise)[0]
+        t_lo = int(abaixo[-1])
+        acima = np.nonzero(w[t_lo:p + 1] >= base + 0.8 * rise)[0]
+        tempo[i] = int(acima[0])
+    return jerk_max, excesso, tempo
+
 
 def _rolling_streak_above_trend(values: np.ndarray, window: int, min_margin: float, margin_frac_std: float) -> np.ndarray:
     """Pra cada posicao i (com pelo menos `window` amostras de historico),
@@ -130,6 +197,17 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
     out['ruido_slope_long'] = (df['ruido_db'] - ruido_lag_long) / LONG_WINDOW
 
     out['idade'] = df['idade']
+
+    for name in MEMORY_FEATURES:
+        out[name] = np.nan
+    for idx in df.groupby('id_crianca').indices.values():
+        cols = _memory_features(
+            df['batimento_cardiaco_bpm'].to_numpy(dtype=float)[idx],
+            df['giroscopio_magnitude_dps'].to_numpy(dtype=float)[idx],
+            out['bpm_jerk'].to_numpy(dtype=float)[idx],
+        )
+        for name, values in zip(MEMORY_FEATURES, cols):
+            out.loc[out.index[idx], name] = values
 
     out['id_crianca'] = df['id_crianca']
     out['timestamp'] = df['timestamp']

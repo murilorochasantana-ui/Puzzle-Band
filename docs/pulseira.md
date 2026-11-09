@@ -139,6 +139,7 @@ resultado esperado (`npm run verificar`):
 |---|---|
 | Intensidade do pico (BPM, EDA, HRV e movimento; luz e ruído com sorteio próprio) | ±15% |
 | Duração de cada fase (subida, platô, descida) | ±20% |
+| Subida da fisiologia nas crises (sorteio próprio, como no gerador do dataset v4) | 70% súbita (5 a 15 s), 30% gradual (40 a 90 s); o platô compensa, e a duração do roteiro não muda |
 | Antecedência do sinal ambiental (cruzar o limite da regra → início da fisiologia) | 8 a 15 s |
 
 No terminal, cada ciclo começa com uma linha destacada e a variação sorteada.
@@ -147,7 +148,7 @@ Cada leitura continua com o nome da fase (trecho real de
 
 ```
 === Ciclo 3 · crise_ruido ===
-    roteiro crise_ruido · pico ×1,06 · subida 35 s · platô 61 s · descida 35 s · ambiente ×1,08 · antecedência ~14 s
+    roteiro crise_ruido · pico ×1,06 · subida gradual 42 s · platô 54 s · descida 35 s · ambiente ×1,08 · antecedência ~14 s
 [10:56] bpm  79  eda  4.03  hrv  53.0  gyro   2.4  reg 0.18  luz  292  ruido  44.0 | ruído subindo
 ...
 [13:26] bpm  77  eda  3.79  hrv  57.0  gyro   8.1  reg 0.12  luz  303  ruido  44.8 | pausa calma (recuperação) · ciclo 4 em 120 s
@@ -186,7 +187,10 @@ ela precisa desse tempo para voltar ao ambiente calmo (ver
 | `controle` | `npm run controle` | Segue os valores-alvo do "Controle da pulseira" do painel; sem comando, fica calmo (ver acima) | sem fim |
 
 Os cenários isolados começam com **2 minutos calmos** (linha de base da regra
-de gatilho); a `demo` começa com 60 s. As transições são rampas de 20 a 40 s.
+de gatilho); a `demo` começa com 60 s. As transições são rampas de 20 a 40 s,
+menos a subida da fisiologia nas crises: no 1º ciclo (nominal) ela é súbita,
+em 10 s, e nos seguintes é sorteada (tabela acima). O exercício e a
+estereotipia continuam subindo aos poucos (40 s).
 A linha do tempo do roteiro aparece no início da execução, e cada leitura é
 impressa com a fase atual. Em loop, cada ciclo dura o trecho ativo do roteiro
 (~2,5 a 4 min) mais a pausa.
@@ -225,10 +229,10 @@ Trecho real de `npm run eventos-aleatorios -- --seed 42`:
 
 ```
 === Evento 11 · visual · intensidade moderada · gatilho esperado: luminosidade ===
-    roteiro crise_luz · pico ×0,67 · subida 31 s · platô 53 s · descida 36 s · ambiente ×1,02 · antecedência ~8 s
-[56:37] bpm  77  eda  3.98  hrv  54.2  gyro   8.1  reg 0.09  luz  304  ruido  44.5 | luz subindo
+    roteiro crise_luz · pico ×0,67 · subida gradual 81 s · platô 20 s · descida 36 s · ambiente ×1,02 · antecedência ~8 s
+[56:53] bpm  79  eda  4.12  hrv  53.2  gyro   3.0  reg 0.17  luz  295  ruido  44.8 | luz subindo
 ...
-[58:45] bpm  77  eda  3.93  hrv  55.7  gyro   2.3  reg 0.00  luz  299  ruido  46.6 | pausa calma (recuperação) · evento 12 em 125 s
+[59:18] bpm  79  eda  3.82  hrv  55.1  gyro   7.6  reg 0.11  luz  293  ruido  46.4 | pausa calma (recuperação) · evento 12 em 125 s
 ```
 
 ## Gabarito dos testes (`simulator/logs/`)

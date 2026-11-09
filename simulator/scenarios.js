@@ -43,7 +43,17 @@ export const CALMO = {
 
 export const BASELINE_S = 120;
 const ENV_RAMP_S = 20;
+// Subida da fisiologia na crise, como no gerador do dataset v4
+// (model/gerar_dataset_v4.py): ~70% subita (5-15 s) e o resto gradual
+// (40-90 s); o 1o ciclo (nominal) e subito, 10 s. O plato absorve a diferenca
+// para a subida de referencia (PHYSIO_RAMP_S, com a variacao do ciclo), com no
+// minimo PLATEAU_MIN_S: a duracao dos roteiros nao muda, so a forma da subida.
 const PHYSIO_RAMP_S = 30;
+const SUDDEN_ONSET_S = [5, 15];
+const GRADUAL_ONSET_S = [40, 90];
+const P_SUDDEN = 0.7;
+const PLATEAU_MIN_S = 20;
+const ONSET_LABEL = { subita: 'súbita', gradual: 'gradual' };
 const RECOVERY_RAMP_S = 40;
 const PLATEAU_S = 60;
 // Depois que a fisiologia volta ao normal, o modelo ainda alerta por ~20-25 s
@@ -80,10 +90,13 @@ const fmt = (x) => x.toFixed(2).replace('.', ',');
 // ambiente      multiplica a mudanca de luz/ruido
 // nivel         intensidade da crise (eventos_aleatorios: leve/moderada/alta);
 //               multiplica so a resposta de estresse (BPM, EDA, HRV)
-// subida, plato, descida   multiplicam a duracao dessas fases
+// subida, plato, descida   multiplicam a duracao dessas fases (na crise, a
+//               subida vem de inicio/subidaCrise e o plato compensa)
 // antecedencia  s entre o ambiente cruzar o limite e a fisiologia comecar a mudar
+// inicio, subidaCrise  tipo e duracao (s) da subida da fisiologia na crise
 export const VARIACAO_NOMINAL = Object.freeze({
   pico: 1, ambiente: 1, nivel: 1, subida: 1, plato: 1, descida: 1, antecedencia: LEAD_S,
+  inicio: 'subita', subidaCrise: 10,
 });
 
 // Limites do sorteio (cada cenario pode restringir com `limites`)
@@ -107,6 +120,22 @@ export function drawVariation(rng, limits = {}) {
     descida: between(lim.descida ?? lim.duracao),
     antecedencia: aMin + Math.floor(rng() * (aMax - aMin + 1)),
   };
+}
+
+// Tipo e duracao da subida da crise (sorteio proprio: nao muda os outros)
+export function drawOnset(rng) {
+  const subita = rng() < P_SUDDEN;
+  const [lo, hi] = subita ? SUDDEN_ONSET_S : GRADUAL_ONSET_S;
+  return { inicio: subita ? 'subita' : 'gradual', subidaCrise: lo + Math.floor(rng() * (hi - lo + 1)) };
+}
+
+// Subida da crise e plato correspondente: o plato absorve a diferenca para
+// a subida de referencia do ciclo (PHYSIO_RAMP_S x fator "subida"), entao
+// subida + plato (e a linha do tempo) ficam como antes
+function crisisRise(v, holdBase) {
+  const up = v.subidaCrise ?? VARIACAO_NOMINAL.subidaCrise;
+  const reference = scaled(v, 'subida', PHYSIO_RAMP_S);
+  return { up, hold: Math.max(PLATEAU_MIN_S, scaled(v, 'plato', holdBase) + reference - up) };
 }
 
 // Duracao de uma fase com o fator sorteado para ela
@@ -136,7 +165,7 @@ function sequence(...parts) {
 
 // Resposta de estresse (crianca parada): BPM e EDA sobem, HRV cai. Comeca em
 // t0, sobe em `up` s, fica `hold` s e volta em `down` s.
-function crisis(t0, v, { up = PHYSIO_RAMP_S, hold = PLATEAU_S, down = RECOVERY_RAMP_S } = {}) {
+function crisis(t0, v, { up, hold, down }) {
   const k = v.pico * v.nivel;
   const p = (key) => pulse(t0, up, hold, down, null, round2(CALMO[key] + CRISIS[key] * k));
   return { bpm: p('bpm'), eda: p('eda'), hrv: p('hrv') };
@@ -173,8 +202,7 @@ const envSummary = (v) => [`ambiente ×${fmt(v.ambiente)}`, `antecedência ~${v.
 const T_PHYSIO = BASELINE_S + LEAD_S + NOISE_EXTRA_LEAD_S;
 
 function crisisTimeline(v, holdBase = PLATEAU_S) {
-  const up = scaled(v, 'subida', PHYSIO_RAMP_S);
-  const hold = scaled(v, 'plato', holdBase);
+  const { up, hold } = crisisRise(v, holdBase);
   const down = scaled(v, 'descida', RECOVERY_RAMP_S);
   const tPhysio = T_PHYSIO;
   const tPeak = tPhysio + up;
@@ -192,7 +220,8 @@ function crisisTimeline(v, holdBase = PLATEAU_S) {
   };
 }
 
-const crisisSummary = (v, tl) => [peakSummary(v), `subida ${tl.up} s`, `platô ${tl.hold} s`, `descida ${tl.down} s`];
+const onsetSummary = (v, up) => `subida ${ONSET_LABEL[v.inicio ?? VARIACAO_NOMINAL.inicio]} ${up} s`;
+const crisisSummary = (v, tl) => [peakSummary(v), onsetSummary(v, tl.up), `platô ${tl.hold} s`, `descida ${tl.down} s`];
 
 function crisisPhases(tl, envStart, envLabel) {
   return [
@@ -259,14 +288,13 @@ const DEMO_RECOVERY_RAMP_S = 25;
 const DEMO_CALM_S = 60;
 const DEMO_RECOVERY_S = 90;
 const DEMO_EXERCISE_S = 30; // subida, platô e descida do exercicio
-const DEMO_HOLD_1_S = 73; // crise 1: 210-330 s (ruido 17 s antes + 30 s subindo + 73 s)
-const DEMO_HOLD_2_S = 90; // crise 2: 420-540 s (30 s subindo + 90 s)
+const DEMO_HOLD_1_S = 73; // crise 1: 210-330 s (ruido 17 s antes + 30 s de referencia + 73 s)
+const DEMO_HOLD_2_S = 90; // crise 2: 420-540 s (30 s de referencia + 90 s)
 
 function demoScenario(v) {
   const ex = { up: scaled(v, 'subida', DEMO_EXERCISE_S), hold: scaled(v, 'plato', DEMO_EXERCISE_S), down: scaled(v, 'descida', DEMO_EXERCISE_S) };
-  const up = scaled(v, 'subida', PHYSIO_RAMP_S);
-  const hold1 = scaled(v, 'plato', DEMO_HOLD_1_S);
-  const hold2 = scaled(v, 'plato', DEMO_HOLD_2_S);
+  const { up, hold: hold1 } = crisisRise(v, DEMO_HOLD_1_S);
+  const { hold: hold2 } = crisisRise(v, DEMO_HOLD_2_S);
   const lead = v.antecedencia + NOISE_EXTRA_LEAD_S; // ruido -> fisiologia (nominal 17 s)
 
   const segmentos = [];
@@ -318,7 +346,7 @@ function demoScenario(v) {
     segmentos,
     tFisiologia: null, // duas crises: ver `segmentos`
     antecedencia: v.antecedencia,
-    resumo: [peakSummary(v), `exercício ${ex.up}/${ex.hold}/${ex.down} s`, `crises: subida ${up} s, platô ${hold1} e ${hold2} s`, ...envSummary(v)],
+    resumo: [peakSummary(v), `exercício ${ex.up}/${ex.hold}/${ex.down} s`, `crises: ${onsetSummary(v, up)}, platô ${hold1} e ${hold2} s`, ...envSummary(v)],
   };
 }
 
@@ -634,10 +662,11 @@ export function withRandom(rng, fn) {
 // ---------------------------------------------------------------------------
 
 export const PAUSA_PADRAO_S = 120;
+const ONSET_SEED_SALT = 0x5bd1e995;
 // 30 s para o episodio anterior fechar + 60 s de linha de base calma
 export const PAUSA_MIN_S = 90;
 
-function newCycle({ numero, cenario, rng, tipos, seed }) {
+function newCycle({ numero, cenario, rng, onsetRng, tipos, seed }) {
   let nome = cenario;
   let tipo = cenario;
   let intensidade = null;
@@ -647,9 +676,9 @@ function newCycle({ numero, cenario, rng, tipos, seed }) {
     tipos.push(tipo);
     nome = TIPOS_DE_EVENTO[tipo];
     if (SCENARIOS[nome].esperado.crise) intensidade = drawIntensity(rng);
-    v = { ...drawVariation(rng, SCENARIOS[nome].limites), nivel: intensidade ? INTENSIDADES[intensidade] : 1 };
+    v = { ...drawVariation(rng, SCENARIOS[nome].limites), nivel: intensidade ? INTENSIDADES[intensidade] : 1, ...drawOnset(onsetRng) };
   } else if (numero > 1) {
-    v = drawVariation(rng, SCENARIOS[nome].limites);
+    v = { ...drawVariation(rng, SCENARIOS[nome].limites), ...drawOnset(onsetRng) };
   }
   const { esperado } = SCENARIOS[nome];
   return {
@@ -707,12 +736,14 @@ export function* programTicks({
   const once = umaVez && !aleatorio; // no eventos_aleatorios, --uma-vez = 1 evento
   const total = umaVez ? 1 : ciclos;
   const rng = seeded(routineSeed(seed));
+  // tipo de subida das crises: gerador proprio, para nao mudar os outros sorteios
+  const onsetRng = seeded(routineSeed(seed) ^ ONSET_SEED_SALT);
   const tipos = [];
   const calm = calmTargets(idade);
   let t = 0;
 
   for (let numero = 1; numero <= total; numero += 1) {
-    const ciclo = newCycle({ numero, cenario, rng, tipos, seed });
+    const ciclo = newCycle({ numero, cenario, rng, onsetRng, tipos, seed });
     const r = ciclo.roteiro;
     const t0 = numero === 1 ? 0 : t - r.inicioAtivo;
     Object.assign(ciclo, {

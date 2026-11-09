@@ -14,9 +14,9 @@ aprovação no fim de cada etapa.
 | 1. Inventário (só leitura) | concluída e aprovada |
 | 2. Remoções aprovadas — parte 1 | concluída (commit `660a35e`) |
 | 2. Remoções aprovadas — parte 2 | concluída e aprovada (sem commit) |
-| 2. Remoções aprovadas — parte 3 | **concluída — aguardando revisão** (sem commit) |
+| 2. Remoções aprovadas — partes 2 e 3 | concluídas (commit `9ca0a01`) |
 | 3. Simplificação do código | não iniciada |
-| 4. Modelo mais simples | não iniciada |
+| 4. Modelo mais simples | **concluída — aguardando revisão** (modelo mantido e compactado; sem commit) |
 | 5. Relatório final | não iniciada |
 
 ## Ponto de partida
@@ -199,6 +199,19 @@ importáveis dos mesmos caminhos (reexport), então testes e imports não mudam:
 - **08/11/2026 — Etapa 2, parte 3:** parte 2 aprovada. Aviso do reset sem
   citar o painel ("Dados apagados para uma nova apresentação."); teste sem
   imagem para as 8 métricas no tema escuro (sem goldens novos).
+- **08/11/2026 — Etapa 4 (com a hipótese da subida súbita):** comparar a, b,
+  c, d e versões com 3 features com memória (calculadas igual em
+  `features.py` e `predict.js`); ajustar os cenários de crise para ~70%
+  subida súbita (5–15 s), mantendo o exercício gradual; registrar a hipótese
+  no `docs/modelo.md`. Só trocar o `forest.json` com "aprovado".
+- **08/11/2026 — Etapa 4, decisões:** não trocar o modelo antes de testar
+  "b + memória" com limiares mais baixos (recomendar a troca só se recuperar
+  todas as crises sem piorar mais nada); compactar o modelo atual; manter os
+  cenários novos (atualizar `docs/testes.md` e a linha do tempo da `demo`);
+  manter as features de memória no código; registrar a conclusão negativa da
+  hipótese no `docs/modelo.md` (vai para Resultados e Limitações do TCC). O
+  usuário disse ter apagado `mobile/ios` e `mobile/macos`, desfeito o
+  `analysis_options.yaml` e posto as plataformas no `.gitignore`.
 
 ## Etapa 2, parte 1 — feito (commitado pelo usuário em `660a35e`)
 
@@ -372,6 +385,108 @@ parte 1, R9).
 | Goldens e `forest.json` | idênticos aos da parte 2 (hash) |
 | Links dos `.md` | 0 quebrados |
 
+## Etapa 4 — comparação feita (sem commit; forest.json NÃO trocado)
+
+Ambiente: venv no scratchpad (scikit-learn 1.9.1, pandas 3.1.1, numpy
+2.5.4). O `train.py` reproduz exatamente as 60 árvores do `forest.json`
+(conferido antes e depois das mudanças em `features.py`).
+
+### O que mudou no código
+
+- `model/features.py`: 3 features com memória (`bpm_jerk_max_90`,
+  `bpm_excesso_mov`, `bpm_tempo_subida`, janela de 90 s; `MEMORY_FEATURES`).
+  Calculadas sempre, mas fora de `FEATURE_COLUMNS`: o treino atual não muda.
+- `frontend/src/model/predict.js`: as mesmas contas (`memoryFeatures`), só
+  quando o `forest.json` as usa; `classify.js` passa até 120 leituras
+  (`FEATURE_HISTORY`) em vez de 31. Paridade Python × JS: diferença zero em
+  26.910 s do v4 (3 crianças) e 5.607 s do simulador.
+- `simulator/scenarios.js`: subida da crise como no gerador do v4 (70%
+  súbita 5–15 s, 30% gradual 40–90 s; nominal súbita 10 s), com sorteio
+  próprio (os outros sorteios não mudam) e o platô compensando (a linha do
+  tempo fica igual, exceto quando o platô bate no mínimo de 20 s). Exercício
+  e estereotipia continuam graduais. `docs/pulseira.md` atualizado (tabela de
+  variação e os dois exemplos de terminal, reproduzidos com o mesmo gerador).
+- Novos: `model/comparar_modelos.py` (por segundo) e
+  `model/comparar_episodios.mjs` (por episódio, roda o `verificar.js` numa
+  cópia da pulseira com cada forest.json).
+- `docs/modelo.md`: seção "Versão simplificada" (hipótese, método, tabelas,
+  resultados negativos, recomendação).
+
+### Resultado (detalhes e tabelas no `docs/modelo.md`)
+
+- Memória: por segundo, precisão 0,47 → 0,68–0,72 com o mesmo recall; por
+  episódio, **nenhuma** versão reduz os alarmes do exercício (96/96 em
+  todas): o pico vem no começo do exercício, que também parece subida
+  súbita.
+- Melhor nova: b + memória (barulho sem crise 56/60 contra 40/60), mas perde
+  4/852 crises e 8/420 no laço e alerta ~1 s depois.
+- Simplificar (b, c, 30/40 árvores) perde crises e piora o barulho sem crise.
+- Recomendação: **manter o modelo atual**. Compactar o atual: 358 → 267 KB,
+  muda 1 de 1000 eventos.
+
+### Linha de base (`linha-de-base/etapa4/`)
+
+Testes do site 67/67, do simulador 30/30, lint 0, build com os mesmos
+hashes, `cenarios.mjs` idêntico, `flutter analyze` 0, `flutter test`
+170/170. O `verificar.js` **mudou** por causa dos cenários (esperado): laço
+igual (exercício 0/60, barulho 40/60, demo 51/60); eventos aleatórios com
+alerta 6,4 s após a fisiologia (antes 7,2 s), 21/52 ambientes com alarme
+(antes 19/52) e gatilho certo em 851/852 (antes 852/852). Nova referência:
+`linha-de-base/etapa4/`.
+
+### Pendente de decisão
+
+- Trocar o modelo? (recomendação: não.) Compactar o atual?
+- Manter os cenários com subida súbita? Se sim, regenerar as tabelas do
+  `docs/testes.md` e a linha do tempo da `demo` no `docs/apresentacao.md`
+  (a crise nominal agora sobe em 10 s), que ainda mostram os números antigos.
+- Manter as features de memória no código (inativas) ou removê-las, se o
+  modelo não mudar.
+- Encontrado e **não alterado**: `mobile/ios/` e `mobile/macos/` voltaram
+  (só arquivos gerados pelo Flutter, criados às 15:08 de 08/11) e o
+  `mobile/analysis_options.yaml` ganhou `ios/**` e `macos/**`: não foi a
+  limpeza.
+
+## Etapa 4 — decisões aplicadas (sem commit)
+
+- **Limiares de "b + memória"** (0,35/0,65; 0,30/0,60; 0,35/0,70;
+  0,25/0,55): não recuperam as crises, pioram (848 → 840 → 824 → 797
+  detectadas), porque o modelo passa a abrir episódios nas pausas calmas
+  (37 → 125 → 330) que "engolem" a crise seguinte. Recomendação mantida:
+  **não trocar**. A segunda rodada (com as colunas "calmo" e "episódios nas
+  pausas") mostrou ainda que todas as versões novas alarmam na calma; só o
+  atual tem 60/60 no `calmo` e 0 episódios nas pausas.
+- **Compactação:** `forest.json` com 4 casas e sem espaços (366 → 273 KB,
+  `meta` igual); `compactar()` no `train.py` (o `comparar_modelos.py` a
+  importa), que agora grava compactado; o retreino gera exatamente o arquivo
+  versionado.
+- **`docs/testes.md`:** as 7 tabelas que são saída do `verificar.js`
+  trocadas pelas novas (conferido que a cópia antiga reproduzia as antigas
+  byte a byte), a tabela de detalhes do `--uma-vez`, os resumos e o texto
+  (tempos de alerta, gatilho 851/852, leves 245/248 em alto_risco, ambiente
+  22/52, variação com a subida). `--pausa 90 --sementes 40` (crises 120/120,
+  mínimo 64) e `demo` com 100 sementes (48/300) conferidos de novo.
+- **`docs/apresentacao.md`:** linha do tempo da `demo` (alerta ~3:49 e
+  ~7:02; texto do gatilho 45 → 87 dB, ~11 s; nota sobre "antes do alerta do
+  modelo"); fechamentos e recuperação não mudaram.
+- **`docs/modelo.md`:** compactação em "Modelo em produção"; na "Versão
+  simplificada", tabela por episódio com "calmo" e "pausas", tabela dos
+  limiares e "Conclusão (para Resultados e Limitações do TCC)".
+- `model/comparar_episodios.mjs`: opção `--limiares` e colunas "calmo sem
+  alerta" e "episódios nas pausas".
+- **Não encontrado nesta cópia:** as mudanças do usuário em `mobile/` (as
+  pastas `ios`/`macos` ainda existem, o `analysis_options.yaml` ainda tem
+  `ios/**` e `macos/**`, e o `.gitignore` não tem as plataformas). Não
+  mexi.
+
+### Linha de base final (`linha-de-base/etapa4-final/`)
+
+Site: lint 0, 67/67, build com os mesmos hashes; simulador 30/30;
+`cenarios.mjs` idêntico ao da Etapa 2; `verificar.js` igual ao usado nas
+tabelas do `docs/testes.md` (falhas conhecidas: exercicio, barulho_sem_crise
+e demo); `flutter analyze` 0; `flutter test` 170/170; links dos `.md`: 0
+quebrados.
+
 ## Próximo passo
 
-Aguardando revisão da parte 3. Pendentes de decisão: S2, S3 e a Etapa 4.
+Aguardando revisão da Etapa 4. Depois: Etapa 5 (relatório final). S2 e S3 continuam fora.

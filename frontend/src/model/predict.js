@@ -7,6 +7,19 @@ const SHORT_WINDOW = forest.shortWindow; // 5s
 const LONG_WINDOW = forest.longWindow; // 30s
 const MIN_HISTORY = LONG_WINDOW + 1; // precisa de t-30 disponivel
 
+// Features com memoria (hipotese da subida subita x gradual, docs/modelo.md):
+// mesmos valores e contas de model/features.py. So sao calculadas se o
+// forest.json as usar.
+const MEMORY_WINDOW = 90;
+const SMOOTH_WINDOW = 5;
+const BPM_PER_GYRO = 0.34;
+const MIN_RISE_BPM = 10;
+const MEMORY_FEATURES = ['bpm_jerk_max_90', 'bpm_excesso_mov', 'bpm_tempo_subida'];
+const USES_MEMORY = forest.featureColumns.some((name) => MEMORY_FEATURES.includes(name));
+// Leituras que o calculo pode olhar para tras (o jerk mais antigo da janela
+// precisa de 30 s antes dele)
+export const FEATURE_HISTORY = LONG_WINDOW + MEMORY_WINDOW;
+
 const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
 const std = (arr, avg) => Math.sqrt(mean(arr.map((v) => (v - avg) ** 2)));
 
@@ -23,6 +36,44 @@ function streakAboveTrend(windowValues, minMargin, marginFracStd) {
     streak += 1;
   }
   return streak;
+}
+
+// As 3 features com memoria no fim do historico (ver _memory_features em
+// model/features.py): maior jerk do BPM nos ultimos 90 s, subida do BPM nao
+// explicada pelo movimento e tempo de subida ate o pico recente.
+function memoryFeatures(history) {
+  const n = history.length;
+  const bpm = history.map((r) => r.bpm);
+  const gyro = history.map((r) => r.gyro_mag_dps);
+  const lo = Math.max(0, n - MEMORY_WINDOW);
+
+  let jerkMax = -Infinity;
+  for (let j = Math.max(lo, LONG_WINDOW); j < n; j += 1) {
+    const jerk = (bpm[j] - bpm[j - SHORT_WINDOW]) / SHORT_WINDOW - (bpm[j] - bpm[j - LONG_WINDOW]) / LONG_WINDOW;
+    if (jerk > jerkMax) jerkMax = jerk;
+  }
+
+  const w = [];
+  const g = [];
+  for (let j = Math.max(lo, SMOOTH_WINDOW - 1); j < n; j += 1) {
+    w.push(mean(bpm.slice(j - SMOOTH_WINDOW + 1, j + 1)));
+    g.push(mean(gyro.slice(j - SMOOTH_WINDOW + 1, j + 1)));
+  }
+  const excesso = (w[w.length - 1] - Math.min(...w)) - BPM_PER_GYRO * (g[g.length - 1] - Math.min(...g));
+
+  let p = 0;
+  for (let k = 1; k < w.length; k += 1) if (w[k] >= w[p]) p = k; // pico mais recente
+  const base = Math.min(...w.slice(0, p + 1));
+  const rise = w[p] - base;
+  let tempo = MEMORY_WINDOW;
+  if (rise >= MIN_RISE_BPM) {
+    let tLo = p;
+    while (w[tLo] > base + 0.2 * rise) tLo -= 1;
+    let tHi = tLo;
+    while (w[tHi] < base + 0.8 * rise) tHi += 1;
+    tempo = tHi - tLo;
+  }
+  return { bpm_jerk_max_90: jerkMax, bpm_excesso_mov: excesso, bpm_tempo_subida: tempo };
 }
 
 // Recebe o historico de leituras (mais antiga -> mais recente) e calcula as
@@ -80,6 +131,7 @@ export function computeFeatures(history) {
     ruido_slope_long: (cur.ruido_db - lagLong.ruido_db) / LONG_WINDOW,
 
     idade: cur.idade,
+    ...(USES_MEMORY ? memoryFeatures(history) : {}),
   };
 }
 
