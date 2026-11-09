@@ -164,12 +164,58 @@ void main() {
     expect(find.text('Rodar sem restrição de bateria'), findsOneWidget);
   });
 
+  testWidgets('passo opcional do "Não perturbe": não conta para o "Começar"', (tester) async {
+    await montar(tester, SistemaFalso(notificacoes: true, bateria: true));
+    expect(find.text('OPCIONAL'), findsOneWidget);
+    expect(find.text('Receber alertas mesmo no Não perturbe'), findsOneWidget);
+    expect(find.textContaining('No modo silencioso ou vibrar, o alerta aparece mas não toca.'), findsOneWidget);
+    expect(
+      find.textContaining('Deixe o volume de notificações ligado enquanto a criança estiver com a pulseira.'),
+      findsOneWidget,
+    );
+    expect(find.widgetWithText(OutlinedButton, 'Abrir o “Não perturbe”'), findsOneWidget);
+    expect(botaoComecar(tester).onPressed, isNotNull, reason: 'opcional');
+  });
+
+  testWidgets('"Não perturbe": o botão abre a tela do sistema, o ✓ aparece e os canais são preparados', (tester) async {
+    final sistema = SistemaFalso(notificacoes: true, bateria: true);
+    await montar(tester, sistema);
+    await tester.ensureVisible(find.text('Abrir o “Não perturbe”'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Abrir o “Não perturbe”'));
+    await tester.pumpAndSettle();
+    expect(sistema.chamadas, containsAllInOrder(['abrirAcessoNaoPerturbe', 'prepararCanaisDeAlerta']));
+    expect(find.text('Feito'), findsNWidgets(3));
+  });
+
+  testWidgets('"Não perturbe" liberado fora do app: ✓ ao voltar (onResume)', (tester) async {
+    final sistema = SistemaFalso(notificacoes: true, bateria: true, concederAoPedir: false);
+    await montar(tester, sistema);
+    expect(find.text('Feito'), findsNWidgets(2));
+    sistema.naoPerturbe = true;
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(find.text('Feito'), findsNWidgets(3));
+    expect(sistema.chamadas, contains('prepararCanaisDeAlerta'));
+  });
+
+  testWidgets('"Não perturbe": o caminho das exceções aparece só em Samsung', (tester) async {
+    const caminho = 'Configurações → Notificações → Não perturbe → Apps';
+    await montar(tester, SistemaFalso(marca: 'samsung'));
+    expect(find.textContaining(caminho), findsOneWidget);
+    await montar(tester, SistemaFalso(marca: 'motorola'));
+    expect(find.textContaining(caminho), findsNothing);
+  });
+
   testWidgets('primeira abertura: o portao mostra "Configurar alertas" antes do Inicio', (tester) async {
     final servico = ServicoFalso(prefs: (await calmo()).prefs);
     final c = await configuracaoDe(servico.prefs, SistemaFalso());
     await mostrar(tester, servico, alertas: c, tela: const PortaoDosAlertas(child: Text('INICIO')));
     expect(find.text('Configurar alertas'), findsOneWidget);
     expect(find.text('INICIO'), findsNothing);
+    await tester.ensureVisible(find.text('Continuar sem isso'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Continuar sem isso'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Continuar mesmo assim'));

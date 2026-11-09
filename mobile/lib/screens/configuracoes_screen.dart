@@ -89,10 +89,7 @@ class ConfiguracoesScreen extends StatelessWidget {
             const ListTile(
               leading: Icon(Icons.info_outline_rounded),
               title: Text('Puzzle Band $versao'),
-              subtitle: Text(
-                'Demonstração (TCC). Indicação de apoio ao cuidador, sem valor diagnóstico. '
-                'Sem login real: qualquer usuário entra.',
-              ),
+              subtitle: Text('Demonstração (TCC). Indicação de apoio ao cuidador, sem valor diagnóstico.'),
             ),
             ListTile(
               leading: const Icon(Icons.description_outlined),
@@ -101,12 +98,6 @@ class ConfiguracoesScreen extends StatelessWidget {
               onTap: () => showLicensePage(context: context, applicationName: 'Puzzle Band', applicationVersion: versao),
             ),
           ],
-        ),
-        const SizedBox(height: Espaco.xl),
-        OutlinedButton.icon(
-          onPressed: () => Navigator.pushReplacementNamed(context, '/'),
-          icon: const Icon(Icons.logout_rounded),
-          label: const Text('Sair'),
         ),
       ],
     );

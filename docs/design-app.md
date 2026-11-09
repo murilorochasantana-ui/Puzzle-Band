@@ -185,8 +185,7 @@ neutros. Nenhuma usa o vermelho, o âmbar ou o verde dos níveis.
 - **Raios em hierarquia**, em vez de um raio único em tudo (medidas do
   modelo do Figma): 20 dp nas linhas da tela Início (probabilidade e botão
   "Hoje"), 16 dp na faixa de estado, nas seções e nos cartões, 12 dp em
-  botões e campos, e formato de pílula nos selos de nível. O logo grande do
-  Login mantém 28 dp.
+  botões e campos, e formato de pílula nos selos de nível.
 - **Sombra só onde há algo ao vivo.** A faixa de estado e o cartão do
   episódio em andamento têm uma sombra suave e azulada, tirada do azul de
   ação, no lugar da sombra preta a 25% do modelo. O tema escuro não tem
@@ -207,8 +206,7 @@ neutros. Nenhuma usa o vermelho, o âmbar ou o verde dos níveis.
   - no Histórico, o cartão do episódio e o calendário abrem e fecham no lugar
     com transição de tamanho; o selo "a confirmar" rola a lista até os botões;
   - nos Gráficos, o balão do instante tocado fica 4 s depois de tirar o dedo
-    e some sem animação; o balão do gráfico de 7 dias entra com um fade curto;
-  - um único fade na abertura do Login.
+    e some sem animação; o balão do gráfico de 7 dias entra com um fade curto.
 - **Sem movimento:** nada se move sozinho. O coração e o ponto de estado que
   pulsavam sem parar no visual anterior (900 ms, escala de 0,95 a 1,2) foram
   removidos. O BPM troca de valor sem animar, e o gráfico ao vivo não anima a
@@ -442,18 +440,23 @@ medidas novas entraram no tema.
 
 ### Login
 
-| Antes | Depois |
-|---|---|
-| <img src="imagens/app-antes/login.png" width="280"> | <img src="../mobile/test/goldens/login.png" width="280"> |
+> **Tela removida em 11/2026.** O login era só visual (qualquer usuário e
+> senha entravam); o app passou a abrir direto, passando antes pela
+> **Configurar alertas** na primeira vez ([app.md](app.md#configuração-na-primeira-abertura)).
+> Fica o registro do redesign.
+
+| Antes |
+|---|
+| <img src="imagens/app-antes/login.png" width="280"> |
 
 - **Antes:**
   - o botão "Entrar" era cinza com texto branco (1,9:1) e parecia desativado;
   - os campos só tinham texto de exemplo, que some ao digitar.
-- **Depois:**
-  - o botão "Entrar" é azul (7,1:1) e tem 56 dp;
-  - os campos têm rótulo fixo;
-  - o aviso diz o que acontece: "qualquer usuário e senha entram";
-  - o logo aparece num selo, com a fita maior.
+- **Depois (até a remoção):**
+  - o botão "Entrar" era azul (7,1:1), com 56 dp;
+  - os campos tinham rótulo fixo;
+  - o aviso dizia o que acontecia: "qualquer usuário e senha entram";
+  - o logo aparecia num selo, com a fita maior.
 
 ### Gráficos
 
@@ -572,7 +575,8 @@ A imagem de Ajustes é uma captura longa, para a seção Aparência aparecer.
   - cada conexão diz o que significa e mostra o erro, quando houver;
   - "Alertas sonoros" ocupa a linha inteira como área de toque;
   - "Licenças de software" abre as licenças, incluindo a da fonte;
-  - "Sair" é neutro.
+  - "Sair" era neutro (o botão saiu com o login, em 11/2026);
+  - em Alertas, "Monitorar com o app fechado" e "Configurar alertas".
 
 ### Tema escuro e fonte ampliada
 
@@ -694,7 +698,7 @@ têm branco nem preto puros.
 As imagens `mobile/test/goldens/escuro_*.png` cobrem todas as telas, nos
 estados principais:
 
-- **Login.**
+- **Configurar alertas.**
 - **Início:** calmo, atenção, possível crise, painel "Hoje" aberto e sem
   conexão.
 - **Episódio:** detalhe.

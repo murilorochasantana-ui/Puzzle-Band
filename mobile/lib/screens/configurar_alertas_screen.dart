@@ -122,6 +122,21 @@ class _ConfigurarAlertasScreenState extends State<ConfigurarAlertasScreen> with 
             confirmar: c.confirmarSamsung,
           ),
         ],
+        const SizedBox(height: Espaco.m),
+        _Passo(
+          numero: ++numero,
+          opcional: true,
+          titulo: 'Receber alertas mesmo no Não perturbe',
+          texto: 'Um alerta de crise pode chegar à noite ou numa reunião, com o “Não perturbe” ligado. '
+              'Na tela que abrir, ative o Puzzle Band para os alertas tocarem mesmo assim.'
+              '${c.ehSamsung ? ' Nos celulares Samsung, também dá para pôr o app nas exceções: '
+                  'Configurações → Notificações → Não perturbe → Apps.' : ''}',
+          aviso: 'No modo silencioso ou vibrar, o alerta aparece mas não toca. '
+              'Deixe o volume de notificações ligado enquanto a criança estiver com a pulseira.',
+          feito: c.naoPerturbeLiberado,
+          botao: 'Abrir o “Não perturbe”',
+          aoTocar: c.pedirNaoPerturbe,
+        ),
         const SizedBox(height: Espaco.xl),
         FilledButton(
           onPressed: pronto ? () => _comecar(c) : null,
@@ -160,6 +175,8 @@ class _Passo extends StatelessWidget {
     required this.botao,
     required this.aoTocar,
     this.confirmar,
+    this.opcional = false,
+    this.aviso,
   });
 
   final int numero;
@@ -170,6 +187,12 @@ class _Passo extends StatelessWidget {
   final Future<void> Function() aoTocar;
   final Future<void> Function()? confirmar;
 
+  /// Nao conta para o "Comecar".
+  final bool opcional;
+
+  /// Destaque abaixo da explicacao (icone de informacao).
+  final String? aviso;
+
   @override
   Widget build(BuildContext context) {
     final cores = CoresApp.of(context);
@@ -177,7 +200,7 @@ class _Passo extends StatelessWidget {
     final verde = cores.calmo;
     return Semantics(
       container: true,
-      label: 'Passo $numero: $titulo. ${feito ? 'Feito.' : 'Pendente.'}',
+      label: 'Passo $numero${opcional ? ' (opcional)' : ''}: $titulo. ${feito ? 'Feito.' : 'Pendente.'}',
       child: Secao(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,9 +224,28 @@ class _Passo extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (opcional)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Espaco.xs),
+                      child: Text('OPCIONAL', style: estilo.labelSmall!.copyWith(color: cores.tintaSuave, letterSpacing: 1)),
+                    ),
                   Text(titulo, style: estilo.titleMedium),
                   const SizedBox(height: Espaco.xs),
                   Text(texto, style: estilo.bodyMedium!.copyWith(color: cores.tintaSuave)),
+                  if (aviso != null) ...[
+                    const SizedBox(height: Espaco.s),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Icon(Icons.volume_up_outlined, size: 20, color: cores.tinta),
+                        ),
+                        const SizedBox(width: Espaco.s),
+                        Expanded(child: Text(aviso!, style: estilo.bodyMedium)),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: Espaco.m),
                   if (feito)
                     Row(

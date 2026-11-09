@@ -6,7 +6,6 @@ import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'config/app_config.dart';
-import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/graficos_screen.dart';
 import 'screens/historico_screen.dart';
@@ -82,7 +81,9 @@ Future<void> main() async {
 class PuzzleBandApp extends StatefulWidget {
   const PuzzleBandApp({super.key, this.rotaInicial = '/'});
 
-  /// Tela de abertura ('/' = Login). Os testes abrem direto em outra aba.
+  /// Tela de abertura ('/' = Inicio, passando antes por "Configurar alertas"
+  /// na primeira abertura; o app nao tem login). Os testes abrem direto em
+  /// outra aba.
   final String rotaInicial;
 
   @override
@@ -157,9 +158,9 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
       ),
       initialRoute: widget.rotaInicial,
       routes: {
-        '/': (context) => const LoginScreen(),
-        // Primeira abertura: "Configurar alertas" antes do Inicio
-        '/home': (context) => const PortaoDosAlertas(child: MainNavigation(initialIndex: 0)),
+        // Abre direto (sem login): na primeira abertura, "Configurar alertas"
+        // antes do Inicio. Tocar numa notificacao tambem abre aqui.
+        '/': (context) => const PortaoDosAlertas(child: MainNavigation(initialIndex: 0)),
         '/graficos': (context) => const MainNavigation(initialIndex: 1),
         '/historico': (context) => const MainNavigation(initialIndex: 2),
         '/configuracoes': (context) => const MainNavigation(initialIndex: 3),

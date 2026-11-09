@@ -17,6 +17,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
     <uses-permission android:name="android.permission.WAKE_LOCK"/>
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+    <!-- Passo opcional "Receber alertas mesmo no Nao perturbe": o app aparece na
+         tela do sistema de acesso ao Nao perturbe; concedido, os canais de
+         alerta ignoram o modo (setBypassDnd) -->
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"/>
     <application
         android:label="Puzzle Band"
         android:name="${applicationName}"

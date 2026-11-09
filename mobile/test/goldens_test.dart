@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/configurar_alertas_screen.dart';
-import 'package:puzzleband/screens/login_screen.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
 import 'package:puzzleband/utils/relogio.dart';
@@ -25,7 +24,7 @@ Future<void> imagem(String nome) =>
 Future<void> configurarAlertas(WidgetTester tester, SistemaFalso sistema, {bool escuro = false}) async {
   final servico = await calmo();
   final c = await configuracaoDe(servico.prefs, sistema);
-  await mostrar(tester, servico, alertas: c, tela: const ConfigurarAlertasScreen(), escuro: escuro, altura: 1100);
+  await mostrar(tester, servico, alertas: c, tela: const ConfigurarAlertasScreen(), escuro: escuro, altura: 1600);
 }
 
 /// Nome de exemplo no cabecalho do Inicio (o padrao seria o CHILD_ID) e,
@@ -139,11 +138,6 @@ void main() {
   tearDown(() => relogio = DateTime.now);
 
   group('tema claro', () {
-    testWidgets('login', (tester) async {
-      await mostrar(tester, await calmo(), tela: const LoginScreen());
-      await imagem('login');
-    });
-
     testWidgets('inicio: calmo', (tester) async {
       await inicio(tester, await calmo());
       await imagem('inicio_calmo');
@@ -365,11 +359,6 @@ void main() {
     // --- Demais telas no escuro (Ajustes > Aparência > Escuro). Os outros
     // estados no escuro sao cobertos pelo teste de contraste (telas_test.dart).
 
-    testWidgets('login', (tester) async {
-      await mostrar(tester, await calmo(), tela: const LoginScreen(), escuro: true);
-      await imagem('escuro_login');
-    });
-
     testWidgets('inicio: atencao', (tester) async {
       await inicio(tester, await atencao(), escuro: true);
       await imagem('escuro_inicio_atencao');
@@ -413,11 +402,6 @@ void main() {
   });
 
   group('fonte do sistema ampliada (1,3x)', () {
-    testWidgets('login', (tester) async {
-      await mostrar(tester, await calmo(), tela: const LoginScreen(), escala: 1.3);
-      await imagem('fonte_130_login');
-    });
-
     testWidgets('inicio: possivel crise (captura longa)', (tester) async {
       await inicio(tester, await possivelCrise(), escala: 1.3, altura: 1300);
       await imagem('fonte_130_inicio_possivel_crise_inteira');

@@ -103,7 +103,8 @@ terminal (ver [docs/mqtt.md](mqtt.md#verificar-pelo-terminal-verificar-app)).
 1. **Pulseira no modo controle + painel + app.**
    - Em `simulator/`, rode `npm run controle`.
    - Em `frontend/`, rode `npm run dev` e abra o site.
-   - No celular, abra o app e toque em **Entrar**.
+   - No celular, abra o app (ele abre direto no Início; na primeira vez,
+     passa antes pela **Configurar alertas**).
 
    O painel mostra "Pulseira: online", "App do cuidador: conectado" e, no
    "Controle da pulseira", "Pulseira no modo controle". O app mostra

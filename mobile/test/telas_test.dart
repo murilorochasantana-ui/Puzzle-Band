@@ -11,7 +11,7 @@ import 'package:puzzleband/models/models.dart';
 import 'package:puzzleband/models/resumo.dart';
 import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
-import 'package:puzzleband/screens/login_screen.dart';
+import 'package:puzzleband/screens/configurar_alertas_screen.dart';
 import 'package:puzzleband/services/app_scope.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
@@ -1122,7 +1122,7 @@ void main() {
 
   group('Acessibilidade (todas as telas, tema claro e escuro)', () {
     final telas = <String, Future<void> Function(WidgetTester, bool)>{
-      'login': (t, e) async => mostrar(t, await calmo(), tela: const LoginScreen(), escuro: e),
+      'configurar alertas': (t, e) async => mostrar(t, await calmo(), tela: const ConfigurarAlertasScreen(), escuro: e),
       'início (crise)': (t, e) async => mostrar(t, await possivelCrise(), escuro: e),
       'início (sem conexão)': (t, e) async => mostrar(t, await semConexao(), escuro: e),
       'início (painel "Hoje" aberto, com lembrete)': (t, e) async {
@@ -1184,7 +1184,7 @@ void main() {
 
     testWidgets('fonte do sistema em 1,3x: nenhuma tela corta nem sobrepõe texto, em todos os estados', (tester) async {
       // Um texto cortado/sobreposto (RenderFlex overflow) vira excecao.
-      await mostrar(tester, await calmo(), tela: const LoginScreen(), escala: 1.3);
+      await mostrar(tester, await calmo(), tela: const ConfigurarAlertasScreen(), escala: 1.3);
       expect(tester.takeException(), isNull);
       for (final cenario in [calmo, atencao, possivelCrise, semConexao, conectando, painelEPulseiraOffline, erroDeConfiguracao, semDadosAinda]) {
         for (final aba in [0, 1, 2, 3]) {

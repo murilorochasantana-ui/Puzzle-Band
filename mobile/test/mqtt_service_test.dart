@@ -34,6 +34,7 @@ class NotificacoesFalsas extends NotificationService {
     required bool comSom,
     required bool atualizacao,
     String? payload,
+    bool ignoraNaoPerturbe = false,
   }) async {
     chamadas.add(Chamada(id, titulo, comSom, atualizacao));
   }

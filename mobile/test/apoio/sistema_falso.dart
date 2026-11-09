@@ -12,12 +12,14 @@ class SistemaFalso implements SistemaAndroid {
     this.marca = 'Google',
     this.servico = false,
     this.concederAoPedir = true,
+    this.naoPerturbe = false,
   });
 
   bool notificacoes;
   bool bateria;
   String marca;
   bool servico;
+  bool naoPerturbe;
 
   /// O tutor aceita na janela do sistema.
   bool concederAoPedir;
@@ -48,6 +50,18 @@ class SistemaFalso implements SistemaAndroid {
 
   @override
   Future<void> abrirDetalhesDoApp() async => chamadas.add('abrirDetalhesDoApp');
+
+  @override
+  Future<bool> naoPerturbeLiberado() async => naoPerturbe;
+
+  @override
+  Future<void> abrirAcessoNaoPerturbe() async {
+    chamadas.add('abrirAcessoNaoPerturbe');
+    if (concederAoPedir) naoPerturbe = true;
+  }
+
+  @override
+  Future<void> prepararCanaisDeAlerta() async => chamadas.add('prepararCanaisDeAlerta');
 
   @override
   Future<bool> servicoRodando() async => servico;

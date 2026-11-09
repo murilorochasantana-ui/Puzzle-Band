@@ -5,7 +5,11 @@
 //     crise), a mesma notificacao e substituida e toca de novo; no mesmo
 //     nivel ou descendo, nada;
 //   - alerta com mais de 10 minutos nao notifica;
-//   - canal com ou sem som conforme a opcao "Alertas sonoros".
+//   - canal com ou sem som conforme a opcao "Alertas sonoros";
+//   - par de canais que ignora o "Nao perturbe" se o acesso estiver
+//     concedido. A SUBIDA de nivel usa o par da notificacao original do
+//     episodio, mesmo que o acesso tenha mudado no meio: assim continua sendo
+//     a mesma notificacao (o par usado fica gravado junto do episodio).
 //
 // O app e o servico rodam em isolates separados (o servico tem o proprio
 // motor Dart), cada um com a sua copia em memoria do shared_preferences.
@@ -66,6 +70,7 @@ class DecisaoDeNotificacao {
     required this.comSom,
     required this.atualizacao,
     required this.payload,
+    this.ignoraNaoPerturbe = false,
   });
 
   final int id;
@@ -76,6 +81,9 @@ class DecisaoDeNotificacao {
   /// Mesmo episodio, nivel subiu: substitui a notificacao (e toca de novo).
   final bool atualizacao;
   final String? payload;
+
+  /// Usar o par de canais que ignora o "Nao perturbe".
+  final bool ignoraNaoPerturbe;
 }
 
 class RegistroDeNotificacoes {
@@ -89,8 +97,10 @@ class RegistroDeNotificacoes {
   static const maxNotificados = 100;
 
   /// Decide e, se for notificar, grava o episodio como notificado (antes de
-  /// devolver). Le o estado do disco primeiro.
-  Future<DecisaoDeNotificacao?> decidir(Alerta alerta, {DateTime? agora}) async {
+  /// devolver). Le o estado do disco primeiro. `naoPerturbeLiberado`: o
+  /// acesso ao "Nao perturbe" agora (vale para a primeira notificacao do
+  /// episodio; a subida repete o par gravado).
+  Future<DecisaoDeNotificacao?> decidir(Alerta alerta, {DateTime? agora, bool naoPerturbeLiberado = false}) async {
     if (!alerta.nivel.isAlerta) return null;
     final ts = alerta.timestamp;
     final instante = agora ?? DateTime.now();
@@ -100,16 +110,20 @@ class RegistroDeNotificacoes {
     final notificados = _ler();
     final chave = alerta.episodioId ?? 'sem_id_${(ts ?? instante).millisecondsSinceEpoch}';
     final anterior = notificados[chave];
-    if (anterior != null && alerta.nivel.rank <= anterior.rank) return null;
+    if (anterior != null && alerta.nivel.rank <= anterior.nivel.rank) return null;
+    final ignora = anterior?.ignoraNaoPerturbe ?? naoPerturbeLiberado;
 
     notificados.remove(chave);
-    notificados[chave] = alerta.nivel;
+    notificados[chave] = (nivel: alerta.nivel, ignoraNaoPerturbe: ignora);
     while (notificados.length > maxNotificados) {
       notificados.remove(notificados.keys.first);
     }
     await estado.gravarTexto(
       chaveNotificados,
-      jsonEncode([for (final e in notificados.entries) [e.key, e.value.codigo]]),
+      jsonEncode([
+        for (final e in notificados.entries)
+          [e.key, e.value.nivel.codigo, if (e.value.ignoraNaoPerturbe) 'ignora_nao_perturbe'],
+      ]),
     );
 
     final critico = alerta.nivel == NivelRisco.altoRisco;
@@ -123,18 +137,23 @@ class RegistroDeNotificacoes {
       comSom: estado.lerBooleano(chaveAlertasSonoros) ?? true,
       atualizacao: anterior != null,
       payload: alerta.episodioId,
+      ignoraNaoPerturbe: ignora,
     );
   }
 
-  Map<String, NivelRisco> _ler() {
-    final mapa = <String, NivelRisco>{}; // literal = LinkedHashMap (ordem de insercao)
+  /// Episodio -> nivel ja notificado e o par de canais usado. Formato antigo
+  /// ([id, nivel]) = par normal.
+  Map<String, ({NivelRisco nivel, bool ignoraNaoPerturbe})> _ler() {
+    final mapa = <String, ({NivelRisco nivel, bool ignoraNaoPerturbe})>{}; // ordem de insercao
     try {
       final lista = jsonDecode(estado.lerTexto(chaveNotificados) ?? '[]');
       if (lista is List) {
         for (final item in lista) {
-          if (item is List && item.length == 2 && item[0] is String) {
+          if (item is List && item.length >= 2 && item[0] is String) {
             final nivel = NivelRisco.fromCodigo(item[1]);
-            if (nivel != null) mapa[item[0] as String] = nivel;
+            if (nivel != null) {
+              mapa[item[0] as String] = (nivel: nivel, ignoraNaoPerturbe: item.length > 2 && item[2] == 'ignora_nao_perturbe');
+            }
           }
         }
       }
@@ -147,7 +166,7 @@ class RegistroDeNotificacoes {
 
 /// Decide e mostra. Usado pelo app aberto e pelo servico.
 Future<bool> notificarAlerta(Alerta alerta, RegistroDeNotificacoes registro, NotificationService notificacoes) async {
-  final d = await registro.decidir(alerta);
+  final d = await registro.decidir(alerta, naoPerturbeLiberado: await notificacoes.naoPerturbeLiberado());
   if (d == null) return false;
   await notificacoes.mostrarAlerta(
     id: d.id,
@@ -156,6 +175,7 @@ Future<bool> notificarAlerta(Alerta alerta, RegistroDeNotificacoes registro, Not
     comSom: d.comSom,
     atualizacao: d.atualizacao,
     payload: d.payload,
+    ignoraNaoPerturbe: d.ignoraNaoPerturbe,
   );
   return true;
 }

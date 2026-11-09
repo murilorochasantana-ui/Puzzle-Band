@@ -4,6 +4,7 @@
 // fechado".
 import 'dart:convert';
 
+import 'package:flutter_local_notifications/flutter_local_notifications.dart' show AndroidNotificationChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mqtt_client/mqtt_client.dart' show MqttQos;
 import 'package:puzzleband/config/app_config.dart';
@@ -43,6 +44,7 @@ class NotificacoesContadas extends NotificationService {
     required bool comSom,
     required bool atualizacao,
     String? payload,
+    bool ignoraNaoPerturbe = false,
   }) async {
     titulos.add(titulo);
     this.comSom.add(comSom);
@@ -185,6 +187,76 @@ void main() {
         alerta('ep_v', 'alto_risco', quando: DateTime.now().subtract(const Duration(minutes: 11))),
       )!;
       expect(await registro.decidir(velho), isNull);
+    });
+  });
+
+  group('"Nao perturbe": par de canais de alerta', () {
+    test('a subida usa o par da notificacao original, mesmo que o acesso mude no meio', () async {
+      final registro = RegistroDeNotificacoes(CopiaDoIsolate(Disco()));
+      // sem acesso no "Atencao"; o tutor libera; a subida continua no par normal
+      final atencao = await registro.decidir(alertaDe('ep_1', 'atencao'), naoPerturbeLiberado: false);
+      expect(atencao!.ignoraNaoPerturbe, isFalse);
+      final subida = await registro.decidir(alertaDe('ep_1', 'alto_risco'), naoPerturbeLiberado: true);
+      expect(subida!.atualizacao, isTrue);
+      expect(subida.ignoraNaoPerturbe, isFalse, reason: 'mesma notificacao, mesmo canal-par');
+      expect(subida.id, atencao.id);
+
+      // ao contrario: com acesso no "Atencao", revogado antes da subida
+      final outra = await registro.decidir(alertaDe('ep_2', 'atencao'), naoPerturbeLiberado: true);
+      expect(outra!.ignoraNaoPerturbe, isTrue);
+      final subida2 = await registro.decidir(alertaDe('ep_2', 'alto_risco'), naoPerturbeLiberado: false);
+      expect(subida2!.ignoraNaoPerturbe, isTrue);
+
+      // episodio novo segue o acesso atual
+      final nova = await registro.decidir(alertaDe('ep_3', 'atencao'), naoPerturbeLiberado: true);
+      expect(nova!.ignoraNaoPerturbe, isTrue);
+    });
+
+    test('o par usado e lido pelo outro lado (app x servico); o formato antigo vale como par normal', () async {
+      final disco = Disco();
+      disco.valores[RegistroDeNotificacoes.chaveNotificados] = jsonEncode([
+        ['ep_velho', 'atencao'],
+      ]);
+      final servico = RegistroDeNotificacoes(CopiaDoIsolate(disco));
+      final app = RegistroDeNotificacoes(CopiaDoIsolate(disco));
+      final velho = await servico.decidir(alertaDe('ep_velho', 'alto_risco'), naoPerturbeLiberado: true);
+      expect(velho!.ignoraNaoPerturbe, isFalse);
+      await servico.decidir(alertaDe('ep_n', 'atencao'), naoPerturbeLiberado: true);
+      final subida = await app.decidir(alertaDe('ep_n', 'alto_risco'), naoPerturbeLiberado: false);
+      expect(subida!.ignoraNaoPerturbe, isTrue);
+    });
+
+    test('nenhum canal de alerta e apagado; o par que ignora o "Nao perturbe" so nasce com o acesso', () {
+      Set<String> ids(List<AndroidNotificationChannel> c) => {for (final x in c) x.id};
+      const normal = {'puzzleband_alertas', 'puzzleband_alertas_silenciosos'};
+      const dnd = {'puzzleband_alertas_dnd', 'puzzleband_alertas_silenciosos_dnd'};
+      // sem acesso: so o par normal (criar um canal com bypassDnd antes do
+      // acesso faria o Android cria-lo sem essa opcao, para sempre)
+      expect(ids(NotificationService.canaisDeAlertaACriar(naoPerturbeLiberado: false, existentes: {})), normal);
+      // acesso concedido: cria o par novo e mantem o normal (que pode ter um
+      // "Possivel crise" na tela)
+      expect(
+        ids(NotificationService.canaisDeAlertaACriar(naoPerturbeLiberado: true, existentes: normal)),
+        {...normal, ...dnd},
+      );
+      // acesso revogado depois: nada alem do par normal e nada a apagar; o par
+      // que ignora continua existindo para a subida de um episodio que comecou
+      // nele
+      expect(
+        ids(NotificationService.canaisDeAlertaACriar(naoPerturbeLiberado: false, existentes: {...normal, ...dnd})),
+        normal,
+      );
+      expect(NotificationService.canalDoAlerta(comSom: true, ignoraNaoPerturbe: true).id, 'puzzleband_alertas_dnd');
+      expect(NotificationService.canalDoAlerta(comSom: false, ignoraNaoPerturbe: false).id, 'puzzleband_alertas_silenciosos');
+      // so os canais de alerta ignoram o "Nao perturbe"
+      expect(NotificationService.canalSomNaoPerturbe.bypassDnd, isTrue);
+      expect(NotificationService.canalSilenciosoNaoPerturbe.bypassDnd, isTrue);
+      expect(NotificationService.canalSom.bypassDnd, isFalse);
+      // nomes claros nas configuracoes do Android
+      expect(NotificationService.canalSom.name, 'Alertas de crise');
+      expect(NotificationService.canalSilencioso.name, 'Alertas de crise (sem som)');
+      expect(NotificationService.canalSomNaoPerturbe.name, 'Alertas de crise (ignora Não perturbe)');
+      expect(NotificationService.canalSilenciosoNaoPerturbe.name, 'Alertas de crise sem som (ignora Não perturbe)');
     });
   });
 

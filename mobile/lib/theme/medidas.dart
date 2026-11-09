@@ -29,9 +29,6 @@ abstract final class Raio {
   static const double secao = 16;
   static const double controle = 12;
   static const double selo = 999;
-
-  /// Logo grande do Login.
-  static const double logoGrande = 28;
 }
 
 /// Areas de toque (Material / WCAG 2.5.5).
@@ -47,7 +44,6 @@ abstract final class Toque {
 abstract final class Movimento {
   static const Duration curto = Duration(milliseconds: 200);
   static const Duration medio = Duration(milliseconds: 300);
-  static const Duration entrada = Duration(milliseconds: 400);
   static const Curve curva = Curves.easeOutCubic;
 
   static bool reduzido(BuildContext context) => MediaQuery.maybeDisableAnimationsOf(context) ?? false;

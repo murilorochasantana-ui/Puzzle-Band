@@ -11,9 +11,17 @@ class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
   bool _pronto = false;
 
-  // No Android o som de um canal nao pode mudar depois de criado: por isso
-  // ha dois canais, e a opcao "Alertas sonoros" escolhe qual usar.
-  static const _canalSom = AndroidNotificationChannel(
+  // No Android a configuracao de um canal (som, "ignorar Nao perturbe") nao
+  // muda depois de criado: por isso ha dois PARES de canais de alerta - o
+  // normal e o que ignora o "Nao perturbe" - e, em cada par, um com som e um
+  // sem som ("Alertas sonoros" escolhe). O par que ignora o "Nao perturbe"
+  // so e criado com o acesso concedido (antes disso, o Android criaria o
+  // canal sem essa opcao) e depois fica. NENHUM canal de alerta e apagado:
+  // apagar um canal tira da tela as notificacoes dele (um "Possivel crise"
+  // ativo sumiria). Qual par usar e decidido por episodio
+  // (regra_de_notificacao.dart): a subida repete o par da notificacao
+  // original, para continuar sendo a mesma notificacao.
+  static const canalSom = AndroidNotificationChannel(
     'puzzleband_alertas',
     'Alertas de crise',
     description: 'Atenção e possível crise, com som e vibração',
@@ -22,14 +30,55 @@ class NotificationService {
     enableVibration: true,
   );
 
-  static const _canalSilencioso = AndroidNotificationChannel(
+  static const canalSilencioso = AndroidNotificationChannel(
     'puzzleband_alertas_silenciosos',
-    'Alertas sem som',
+    'Alertas de crise (sem som)',
     description: 'Atenção e possível crise, sem som (opção "Alertas sonoros" desligada)',
     importance: Importance.high,
     playSound: false,
     enableVibration: false,
   );
+
+  static const canalSomNaoPerturbe = AndroidNotificationChannel(
+    'puzzleband_alertas_dnd',
+    'Alertas de crise (ignora Não perturbe)',
+    description: 'Atenção e possível crise, com som e vibração, mesmo com o "Não perturbe" ligado',
+    importance: Importance.high,
+    playSound: true,
+    enableVibration: true,
+    bypassDnd: true,
+  );
+
+  static const canalSilenciosoNaoPerturbe = AndroidNotificationChannel(
+    'puzzleband_alertas_silenciosos_dnd',
+    'Alertas de crise sem som (ignora Não perturbe)',
+    description: 'Atenção e possível crise, sem som, aparecendo mesmo com o "Não perturbe" ligado',
+    importance: Importance.high,
+    playSound: false,
+    enableVibration: false,
+    bypassDnd: true,
+  );
+
+  /// O canal de um alerta.
+  static AndroidNotificationChannel canalDoAlerta({required bool comSom, required bool ignoraNaoPerturbe}) =>
+      ignoraNaoPerturbe
+          ? (comSom ? canalSomNaoPerturbe : canalSilenciosoNaoPerturbe)
+          : (comSom ? canalSom : canalSilencioso);
+
+  /// Canais de alerta a criar: o par normal sempre (criar de novo um canal
+  /// que ja existe so atualiza o nome); o que ignora o "Nao perturbe", so com
+  /// o acesso concedido e se ainda nao existe. Nunca apaga canal nenhum.
+  static List<AndroidNotificationChannel> canaisDeAlertaACriar({
+    required bool naoPerturbeLiberado,
+    required Set<String> existentes,
+  }) =>
+      [
+        canalSom,
+        canalSilencioso,
+        if (naoPerturbeLiberado)
+          for (final c in [canalSomNaoPerturbe, canalSilenciosoNaoPerturbe])
+            if (!existentes.contains(c.id)) c,
+      ];
 
   // Avisos sobre o proprio monitoramento ("Monitoramento pausado"): canal
   // separado dos alertas, importancia alta (o tutor precisa ver).
@@ -55,13 +104,51 @@ class NotificationService {
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
         ),
       );
-      await _android?.createNotificationChannel(_canalSom);
-      await _android?.createNotificationChannel(_canalSilencioso);
       await _android?.createNotificationChannel(_canalAvisos);
       _pronto = true;
+      await prepararCanaisDeAlerta();
     } catch (e) {
       // Plataforma sem suporte (testes, desktop): o app segue sem notificacao
       debugPrint('Notificacoes indisponiveis: $e');
+    }
+  }
+
+  /// O app tem acesso ao "Nao perturbe" (ACCESS_NOTIFICATION_POLICY concedido
+  /// em Configuracoes -> Acesso ao "Nao perturbe").
+  Future<bool> naoPerturbeLiberado() async {
+    if (!_pronto) return false;
+    try {
+      return await _android?.hasNotificationPolicyAccess() ?? false;
+    } catch (e) {
+      debugPrint('Falha ao ler o acesso ao Nao perturbe: $e');
+      return false;
+    }
+  }
+
+  Future<Set<String>> _canaisExistentes() async {
+    try {
+      final canais = await _android?.getNotificationChannels() ?? const [];
+      return {for (final c in canais) c.id};
+    } catch (_) {
+      return const {};
+    }
+  }
+
+  /// Cria os canais de alerta que faltam (ver canaisDeAlertaACriar). Chamado
+  /// na abertura e quando o tutor concede o acesso ao "Nao perturbe".
+  Future<void> prepararCanaisDeAlerta() async {
+    final android = _android;
+    if (android == null) return;
+    try {
+      final criar = canaisDeAlertaACriar(
+        naoPerturbeLiberado: await naoPerturbeLiberado(),
+        existentes: await _canaisExistentes(),
+      );
+      for (final canal in criar) {
+        await android.createNotificationChannel(canal);
+      }
+    } catch (e) {
+      debugPrint('Falha ao criar os canais de alerta: $e');
     }
   }
 
@@ -163,13 +250,23 @@ class NotificationService {
     required bool comSom,
     required bool atualizacao,
     String? payload,
+    bool ignoraNaoPerturbe = false,
   }) async {
     if (!_pronto) return;
-    final canal = comSom ? _canalSom : _canalSilencioso;
+    var ignora = ignoraNaoPerturbe;
+    if (ignora) {
+      // O par que ignora o "Nao perturbe" precisa existir; se o acesso caiu
+      // antes de ele ser criado, vai pelo par normal
+      await prepararCanaisDeAlerta();
+      final canalDnd = canalDoAlerta(comSom: comSom, ignoraNaoPerturbe: true);
+      ignora = (await _canaisExistentes()).contains(canalDnd.id);
+    }
+    final canal = canalDoAlerta(comSom: comSom, ignoraNaoPerturbe: ignora);
     final detalhes = AndroidNotificationDetails(
       canal.id,
       canal.name,
       channelDescription: canal.description,
+      channelBypassDnd: canal.bypassDnd,
       importance: Importance.high,
       priority: Priority.high,
       styleInformation: BigTextStyleInformation(texto),

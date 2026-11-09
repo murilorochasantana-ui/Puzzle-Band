@@ -12,7 +12,7 @@ foi para a pulseira: os tópicos e os formatos das mensagens são os mesmos.
 Isso foi conferido com `npm run verificar-app` com a pulseira ligada e o site
 fechado ([testes.md](testes.md#app-do-cuidador-sem-o-site-verificar-app)).
 
-As telas (login, home, gráficos, configurações) vieram do repositório
+As telas (home, gráficos, configurações e, até 11/2026, um login só visual) vieram do repositório
 [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
 (pasta `frontend/`). Os dados fixos foram trocados pelos dados reais e o
 necessário foi acrescentado. Depois, o visual foi redesenhado para o público
@@ -66,8 +66,7 @@ escuro: [design-app.md](design-app.md).
 
 | Tela | Conteúdo |
 |---|---|
-| Login | Só navega para a tela Início (antes, na primeira abertura, para **Configurar alertas**). Mostra o aviso "Versão de demonstração: qualquer usuário e senha entram". |
-| Configurar alertas | Passos numerados, cada um com um botão que abre a janela certa do sistema e um ✓ verde quando concedido (conferido de novo ao voltar para o app): **Permitir notificações**, **Rodar sem restrição de bateria** e, só em celulares Samsung, **Tirar dos "Apps em suspensão"** (com "Já fiz"). **Começar** fica destacado quando tudo tem ✓; **Continuar sem isso** entra assim mesmo, depois de um aviso. Ver [Configuração na primeira abertura](#configuração-na-primeira-abertura). |
+| Configurar alertas | Aparece na abertura (o app não tem login) enquanto a configuração não foi concluída; depois, o app abre direto no Início. Passos numerados, cada um com um botão que abre a janela certa do sistema e um ✓ verde quando concedido (conferido de novo ao voltar para o app): **Permitir notificações**, **Rodar sem restrição de bateria** e, só em celulares Samsung, **Tirar dos "Apps em suspensão"** (com "Já fiz"); e um passo **opcional**, **Receber alertas mesmo no Não perturbe**. **Começar** fica destacado quando tudo tem ✓; **Continuar sem isso** entra assim mesmo, depois de um aviso. Ver [Configuração na primeira abertura](#configuração-na-primeira-abertura). |
 | Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; o aviso fixo **"Alertas com o app fechado desativados — Corrigir"** (só enquanto o monitoramento com o app fechado não estiver funcionando); a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do gatilho abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, pulseira parou de enviar, aguardando a pulseira, configuração incompleta). |
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
 | Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com a pulseira parada ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
@@ -175,15 +174,33 @@ fosse atual.
   estava ligada (o pacote não religa um serviço que o app parou). Se o
   sistema matar o processo, o próprio Android religa o serviço (START_STICKY;
   conferido no emulador).
-- Os avisos dos **lembretes** usam um terceiro canal, **Lembretes**, de
+- **"Não perturbe".** Os alertas têm dois **pares** de canais, cada um com
+  um canal com som e um sem som ("Alertas sonoros" escolhe dentro do par):
+  **Alertas de crise** / **Alertas de crise (sem som)** e, com o acesso ao
+  "Não perturbe" concedido (passo opcional), **Alertas de crise (ignora Não
+  perturbe)** / **Alertas de crise sem som (ignora Não perturbe)**, que usam
+  `setBypassDnd`. O Android não muda um canal depois de criado, e um canal
+  com essa opção criado antes do acesso nasceria sem ela: por isso o par que
+  ignora o "Não perturbe" é criado só quando o acesso é concedido e depois
+  fica. **Nenhum canal de alerta é apagado** (apagar um canal tira da tela
+  as notificações dele, e um "Possível crise" ativo sumiria). A primeira
+  notificação de um episódio usa o par do acesso atual; a **subida de nível
+  usa o par da notificação original**, mesmo que o acesso tenha mudado no
+  meio, para continuar sendo a mesma notificação (o par fica gravado junto
+  do episódio). Só os canais de alerta ignoram o "Não perturbe": a
+  notificação fixa do serviço, os avisos do monitoramento e os lembretes,
+  não. No modo silencioso ou vibrar, o alerta aparece mas não toca.
+- Os avisos dos **lembretes** usam outro canal, **Lembretes**, de
   importância normal, separado dos alertas (ver
   [Lembretes](#lembretes-e-nome-da-criança)).
 
 ### Configuração na primeira abertura
 
-Depois do login, na primeira vez, o app mostra **Configurar alertas** antes
-do Início. A tela explica em linguagem simples e tem um botão por passo, que
-abre **exatamente** a janela do sistema:
+O app não tem login: abre direto. Na primeira vez (configuração não
+concluída), mostra **Configurar alertas** antes do Início; depois, abre
+direto no Início. Tocar numa notificação ("Possível crise", "Monitoramento
+pausado") abre o app do mesmo jeito. A tela explica em linguagem simples e
+tem um botão por passo, que abre **exatamente** a janela do sistema:
 
 1. **Permitir notificações** — a janela do sistema de `POST_NOTIFICATIONS`
    (Android 13+).
@@ -199,6 +216,15 @@ abre **exatamente** a janela do sistema:
    Puzzle Band de 'Apps em suspensão'", com um botão que abre os detalhes do
    app (`ACTION_APPLICATION_DETAILS_SETTINGS`). O app não consegue conferir
    esse passo: o tutor confirma com **Já fiz**.
+4. **Opcional: Receber alertas mesmo no Não perturbe** — a tela do sistema
+   de acesso ao "Não perturbe" (`ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS`;
+   permissão `ACCESS_NOTIFICATION_POLICY` no manifesto). O texto explica por
+   que importa (um alerta de crise à noite ou numa reunião) e avisa: "No modo
+   silencioso ou vibrar, o alerta aparece mas não toca. Deixe o volume de
+   notificações ligado enquanto a criança estiver com a pulseira." Em
+   celulares Samsung, também mostra o caminho das exceções (Configurações →
+   Notificações → Não perturbe → Apps). Ganha ✓ quando concedido, mas **não
+   conta** para o "Começar" ficar destacado.
 
 Cada passo ganha um **✓ verde** quando o app confere que foi concedido (de
 novo a cada volta para o app, no `onResume`). **Começar** fica destacado
@@ -464,7 +490,7 @@ de comparar.
    o arquivo para o celular e abra). Num celular que já tinha o app, a tela
    de configuração só aparece na primeira abertura depois de instalar; para
    vê-la de novo, use Ajustes → Configurar alertas.
-2. Abra o app, entre e faça a **Configurar alertas**: **Permitir
+2. Abra o app (sem login) e faça a **Configurar alertas**: **Permitir
    notificações** → Permitir; **Liberar a bateria** → Permitir; num Samsung,
    **Abrir os ajustes do app**, siga o caminho da tela e toque em **Já
    fiz**. Toque em **Começar**. Na gaveta de notificações deve aparecer
@@ -485,8 +511,9 @@ Resultado no emulador (Android API 37, 09/11/2026): os passos 2 a 6
 funcionaram (a "Possível crise" chegou com o app fechado e, com o app
 aberto, só o serviço notificou: atenção e a subida, na mesma notificação).
 Sem a isenção de bateria, o serviço mostrou "Monitoramento pausado" na
-conferência seguinte (~5 min); tocar nele abriu o app e, depois do login,
-a **Configurar alertas** com o passo da bateria pendente. Um crash do
+conferência seguinte (~5 min); tocar nele abriu o app (na época, depois do
+login, que saiu depois) na **Configurar alertas**, com o passo da bateria
+pendente. Um crash do
 processo (`adb shell am crash`) foi religado pelo próprio Android na hora.
 `adb shell am stopservice` não para o serviço (não exportado) e
 `am force-stop` cancela tudo (ver Limitações).
@@ -514,7 +541,7 @@ mobile/
 │   │   ├── preferencias_locais.dart # nome da criança e lembretes (só no celular)
 │   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
-│   ├── screens/                # login, início, detalhe do episódio, gráficos, histórico, ajustes
+│   ├── screens/                # configurar alertas, início, detalhe do episódio, gráficos, histórico, ajustes
 │   ├── widgets/                # faixa de estado, cartões do episódio (completo e resumido), calendário, selo da avaliação, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
 └── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)
@@ -527,6 +554,7 @@ reagenda os avisos dos lembretes depois que o celular reinicia (e religa o
 serviço em primeiro plano). Para os alertas com o app fechado:
 `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` (o serviço, com a
 justificativa em `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`), `WAKE_LOCK` e
+`ACCESS_NOTIFICATION_POLICY` (passo opcional do "Não perturbe") e
 `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` (a janela do passo 2; ver
 [Configuração na primeira abertura](#configuração-na-primeira-abertura)).
 
@@ -561,9 +589,16 @@ rede.
   servidor sempre ligado assinando os alertas da pulseira e enviando o push
   (o modelo já roda na pulseira, então esse servidor não precisaria
   processar nada).
-- **Login sem autenticação real.** A tela de login só navega. Qualquer pessoa
-  com o app vê os dados da criança configurada. Num produto real, seria
-  preciso conta por cuidador e autorização por criança.
+- **Sem autenticação.** O app não tem login (a tela de login, que era só
+  visual, saiu em 11/2026): é de **um único tutor e uma única criança**, a
+  do `CHILD_ID` do `env.json`, e qualquer pessoa com o celular desbloqueado
+  vê os dados dela. **Trabalho futuro:** login com conta por tutor e
+  autorização por criança, necessário antes de qualquer uso real, por causa
+  da LGPD (dados de saúde de criança).
+- **Canais "Não perturbe".** Quando o par de canais em uso muda (acesso ao
+  "Não perturbe" concedido ou revogado), ajustes que o tutor tenha feito à
+  mão no canal do outro par (por exemplo, outro som) não passam para o novo.
+  O "Não perturbe" não vence o modo silencioso ou vibrar do celular.
 - **As credenciais do app ficam dentro do APK.** O `--dart-define` embute
   `MQTT_USER`/`MQTT_PASS` no binário, e dá para extrair. A ACL do broker
   ([mqtt.md](mqtt.md#acl-sugerida-menor-privilégio)) limita o que essa

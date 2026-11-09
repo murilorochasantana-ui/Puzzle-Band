@@ -156,7 +156,7 @@ modelo novo. Detalhes: [docs/modelo.md](docs/modelo.md).
 
 ## Créditos
 
-As telas do app do cuidador (login, home, gráficos e configurações) vieram do
+As telas do app do cuidador (home, gráficos, configurações e um login só visual, removido em 11/2026) vieram do
 repositório [mariafernandarsantos/puzzleband](https://github.com/mariafernandarsantos/puzzleband)
 (pasta `frontend/`, Flutter). Aqui os dados fixos foram trocados pelos dados
 recebidos da pulseira via MQTT, e o visual foi redesenhado para o público do TEA

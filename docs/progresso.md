@@ -876,6 +876,46 @@ só se necessário (documentar a bateria); testes a, b e c no emulador.
   3.47.9).
 - Emulador disponível: `Medium_Phone_API_37.0` (nenhum celular conectado).
 
+### Sem login e passo opcional do "Não perturbe" (09/11/2026, sem commit)
+
+Pedido: remover a tela de login (só visual) e um passo opcional "Receber
+alertas mesmo no Não perturbe". Aprovado com ajuste: não apagar nenhum par de
+canais (apagar tira da tela as notificações dele) e a subida de nível usa o
+par da notificação original do episódio.
+
+- **Login removido:** `login_screen.dart`, a rota, `Raio.logoGrande` e
+  `Movimento.entrada` (só o login usava); `/` = portão (Configurar alertas na
+  primeira abertura, senão o Início), também ao tocar numa notificação.
+  Ajustes: sem "Sair" e sem "Sem login real…". Testes: 3 goldens do login
+  apagados; acessibilidade e fonte 1,3× passam a usar a Configurar alertas.
+  Os goldens de Ajustes **não mudaram**: o "Sair" e o "Sobre" ficavam abaixo
+  da captura. Docs: `app.md` (telas, primeira abertura, limitação "Sem
+  autenticação" com trabalho futuro e LGPD), `apresentacao.md`, `README.md`,
+  `design-app.md` (seção do Login como histórico, sem o golden).
+- **"Não perturbe":** passo opcional (não conta para o "Começar"), botão →
+  `ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS` (canal nativo),
+  `ACCESS_NOTIFICATION_POLICY` no manifesto, ✓ no onResume, texto do
+  Samsung só em Samsung. Dois pares de canais de alerta ("Alertas de crise",
+  "(sem som)", "(ignora Não perturbe)", "sem som (ignora Não perturbe)"); o
+  par que ignora só é criado com o acesso (antes, o Android o criaria sem
+  bypassDnd) e nenhum canal é apagado; o par usado fica gravado por episódio
+  na lista de notificados (`[id, nivel, 'ignora_nao_perturbe']`; formato
+  antigo = par normal) e a subida o repete.
+- **Testes:** `flutter test` 202 (+3 de unidade: subida no par original nos
+  dois sentidos, par lido pelo outro lado/formato antigo, nenhum canal
+  apagado e bypass só nos de alerta; +4 de widget do passo opcional); 3
+  goldens da Configurar alertas refeitos (captura de 1600 dp).
+- **Emulador (API 37):** abre direto na Configurar alertas (sem login); o
+  botão abre "Modes access" (nome novo do acesso ao Não perturbe no Android
+  15+); depois de liberar, ✓ ao voltar. `dumpsys notification`: só
+  `puzzleband_alertas_dnd` e `puzzleband_alertas_silenciosos_dnd` com
+  `mBypassDnd=true`; normais, avisos e a fixa `false`. Com o Não perturbe
+  ligado (`zen_mode=1`) e o app fechado, `crise-ruido`: "Possível crise" no
+  canal `_dnd` com `mIntercept=false`; a fixa `mIntercept=true`; uma
+  "Atenção" anterior no canal normal continuou na tela (`mIntercept=true`).
+  Observação: durante o teste chegaram também alertas de episódios com t =
+  1737 e 2012 s, de outra pulseira publicando no mesmo CHILD_ID.
+
 ## Próximo passo
 
 App em segundo plano: implementado e testado, sem commit (revisão do

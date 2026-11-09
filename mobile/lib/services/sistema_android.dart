@@ -28,6 +28,15 @@ abstract class SistemaAndroid {
   /// Abre ACTION_APPLICATION_DETAILS_SETTINGS (detalhes do app).
   Future<void> abrirDetalhesDoApp();
 
+  /// Acesso ao "Nao perturbe" concedido (passo opcional).
+  Future<bool> naoPerturbeLiberado();
+
+  /// Abre ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS.
+  Future<void> abrirAcessoNaoPerturbe();
+
+  /// Cria os canais de alerta que ignoram o "Nao perturbe" (com o acesso).
+  Future<void> prepararCanaisDeAlerta();
+
   Future<bool> servicoRodando();
   Future<bool> iniciarServico(String nomeCrianca);
   Future<void> pararServico();
@@ -75,6 +84,15 @@ class SistemaAndroidReal implements SistemaAndroid {
 
   @override
   Future<void> abrirDetalhesDoApp() => _chamar<bool>('abrirDetalhesDoApp');
+
+  @override
+  Future<bool> naoPerturbeLiberado() => notificacoes.naoPerturbeLiberado();
+
+  @override
+  Future<void> abrirAcessoNaoPerturbe() => _chamar<bool>('abrirAcessoNaoPerturbe');
+
+  @override
+  Future<void> prepararCanaisDeAlerta() => notificacoes.prepararCanaisDeAlerta();
 
   @override
   Future<bool> servicoRodando() async {

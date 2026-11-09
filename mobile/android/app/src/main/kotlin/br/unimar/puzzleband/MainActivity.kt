@@ -36,6 +36,11 @@ class MainActivity : FlutterActivity() {
                     "abrirDetalhesDoApp" -> result.success(
                         abrir(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, pacote()))
                     )
+                    // Acesso ao "Nao perturbe" (passo opcional): para os canais de
+                    // alerta ignorarem o modo (ACCESS_NOTIFICATION_POLICY no manifesto)
+                    "abrirAcessoNaoPerturbe" -> result.success(
+                        abrir(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                    )
                     // Notificacoes do app (quando o Android nao mostra mais a janela
                     // de permissao, depois de duas recusas)
                     "abrirAjustesDeNotificacao" -> result.success(

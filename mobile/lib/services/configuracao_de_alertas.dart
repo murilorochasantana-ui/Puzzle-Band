@@ -5,6 +5,8 @@
 //   - passos: notificacoes permitidas, sem restricao de bateria e, so em
 //     Samsung, "Apps em suspensao" (nao da para verificar: o tutor confirma
 //     com "Ja fiz"). Reavaliados ao voltar para o app (atualizar);
+//   - passo OPCIONAL (nao conta para o "Comecar"): acesso ao "Nao perturbe",
+//     para os canais de alerta ignorarem o modo;
 //   - a opcao (ligada por padrao) inicia e para o servico em primeiro plano;
 //   - quem notifica: o MqttService das telas e avisado de que o servico
 //     comecou ou parou (definirServicoRodando) - sem lacuna nem duplicata;
@@ -41,6 +43,7 @@ class ConfiguracaoDeAlertas extends ChangeNotifier {
   bool _notificacoes = false;
   bool _bateria = false;
   bool _samsung = false;
+  bool _naoPerturbe = false;
   bool _servico = false;
   bool _carregado = false;
   bool _descartado = false;
@@ -57,6 +60,9 @@ class ConfiguracaoDeAlertas extends ChangeNotifier {
   /// Celular Samsung: mostra o passo "Apps em suspensao".
   bool get ehSamsung => _samsung;
   bool get samsungConfirmado => prefs.getBool(chaveSamsung) ?? false;
+
+  /// Passo opcional: os alertas tocam mesmo no "Nao perturbe".
+  bool get naoPerturbeLiberado => _naoPerturbe;
   bool get servicoRodando => _servico;
 
   /// Opcao "Monitorar com o app fechado" (ligada por padrao).
@@ -92,9 +98,14 @@ class ConfiguracaoDeAlertas extends ChangeNotifier {
     final permitidas = await sistema.notificacoesPermitidas();
     final bateria = await sistema.semRestricaoDeBateria();
     final fabricante = await sistema.fabricante();
+    final naoPerturbe = await sistema.naoPerturbeLiberado();
     _notificacoes = permitidas;
     _bateria = bateria;
     _samsung = fabricante.toLowerCase().contains('samsung');
+    // Acabou de liberar: cria ja o par de canais que ignora o "Nao perturbe"
+    // (aparece nas configuracoes do Android; os alertas passam a usa-lo)
+    if (naoPerturbe && !_naoPerturbe) await sistema.prepararCanaisDeAlerta();
+    _naoPerturbe = naoPerturbe;
     _carregado = true;
     if (tudoConcedido && pulada) await prefs.setBool(chavePulada, false); // resolvido
     await _conferirServico(iniciarSeParado: concluida && monitorar);
@@ -112,6 +123,13 @@ class ConfiguracaoDeAlertas extends ChangeNotifier {
   }
 
   Future<void> abrirDetalhesDoApp() => sistema.abrirDetalhesDoApp();
+
+  /// Passo opcional: abre a tela do sistema de acesso ao "Nao perturbe" (o
+  /// resultado chega no onResume).
+  Future<void> pedirNaoPerturbe() async {
+    await sistema.abrirAcessoNaoPerturbe();
+    await atualizar();
+  }
 
   /// "Ja fiz" do passo Samsung.
   Future<void> confirmarSamsung() async {
