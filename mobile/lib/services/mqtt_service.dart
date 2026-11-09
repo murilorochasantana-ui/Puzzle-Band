@@ -15,9 +15,17 @@
 //     tela (avisos -> SnackBar). O mesmo apagarDadosLocais serve ao botao
 //     "Apagar dados deste aparelho" (Ajustes).
 // Mensagem malformada e descartada sem derrubar o app.
+//
+// Duas conexoes (docs/app.md, "Notificacoes"): a das telas (papel app) e a
+// do servico em primeiro plano, que roda com o app fechado (papel servico,
+// em monitor_segundo_plano.dart). Com o servico rodando, SO ELE notifica os
+// alertas e publica a presenca do app (online + Last Will); a conexao das
+// telas entra sem Last Will e nao notifica. Sem o servico, as telas voltam
+// a fazer as duas coisas na hora (definirServicoRodando). O servico assina
+// so alertas, historico e status (sem o estado de 1 mensagem/s e sem o
+// comando de reset, que continua com o app aberto).
 
 import 'dart:async';
-import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -31,6 +39,10 @@ import '../config/app_config.dart';
 import '../models/models.dart';
 import '../models/sinais.dart';
 import 'notification_service.dart';
+import 'regra_de_notificacao.dart';
+
+/// app: a conexao das telas; servico: a do servico em primeiro plano.
+enum PapelDaConexao { app, servico }
 
 enum BrokerStatus { naoConfigurado, conectando, conectado, desconectado, erro }
 
@@ -41,28 +53,34 @@ enum Presenca { online, offline, desconhecido }
 typedef ApagarDadosLocais = Future<void> Function({required bool manterPreferencias});
 
 class MqttService extends ChangeNotifier {
-  MqttService({required this.config, required this.prefs, required this.notificacoes, this.aoApagarDados})
-      : _topics = Topics(config);
+  MqttService({
+    required this.config,
+    required this.prefs,
+    required this.notificacoes,
+    this.aoApagarDados,
+    this.papel = PapelDaConexao.app,
+  })  : _topics = Topics(config),
+        _registro = RegistroDeNotificacoes(EstadoNasPreferencias(prefs));
 
   final AppConfig config;
   final SharedPreferences prefs;
   final NotificationService notificacoes;
   final ApagarDadosLocais? aoApagarDados;
+  final PapelDaConexao papel;
   final Topics _topics;
+  final RegistroDeNotificacoes _registro;
 
   /// SnackBar mostrado quando a ordem do terminal apaga os dados.
   static const avisoDeReset = 'Dados apagados para uma nova apresentação.';
 
   static const janelaSinais = Duration(minutes: 5); // grafico ao vivo
   static const _estadoMaxAtraso = Duration(seconds: 6); // a pulseira publica 1x/s
-  static const _alertaMaxAtraso = Duration(minutes: 10); // alerta mais velho nao notifica
   static const _maxAlertas = 50;
-  static const _maxNotificados = 100;
   static const _maxObservacao = 200;
 
   static const _chaveHistorico = 'historico_v1';
-  static const _chaveAlertasSonoros = 'alertas_sonoros';
-  static const _chaveNotificados = 'episodios_notificados';
+  static const _chaveAlertasSonoros = RegistroDeNotificacoes.chaveAlertasSonoros;
+  static const _chaveNotificados = RegistroDeNotificacoes.chaveNotificados;
   static const _chaveClienteId = 'mqtt_cliente_sufixo';
   static const _chaveResetAplicado = 'reset_aplicado_id';
 
@@ -88,8 +106,8 @@ class MqttService extends ChangeNotifier {
   DateTime? _historicoRecebidoEm;
   bool _historicoNestaSessao = false;
   final Map<String, DateTime> _cienteLocal = {};
-  final LinkedHashMap<String, NivelRisco> _notificados = LinkedHashMap();
   bool _alertasSonoros = true;
+  bool _servicoRodando = false;
   final StreamController<String> _avisos = StreamController<String>.broadcast();
   Future<void>? _reset;
 
@@ -127,6 +145,39 @@ class MqttService extends ChangeNotifier {
   /// Mensagens curtas para a tela (SnackBar), como o aviso do reset.
   Stream<String> get avisos => _avisos.stream;
 
+  /// O servico em primeiro plano esta rodando (so faz sentido no papel app).
+  bool get servicoRodando => _servicoRodando;
+
+  /// Esta conexao notifica os alertas? O servico sempre; o app so sem o
+  /// servico (quemNotifica).
+  bool get notificaAlertas =>
+      papel == PapelDaConexao.servico || quemNotifica(servicoRodando: _servicoRodando) == QuemNotifica.app;
+
+  /// Esta conexao publica a presenca do app ("online" + Last Will "offline")?
+  /// A mesma regra: um so dono, para fechar as telas nao marcar "offline"
+  /// com o servico ainda monitorando.
+  bool get publicaPresenca => notificaAlertas;
+
+  /// O app (papel app) soube que o servico comecou ou parou. Parou: as telas
+  /// voltam a notificar e a publicar "online" na hora, e reconectam com o
+  /// Last Will. Comecou: deixam de fazer as duas coisas e reconectam sem o
+  /// Last Will (o "offline" de uma desconexao das telas nao vale mais).
+  void definirServicoRodando(bool rodando) {
+    if (papel != PapelDaConexao.app || rodando == _servicoRodando) return;
+    _servicoRodando = rodando;
+    if (publicaPresenca) {
+      _publicarPresenca();
+    } else {
+      _presenca?.cancel();
+    }
+    final client = _client;
+    if (!_parado && !_descartado && config.isValid && client != null && !_conectando) {
+      _tentativas = 0;
+      _conectar(); // o Last Will so muda numa conexao nova
+    }
+    _avisar();
+  }
+
   /// Id da ultima ordem de reset aplicada (null: nenhuma).
   String? get resetAplicado => prefs.getString(_chaveResetAplicado);
 
@@ -158,8 +209,11 @@ class MqttService extends ChangeNotifier {
     await _conectar();
   }
 
-  /// App voltou para o primeiro plano: reconecta na hora se estava sem conexao.
+  /// App voltou para o primeiro plano: rele a copia do historico (o servico
+  /// pode ter gravado uma mais nova com o app fechado) e reconecta na hora se
+  /// estava sem conexao.
   void retomar() {
+    unawaited(_recarregarCopiaSalva());
     if (_parado || _conectando || !config.isValid) return;
     if (_brokerStatus == BrokerStatus.desconectado || _brokerStatus == BrokerStatus.erro) {
       _tentativas = 0;
@@ -168,15 +222,17 @@ class MqttService extends ChangeNotifier {
   }
 
   /// Saida normal: publica "offline" antes de desconectar (o DISCONNECT
-  /// limpo nao dispara o Last Will).
-  Future<void> parar() async {
+  /// limpo nao dispara o Last Will) - so se esta conexao for a dona da
+  /// presenca. `semOffline`: o servico parado pelo tutor com o app aberto
+  /// (as telas assumem a presenca; um "offline" atrasado apagaria o "online").
+  Future<void> parar({bool semOffline = false}) async {
     if (_parado) return;
     _parado = true;
     _novaTentativa?.cancel();
     _presenca?.cancel();
     _frescor?.cancel();
     final client = _client;
-    if (client != null && _conectado(client)) {
+    if (client != null && _conectado(client) && publicaPresenca && !semOffline) {
       publicarTexto(_topics.appStatus, 'offline', MqttQos.atLeastOnce, retain: true);
       await Future<void>.delayed(const Duration(milliseconds: 300));
     }
@@ -215,8 +271,9 @@ class MqttService extends ChangeNotifier {
       prefs.setString(_chaveClienteId, sufixo);
     }
     // Id fixo por instalacao: numa reconexao o broker derruba a sessao antiga
-    // (meio aberta) em vez de manter duas.
-    return 'puzzleband-app-${config.childId}-$sufixo';
+    // (meio aberta) em vez de manter duas. O servico usa outro id: as duas
+    // conexoes convivem.
+    return 'puzzleband-app-${config.childId}-$sufixo${papel == PapelDaConexao.servico ? '-svc' : ''}';
   }
 
   MqttServerClient _criarCliente() {
@@ -232,14 +289,15 @@ class MqttService extends ChangeNotifier {
       ..onAutoReconnected = _aoConectar;
     client.setProtocolV311();
     client.logging(on: false);
-    client.connectionMessage = MqttConnectMessage()
-        .withClientIdentifier(id)
-        .startClean()
-        .withWillTopic(_topics.appStatus)
-        .withWillMessage('offline')
-        .withWillQos(MqttQos.atLeastOnce)
-        .withWillRetain()
-        .authenticateAs(config.user, config.pass);
+    var conexao = MqttConnectMessage().withClientIdentifier(id).startClean();
+    if (publicaPresenca) {
+      conexao = conexao
+          .withWillTopic(_topics.appStatus)
+          .withWillMessage('offline')
+          .withWillQos(MqttQos.atLeastOnce)
+          .withWillRetain();
+    }
+    client.connectionMessage = conexao.authenticateAs(config.user, config.pass);
     return client;
   }
 
@@ -288,11 +346,11 @@ class MqttService extends ChangeNotifier {
       _tentativas = 0;
       client.onDisconnected = _aoDesconectar;
       _updatesSub = client.updates?.listen(_aoReceber);
-      client.subscribe(_topics.estado, MqttQos.atMostOnce);
+      if (papel == PapelDaConexao.app) client.subscribe(_topics.estado, MqttQos.atMostOnce);
       client.subscribe(_topics.alertas, MqttQos.atLeastOnce);
       client.subscribe(_topics.historico, MqttQos.atLeastOnce);
       client.subscribe(_topics.status, MqttQos.atLeastOnce);
-      client.subscribe(_topics.comando, MqttQos.atLeastOnce);
+      if (papel == PapelDaConexao.app) client.subscribe(_topics.comando, MqttQos.atLeastOnce);
       _aoConectar();
     } else {
       // le o motivo antes do disconnect (que pode limpar o status do cliente)
@@ -313,11 +371,15 @@ class MqttService extends ChangeNotifier {
   void _aoConectar() {
     _ultimoErro = null;
     _brokerStatus = BrokerStatus.conectado;
-    _publicarPresenca();
-    // Reforco periodico do "online": corrige um "offline" atrasado de uma
-    // conexao antiga (Last Will) que chegue depois desta conexao.
     _presenca?.cancel();
-    _presenca = Timer.periodic(const Duration(seconds: 60), (_) => _publicarPresenca());
+    if (publicaPresenca) {
+      _publicarPresenca();
+      // Reforco periodico do "online": corrige um "offline" atrasado de uma
+      // conexao antiga (Last Will) que chegue depois desta conexao.
+      _presenca = Timer.periodic(const Duration(seconds: 60), (_) {
+        if (publicaPresenca) _publicarPresenca();
+      });
+    }
     _avisar();
   }
 
@@ -428,9 +490,29 @@ class MqttService extends ChangeNotifier {
     if (alerta == null) return false;
     _alertas.insert(0, alerta);
     if (_alertas.length > _maxAlertas) _alertas.removeRange(_maxAlertas, _alertas.length);
-    _notificarSePreciso(alerta);
+    if (notificaAlertas) _notificacaoPendente = _notificarEmOrdem(alerta);
     return true;
   }
+
+  // Uma decisao de cada vez (le e grava a lista de notificados no disco):
+  // dois alertas seguidos do mesmo episodio nao notificam os dois.
+  Future<void> _notificacaoPendente = Future.value();
+  Future<void> _notificarEmOrdem(Alerta alerta) async {
+    try {
+      await _notificacaoPendente;
+    } catch (_) {}
+    try {
+      final mostrou = await notificarAlerta(alerta, _registro, notificacoes);
+      // Diagnostico (logcat, tag "flutter"): quem notificou cada alerta
+      if (mostrou) debugPrint('Puzzle Band: alerta ${alerta.nivel.codigo} notificado pelo ${papel.name} (${alerta.episodioId})');
+    } catch (e) {
+      debugPrint('Falha ao notificar: $e');
+    }
+  }
+
+  /// Para os testes esperarem a notificacao (a decisao le o disco).
+  @visibleForTesting
+  Future<void> get notificacoesPendentes => _notificacaoPendente;
 
   bool _tratarHistorico(String texto) {
     // So a pulseira publica o historico: outra origem nao substitui a copia
@@ -485,7 +567,6 @@ class MqttService extends ChangeNotifier {
     _historico = const [];
     _historicoRecebidoEm = null;
     _historicoNestaSessao = false;
-    _notificados.clear();
     _alertas.clear();
     _cienteLocal.clear();
     _sinais.limpar();
@@ -506,48 +587,6 @@ class MqttService extends ChangeNotifier {
       _aoVivoAnterior = agora;
       _avisar();
     }
-  }
-
-  // -------------------------------------------------------------------------
-  // Notificacao (no maximo uma por episodio)
-  // -------------------------------------------------------------------------
-
-  void _notificarSePreciso(Alerta alerta) {
-    if (!alerta.nivel.isAlerta) return;
-    final ts = alerta.timestamp;
-    if (ts != null && DateTime.now().difference(ts) > _alertaMaxAtraso) return;
-
-    final chave = alerta.episodioId ?? 'sem_id_${(ts ?? DateTime.now()).millisecondsSinceEpoch}';
-    final anterior = _notificados[chave];
-    // Mesmo episodio no mesmo nivel ou descendo: nao notifica de novo. Se
-    // SUBIU de nivel (atencao -> possivel crise), a MESMA notificacao e
-    // substituida e toca de novo (pode ser uma crise comecando dentro do
-    // episodio aberto).
-    if (anterior != null && alerta.nivel.rank <= anterior.rank) return;
-    final atualizacao = anterior != null;
-
-    _notificados.remove(chave);
-    _notificados[chave] = alerta.nivel;
-    while (_notificados.length > _maxNotificados) {
-      _notificados.remove(_notificados.keys.first);
-    }
-    prefs.setString(
-      _chaveNotificados,
-      jsonEncode([for (final e in _notificados.entries) [e.key, e.value.codigo]]),
-    );
-
-    final critico = alerta.nivel == NivelRisco.altoRisco;
-    final textoGatilho = alerta.gatilho?.texto ?? '';
-    notificacoes.mostrarAlerta(
-      id: idDeNotificacao(chave),
-      titulo: critico ? 'Possível crise' : 'Atenção',
-      texto: textoGatilho.isNotEmpty
-          ? textoGatilho
-          : 'O modelo identificou sinais de ${critico ? 'possível crise' : 'atenção'}. Verifique o ambiente da criança.',
-      comSom: _alertasSonoros,
-      atualizacao: atualizacao,
-      payload: alerta.episodioId,
-    );
   }
 
   // -------------------------------------------------------------------------
@@ -640,20 +679,18 @@ class MqttService extends ChangeNotifier {
         _historicoRecebidoEm = recebido is String ? DateTime.tryParse(recebido)?.toLocal() : null;
       }
     }
+  }
 
+  Future<void> _recarregarCopiaSalva() async {
     try {
-      final notificados = jsonDecode(prefs.getString(_chaveNotificados) ?? '[]');
-      if (notificados is List) {
-        for (final item in notificados) {
-          if (item is List && item.length == 2 && item[0] is String) {
-            final nivel = NivelRisco.fromCodigo(item[1]);
-            if (nivel != null) _notificados[item[0] as String] = nivel;
-          }
-        }
-      }
+      await prefs.reload();
     } catch (_) {
-      // lista corrompida: recomeca vazia
+      return;
     }
+    if (_descartado || historicoAoVivo) return;
+    final antes = _historicoRecebidoEm;
+    _carregarPreferencias();
+    if (_historicoRecebidoEm != antes) _avisar();
   }
 
   void _salvarHistorico() {

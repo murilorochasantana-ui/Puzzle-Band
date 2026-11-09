@@ -8,12 +8,14 @@ import 'package:puzzleband/main.dart';
 import 'package:puzzleband/models/models.dart';
 import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/services/app_scope.dart';
+import 'package:puzzleband/services/configuracao_de_alertas.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'servico_falso.dart';
+import 'sistema_falso.dart';
 
 /// Quinta-feira, 05/11/2026, 15:00.
 final agoraFixo = DateTime(2026, 11, 5, 15, 0);
@@ -243,7 +245,13 @@ Future<void> mostrar(
   double altura = 852,
   bool reduzirMovimento = true,
   PreferenciasLocais? preferencias,
+  ConfiguracaoDeAlertas? alertas,
 }) async {
+  // Alertas com o app fechado ja configurados (celular de exemplo): tudo
+  // concedido, servico rodando, sem aviso fixo nem tela de configuracao
+  final configuracao = alertas ??
+      await configuracaoDe(servico.prefs, SistemaFalso(notificacoes: true, bateria: true, servico: true),
+          concluida: true);
   tester.view.physicalSize = Size(393 * 2, altura * 2);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);
@@ -255,20 +263,23 @@ Future<void> mostrar(
       service: servico,
       child: PreferenciasScope(
         preferencias: preferencias ?? preferenciasDe(servico),
-        child: MaterialApp(
-          debugShowCheckedModeBanner: false,
-          theme: AppTheme.claro(),
-          darkTheme: AppTheme.escuro(),
-          themeMode: escuro ? ThemeMode.dark : ThemeMode.light,
-          builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(
-              textScaler: TextScaler.linear(escala),
-              disableAnimations: reduzirMovimento,
+        child: ConfiguracaoScope(
+          configuracao: configuracao,
+          child: MaterialApp(
+            debugShowCheckedModeBanner: false,
+            theme: AppTheme.claro(),
+            darkTheme: AppTheme.escuro(),
+            themeMode: escuro ? ThemeMode.dark : ThemeMode.light,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(escala),
+                disableAnimations: reduzirMovimento,
+              ),
+              child: child!,
             ),
-            child: child!,
+            routes: {'/home': (_) => const MainNavigation()},
+            home: tela ?? MainNavigation(initialIndex: aba),
           ),
-          routes: {'/home': (_) => const MainNavigation()},
-          home: tela ?? MainNavigation(initialIndex: aba),
         ),
       ),
     ),

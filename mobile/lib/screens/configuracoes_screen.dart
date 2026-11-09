@@ -1,16 +1,19 @@
 import 'package:flutter/material.dart';
 
 import '../services/app_scope.dart';
+import '../services/configuracao_de_alertas.dart';
 import '../services/mqtt_service.dart';
 import '../services/preferencias_locais.dart';
 import '../theme/app_theme.dart';
 import '../widgets/cabecalho.dart';
 import '../widgets/connection_bar.dart';
 import '../widgets/secao.dart';
+import 'configurar_alertas_screen.dart';
 
 /// Ajustes: crianca monitorada (nome mostrado no Inicio, so neste celular),
-/// conexoes (com o erro, se houver), alertas sonoros, aparencia (tema),
-/// "Apagar dados deste aparelho" e "sobre".
+/// conexoes (com o erro, se houver), alertas (sonoros, "Monitorar com o app
+/// fechado" e "Configurar alertas"), aparencia (tema), "Apagar dados deste
+/// aparelho" e "sobre".
 class ConfiguracoesScreen extends StatelessWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -19,6 +22,7 @@ class ConfiguracoesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final service = AppScope.of(context);
+    final alertas = ConfiguracaoScope.maybeOf(context);
     return EstruturaTela(
       children: [
         const TituloTela('Ajustes'),
@@ -48,6 +52,30 @@ class ConfiguracoesScreen extends StatelessWidget {
               value: service.alertasSonoros,
               onChanged: (v) => service.definirAlertasSonoros(v),
             ),
+            if (alertas != null) ...[
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('Monitorar com o app fechado'),
+                subtitle: Text(
+                  alertas.monitorar
+                      ? (alertas.monitoramentoAtivo
+                          ? 'Ligado: os alertas chegam mesmo com o app fechado (notificação fixa “monitorando”).'
+                          : 'Ligado, mas falta configurar: por enquanto, os alertas só chegam com o app aberto.')
+                      : 'Desligado: os alertas só chegam com o app aberto.',
+                ),
+                value: alertas.monitorar,
+                onChanged: (v) => alertas.definirMonitorar(v),
+              ),
+              ListTile(
+                leading: const Icon(Icons.checklist_rounded),
+                title: const Text('Configurar alertas'),
+                subtitle: const Text('Notificações, bateria e o que mais o celular pede para avisar com o app fechado.'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (_) => const ConfigurarAlertasScreen()),
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: Espaco.l),
@@ -179,7 +207,12 @@ class _CampoNomeState extends State<_CampoNome> {
         maxLength: PreferenciasLocais.maxNome,
         textCapitalization: TextCapitalization.words,
         textInputAction: TextInputAction.done,
-        onChanged: _preferencias.definirNomeCrianca,
+        onChanged: (nome) async {
+          final alertas = ConfiguracaoScope.read(context);
+          await _preferencias.definirNomeCrianca(nome);
+          // Notificacao fixa do servico: "monitorando <nome>"
+          await alertas?.nomeMudou();
+        },
         decoration: InputDecoration(
           labelText: 'Nome da criança',
           hintText: _preferencias.nomePadrao,

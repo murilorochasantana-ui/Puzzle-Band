@@ -11,11 +11,15 @@ import 'screens/home_screen.dart';
 import 'screens/graficos_screen.dart';
 import 'screens/historico_screen.dart';
 import 'screens/configuracoes_screen.dart';
+import 'screens/configurar_alertas_screen.dart';
 import 'services/app_scope.dart';
 import 'services/aviso_de_lembrete.dart';
+import 'services/configuracao_de_alertas.dart';
+import 'services/monitor_segundo_plano.dart';
 import 'services/mqtt_service.dart';
 import 'services/notification_service.dart';
 import 'services/preferencias_locais.dart';
+import 'services/sistema_android.dart';
 import 'theme/app_theme.dart';
 
 Future<void> main() async {
@@ -28,6 +32,9 @@ Future<void> main() async {
   final prefs = await SharedPreferences.getInstance();
   final notificacoes = NotificationService();
   await notificacoes.init();
+  // Servico em primeiro plano (alertas com o app fechado): opcoes e a porta
+  // de comunicacao com a tarefa (monitor_segundo_plano.dart)
+  MonitorSegundoPlano.configurar();
 
   // Nome da crianca e lembretes: so neste celular (nao vao para o MQTT)
   final config = AppConfig.fromEnvironment();
@@ -37,9 +44,10 @@ Future<void> main() async {
     aviso: AvisoDeLembreteLocal(),
   );
 
-  // Servico MQTT unico, vivo enquanto o processo do app estiver vivo. A
+  // Conexao MQTT das telas, viva enquanto o processo do app estiver vivo. A
   // ordem de reset (npm run resetar) tambem apaga os lembretes e, com
-  // --tudo, o nome e a aparencia (preferencias.apagarDados).
+  // --tudo, o nome e a aparencia (preferencias.apagarDados). Com o servico
+  // em primeiro plano rodando, quem notifica e ele (definirServicoRodando).
   final service = MqttService(
     config: config,
     prefs: prefs,
@@ -47,16 +55,28 @@ Future<void> main() async {
     aoApagarDados: preferencias.apagarDados,
   );
 
+  // Configuracao dos alertas com o app fechado (tela "Configurar alertas"):
+  // a permissao de notificacao e pedida la, num passo explicado
+  final configuracao = ConfiguracaoDeAlertas(
+    prefs: prefs,
+    sistema: SistemaAndroidReal(notificacoes: notificacoes),
+    nomeCrianca: () => preferencias.nomeCrianca,
+    mqtt: service,
+  );
+
   runApp(AppScope(
     service: service,
-    child: PreferenciasScope(preferencias: preferencias, child: const PuzzleBandApp()),
+    child: PreferenciasScope(
+      preferencias: preferencias,
+      child: ConfiguracaoScope(configuracao: configuracao, child: const PuzzleBandApp()),
+    ),
   ));
 
+  // Primeiro descobre se o servico ja roda (aberto depois de fechado, ou
+  // religado no boot): so entao conecta, ja sabendo quem notifica
+  await configuracao.atualizar();
+  configuracao.retomar();
   unawaited(service.iniciar());
-  // Android 13+: permissao de notificacao na primeira abertura
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    notificacoes.pedirPermissaoNaPrimeiraAbertura(prefs);
-  });
 }
 
 class PuzzleBandApp extends StatefulWidget {
@@ -104,10 +124,15 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final service = AppScope.read(context);
+    final configuracao = ConfiguracaoScope.read(context);
     if (state == AppLifecycleState.resumed) {
       service.retomar(); // voltou do segundo plano: reconecta se caiu
+      configuracao?.retomar(); // confere o servico e as permissoes
+    } else if (state == AppLifecycleState.paused) {
+      configuracao?.pausar();
     } else if (state == AppLifecycleState.detached) {
-      service.parar(); // saida normal: publica "offline" (senao vale o Last Will)
+      configuracao?.pausar();
+      service.parar(); // saida normal: "offline" so se as telas forem as donas da presenca
     }
   }
 
@@ -133,7 +158,8 @@ class _PuzzleBandAppState extends State<PuzzleBandApp> with WidgetsBindingObserv
       initialRoute: widget.rotaInicial,
       routes: {
         '/': (context) => const LoginScreen(),
-        '/home': (context) => const MainNavigation(initialIndex: 0),
+        // Primeira abertura: "Configurar alertas" antes do Inicio
+        '/home': (context) => const PortaoDosAlertas(child: MainNavigation(initialIndex: 0)),
         '/graficos': (context) => const MainNavigation(initialIndex: 1),
         '/historico': (context) => const MainNavigation(initialIndex: 2),
         '/configuracoes': (context) => const MainNavigation(initialIndex: 3),

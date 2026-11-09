@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'configurar_alertas_screen.dart';
 import '../models/resumo.dart';
 import '../services/app_scope.dart';
 import '../services/preferencias_locais.dart';
@@ -37,6 +38,8 @@ class HomeScreen extends StatelessWidget {
     return EstruturaTela(
       titulo: preferencias.nomeCrianca,
       children: [
+        // Alertas com o app fechado desativados - Corrigir (some quando ok)
+        const AvisoMonitoramento(),
         ConnectionBar(service: service),
         const SizedBox(height: Espaco.m),
         FaixaEstado(service: service),

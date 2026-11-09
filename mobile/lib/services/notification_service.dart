@@ -1,11 +1,11 @@
-// Notificacoes locais dos alertas (atencao / possivel crise). So funcionam com
-// o processo do app vivo (aberto ou em segundo plano recente): notificacao
-// com o app fechado exigiria push (FCM) e um servidor sempre ligado - ver
-// docs/app.md, "Limitacoes".
+// Notificacoes locais dos alertas (atencao / possivel crise) e o aviso
+// "Monitoramento pausado". Com o app fechado, quem as mostra e o servico em
+// primeiro plano (monitor_segundo_plano.dart), com este mesmo codigo; ver
+// docs/app.md, "Notificacoes".
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:timezone/timezone.dart' as tz;
 
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin();
@@ -31,7 +31,19 @@ class NotificationService {
     enableVibration: false,
   );
 
-  static const _chavePermissaoPedida = 'notificacao_permissao_pedida';
+  // Avisos sobre o proprio monitoramento ("Monitoramento pausado"): canal
+  // separado dos alertas, importancia alta (o tutor precisa ver).
+  static const _canalAvisos = AndroidNotificationChannel(
+    'puzzleband_avisos',
+    'Avisos do monitoramento',
+    description: 'Avisa quando o monitoramento com o app fechado parou',
+    importance: Importance.high,
+  );
+
+  /// Id fixo do "Monitoramento pausado" (o vigia agendado e o aviso na hora).
+  static const idMonitoramentoPausado = 0x50424d50; // "PBMP"
+  static const tituloPausado = 'Monitoramento pausado';
+  static const textoPausado = 'Os alertas com o app fechado pararam. Toque para corrigir.';
 
   AndroidFlutterLocalNotificationsPlugin? get _android =>
       _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
@@ -45,6 +57,7 @@ class NotificationService {
       );
       await _android?.createNotificationChannel(_canalSom);
       await _android?.createNotificationChannel(_canalSilencioso);
+      await _android?.createNotificationChannel(_canalAvisos);
       _pronto = true;
     } catch (e) {
       // Plataforma sem suporte (testes, desktop): o app segue sem notificacao
@@ -52,14 +65,90 @@ class NotificationService {
     }
   }
 
-  /// Android 13+: pede POST_NOTIFICATIONS so na primeira abertura do app.
-  Future<void> pedirPermissaoNaPrimeiraAbertura(SharedPreferences prefs) async {
-    if (!_pronto || (prefs.getBool(_chavePermissaoPedida) ?? false)) return;
-    await prefs.setBool(_chavePermissaoPedida, true);
+  /// As notificacoes do app estao permitidas (Android 13+: POST_NOTIFICATIONS;
+  /// antes, o interruptor do app nos ajustes). null: plataforma sem suporte.
+  Future<bool?> permitidas() async {
+    if (!_pronto) return null;
     try {
-      await _android?.requestNotificationsPermission();
+      return await _android?.areNotificationsEnabled();
+    } catch (e) {
+      debugPrint('Falha ao ler a permissao de notificacao: $e');
+      return null;
+    }
+  }
+
+  /// Abre a janela do sistema de POST_NOTIFICATIONS (Android 13+). Devolve se
+  /// ficou permitido. Depois de duas recusas o Android nao mostra mais a
+  /// janela (devolve false na hora): quem chama abre os ajustes do app.
+  Future<bool> pedirPermissao() async {
+    if (!_pronto) return false;
+    try {
+      return await _android?.requestNotificationsPermission() ?? false;
     } catch (e) {
       debugPrint('Falha ao pedir permissao de notificacao: $e');
+      return false;
+    }
+  }
+
+  NotificationDetails get _detalhesPausado => NotificationDetails(
+        android: AndroidNotificationDetails(
+          _canalAvisos.id,
+          _canalAvisos.name,
+          channelDescription: _canalAvisos.description,
+          importance: Importance.high,
+          priority: Priority.high,
+          category: AndroidNotificationCategory.status,
+          styleInformation: const BigTextStyleInformation(textoPausado),
+        ),
+      );
+
+  /// "Monitoramento pausado - toque para corrigir", agora (tocar abre o app,
+  /// que leva a "Configurar alertas").
+  Future<void> mostrarMonitoramentoPausado() async {
+    if (!_pronto) return;
+    try {
+      await _plugin.show(
+        id: idMonitoramentoPausado,
+        title: tituloPausado,
+        body: textoPausado,
+        notificationDetails: _detalhesPausado,
+        payload: 'configurar_alertas',
+      );
+    } catch (e) {
+      debugPrint('Falha ao mostrar o aviso de monitoramento pausado: $e');
+    }
+  }
+
+  /// Vigia: agenda o "Monitoramento pausado" para daqui a [depois], trocando
+  /// o anterior (e apagando um aviso ja mostrado). O servico vivo rearma a
+  /// cada poucos minutos; se ele morrer, o aviso dispara sozinho. Agendamento
+  /// INEXATO (inexactAllowWhileIdle): pode atrasar alguns minutos, sem a
+  /// permissao de alarme exato.
+  Future<void> armarVigia(Duration depois) async {
+    if (!_pronto) return;
+    try {
+      await _plugin.cancel(id: idMonitoramentoPausado);
+      await _plugin.zonedSchedule(
+        id: idMonitoramentoPausado,
+        title: tituloPausado,
+        body: textoPausado,
+        scheduledDate: tz.TZDateTime.from(DateTime.now().add(depois), tz.UTC),
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        notificationDetails: _detalhesPausado,
+        payload: 'configurar_alertas',
+      );
+    } catch (e) {
+      debugPrint('Falha ao armar o vigia do monitoramento: $e');
+    }
+  }
+
+  /// Desarma o vigia e apaga o aviso (tutor desligou a opcao ou resolveu).
+  Future<void> cancelarVigia() async {
+    if (!_pronto) return;
+    try {
+      await _plugin.cancel(id: idMonitoramentoPausado);
+    } catch (e) {
+      debugPrint('Falha ao desarmar o vigia do monitoramento: $e');
     }
   }
 

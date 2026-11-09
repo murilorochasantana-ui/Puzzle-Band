@@ -804,8 +804,81 @@ leve). `docs/apresentacao.md`: "quase nunca Possível crise".
   notificação toca de novo); 5:47 atenção do mesmo episódio (não toca); 7:02
   episódio novo, atenção (notificação nova).
 
+## App em segundo plano (branch `app-segundo-plano`, a partir de `2f29423`)
+
+Pedido (09/11/2026): o app recebe os alertas e notifica **com o app
+fechado**, sem servidor novo, por um serviço em primeiro plano do Android, e
+guia o tutor na configuração já na primeira abertura. Regras: sem commit;
+`.env`, `mobile/env.json`, tópicos, formatos, pulseira e site intactos; sem
+navegador; não recriar `mobile/ios`, `macos`, `linux`, `windows`, `web`.
+
+Situação: **implementado e testado (inclusive no emulador), sem commit.**
+
+Decisões do usuário (09/11/2026): plano aprovado; pode usar o emulador com o
+broker (ler o `env.json` é permitido, não alterar). Ajustes: reload do
+shared_preferences antes de ler o estado compartilhado e gravar logo após
+notificar (com teste dos dois lados); transições sem lacuna nos dois
+sentidos; vigia em modo inexato, cancelado ao desligar a opção; wake lock
+só se necessário (documentar a bateria); testes a, b e c no emulador.
+
+### Feito
+
+- **Pacote** `flutter_foreground_task` 11.0.3; serviço `specialUse` com
+  `PROPERTY_SPECIAL_USE_FGS_SUBTYPE`; permissões `FOREGROUND_SERVICE`,
+  `FOREGROUND_SERVICE_SPECIAL_USE`, `WAKE_LOCK`,
+  `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`. Wake lock parcial mantido (sem
+  ele o ping do MQTT atrasa com a CPU dormindo); impacto na bateria no
+  `docs/app.md`.
+- **Código novo:** `regra_de_notificacao.dart` (regra única + quem
+  notifica; relê o disco antes e grava depois), `monitor_segundo_plano.dart`
+  (controle e tarefa; vigia a cada 5 min para +15 min, inexato),
+  `sistema_android.dart` + `MainActivity.kt` (canal com fabricante e as
+  janelas exatas), `configuracao_de_alertas.dart`,
+  `configurar_alertas_screen.dart` (tela, portão antes do Início e aviso
+  fixo). `MqttService`: papel app/serviço (id `-svc`, o serviço não assina
+  estado nem comando), `definirServicoRodando` (as telas notificam e
+  publicam "online" com Last Will na hora quando o serviço para, e deixam de
+  fazer quando volta), releitura da cópia do histórico ao voltar. Ajustes:
+  "Monitorar com o app fechado" e "Configurar alertas". `main.dart`: login →
+  portão → Início; a permissão de notificação saiu da abertura e foi para o
+  passo 1. Linha de diagnóstico no logcat ("notificado pelo servico/app").
+- **Testes:** `flutter analyze` 0; `flutter test` 198 (170 antigos + 13 de
+  unidade em `segundo_plano_test.dart` + 11 de widget em
+  `configurar_alertas_test.dart` + 4 goldens novos). Goldens: só os 3 de
+  Ajustes mudaram (itens novos); novos: `configurar_alertas`,
+  `escuro_configurar_alertas`, `configurar_alertas_pronto`,
+  `inicio_aviso_monitoramento`. O "✓" no texto de ajuda virava quadrado
+  (fonte sem o glifo): trocado por "estiverem feitos".
+- **Emulador (API 37), APK de release com o broker:** primeira abertura →
+  Configurar alertas; as duas janelas do sistema (POST_NOTIFICATIONS e
+  "rodar sempre em segundo plano") abriram e os ✓ apareceram; serviço
+  `types=0x40000000` (specialUse), canal de importância 2,
+  "Puzzle Band: monitorando C01". App tirado dos recentes +
+  `npm run crise-ruido -- --uma-vez` → "Possível crise" pelo serviço.
+  (a) App aberto + serviço: 3 alertas publicados, só o serviço notificou
+  (atenção e a subida na mesma notificação), o app 0. (b) `am stopservice`
+  não funciona (serviço não exportado: "Error stopping service"); `am crash`
+  → o Android religou o serviço na hora (START_STICKY); sem a isenção de
+  bateria → "Monitoramento pausado" na conferência seguinte (~280 s); tocar
+  → app → login → Configurar alertas com a bateria pendente; vigia conferido
+  no `dumpsys alarm` (RTC_WAKEUP inexato, +15 min, janela de ~11 min). O
+  vigia em si (serviço morto sem volta) não foi disparado: sem root não há
+  como parar o serviço sem `force-stop` (que cancela os alarmes).
+  (c) Cold boot do emulador → serviço de volta em ~60 s sem abrir o app;
+  crise depois do boot → "Possível crise" pelo serviço. O `adb reboot`
+  derrubou o emulador; o cold boot só subiu sem janela (`-no-window`).
+
+- Documentação oficial do Android consultada (tipos de foreground service e
+  limite de tempo): `dataSync` tem 6 h a cada 24 h no Android 15 e não pode
+  ser iniciado no BOOT_COMPLETED; `specialUse` não tem pré-requisito nem
+  limite de tempo (a justificativa no manifesto só é revisada na Play Store).
+- Pacote candidato: `flutter_foreground_task` 11.0.3 (Flutter 3.44+; aqui
+  3.47.9).
+- Emulador disponível: `Medium_Phone_API_37.0` (nenhum celular conectado).
+
 ## Próximo passo
 
-Estudo exercício x crise: concluído, sem commit (revisão do usuário). Etapa
+App em segundo plano: implementado e testado, sem commit (revisão do
+usuário). Estudo exercício x crise: concluído. Etapa
 4 aguardando revisão; depois, Etapa 5 (relatório final). S2 e S3 continuam
 fora.

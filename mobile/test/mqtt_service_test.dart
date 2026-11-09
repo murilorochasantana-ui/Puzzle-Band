@@ -80,13 +80,16 @@ void main() {
     final (service, n) = await criar(prefs);
 
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao'));
+    await service.notificacoesPendentes;
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao')); // repetido (QoS 1)
+    await service.notificacoesPendentes;
     expect(n.chamadas.length, 1);
     expect(n.chamadas[0].titulo, 'Atenção');
     expect(n.chamadas[0].atualizacao, isFalse);
     expect(n.chamadas[0].comSom, isTrue);
 
     service.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
+    await service.notificacoesPendentes;
     expect(n.chamadas.length, 2);
     expect(n.chamadas[1].titulo, 'Possível crise');
     expect(n.chamadas[1].atualizacao, isTrue, reason: 'substitui a mesma notificacao');
@@ -94,10 +97,13 @@ void main() {
     expect(n.chamadas[1].id, n.chamadas[0].id);
 
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao')); // desceu: nada
+    await service.notificacoesPendentes;
     service.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco')); // de novo: nada
+    await service.notificacoesPendentes;
     expect(n.chamadas.length, 2);
 
     service.tratarMensagem(_alertas, alerta('ep_2', 'alto_risco'));
+    await service.notificacoesPendentes;
     expect(n.chamadas.length, 3);
     expect(n.chamadas[2].atualizacao, isFalse);
     expect(service.alertas.length, 6);
@@ -106,10 +112,12 @@ void main() {
   test('episodios ja notificados continuam lembrados depois de reabrir o app', () async {
     final (primeiro, n1) = await criar(prefs);
     primeiro.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
+    await primeiro.notificacoesPendentes;
     expect(n1.chamadas.length, 1);
 
     final (segundo, n2) = await criar(prefs);
     segundo.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
+    await segundo.notificacoesPendentes;
     expect(n2.chamadas, isEmpty);
   });
 
@@ -117,7 +125,9 @@ void main() {
     final (service, n) = await criar(prefs);
     final velho = DateTime.now().subtract(const Duration(hours: 1));
     service.tratarMensagem(_alertas, alerta('ep_velho', 'alto_risco', quando: velho));
+    await service.notificacoesPendentes;
     service.tratarMensagem(_alertas, alerta('ep_calmo', 'baixo_risco'));
+    await service.notificacoesPendentes;
     expect(service.tratarMensagem(_alertas, '{"nivel": '), isFalse);
     expect(service.tratarMensagem(_alertas, '{"nivel":"desconhecido"}'), isFalse);
     expect(n.chamadas, isEmpty);
@@ -127,6 +137,7 @@ void main() {
     final (service, n) = await criar(prefs);
     await service.definirAlertasSonoros(false);
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao'));
+    await service.notificacoesPendentes;
     expect(n.chamadas.single.comSom, isFalse);
     expect(prefs.getBool('alertas_sonoros'), isFalse);
   });
@@ -236,6 +247,7 @@ void main() {
       // dados de uma apresentacao anterior
       service.tratarMensagem(_historico, historico('pulseira', [ep('ep_1', '2026-11-04T10:00:00Z')]));
       service.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
+      await service.notificacoesPendentes;
       await preferencias.salvarLembrete('dia:2026-11-04', 'Levar o abafador',
           avisarEm: DateTime.now().add(const Duration(days: 1)), tituloDoAviso: 'Lembrete');
       await preferencias.definirNomeCrianca('Ana');
@@ -281,6 +293,7 @@ void main() {
       final n = service.notificacoes as NotificacoesFalsas;
       final antes = n.chamadas.length;
       service.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
+      await service.notificacoesPendentes;
       expect(n.chamadas.length, antes + 1);
     });
 

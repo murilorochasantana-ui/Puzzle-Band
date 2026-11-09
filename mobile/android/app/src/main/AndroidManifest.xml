@@ -8,6 +8,15 @@
     <!-- Aviso dos lembretes (agendado e inexato, sem alarme exato): reagenda
          os avisos depois que o celular reinicia -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <!-- Alertas com o app fechado (docs/app.md): servico em primeiro plano do
+         tipo specialUse (o dataSync tem limite de 6 h a cada 24 h no Android 15
+         e nao pode ser iniciado no BOOT_COMPLETED), wake lock parcial para o
+         ping do MQTT e a janela do sistema "rodar sem restricao de bateria"
+         (o app e distribuido por APK, fora da Play Store). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <application
         android:label="Puzzle Band"
         android:name="${applicationName}"
@@ -34,6 +43,17 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
+        <!-- Servico em primeiro plano (flutter_foreground_task; o nome nao pode
+             mudar): mantem a conexao MQTT e notifica os alertas com o app
+             fechado (lib/services/monitor_segundo_plano.dart) -->
+        <service
+            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:foregroundServiceType="specialUse"
+            android:exported="false">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Mantem a conexao com a pulseira de monitoramento (via servidor MQTT) para notificar o cuidador de uma possivel crise da crianca mesmo com o app fechado." />
+        </service>
         <!-- Avisos agendados dos lembretes (flutter_local_notifications) -->
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
         <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">

@@ -6,6 +6,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
+import 'package:puzzleband/screens/configurar_alertas_screen.dart';
 import 'package:puzzleband/screens/login_screen.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
 import 'package:puzzleband/theme/app_theme.dart';
@@ -15,9 +16,17 @@ import 'package:puzzleband/widgets/selo_avaliacao.dart';
 import 'apoio/cenarios.dart';
 import 'apoio/fontes.dart';
 import 'apoio/servico_falso.dart';
+import 'apoio/sistema_falso.dart';
 
 Future<void> imagem(String nome) =>
     expectLater(find.byType(MaterialApp), matchesGoldenFile('goldens/$nome.png'));
+
+/// "Configurar alertas" com o sistema falso (primeira abertura).
+Future<void> configurarAlertas(WidgetTester tester, SistemaFalso sistema, {bool escuro = false}) async {
+  final servico = await calmo();
+  final c = await configuracaoDe(servico.prefs, sistema);
+  await mostrar(tester, servico, alertas: c, tela: const ConfigurarAlertasScreen(), escuro: escuro, altura: 1100);
+}
 
 /// Nome de exemplo no cabecalho do Inicio (o padrao seria o CHILD_ID) e,
 /// se pedido, um lembrete do dia (com aviso) e um do episodio das 14:32.
@@ -283,8 +292,25 @@ void main() {
     });
 
     testWidgets('ajustes', (tester) async {
-      await mostrar(tester, await painelEPulseiraOffline(), aba: 3, altura: 1400);
+      await mostrar(tester, await painelEPulseiraOffline(), aba: 3, altura: 1650);
       await imagem('ajustes');
+    });
+
+    testWidgets('configurar alertas: Samsung, so as notificacoes concedidas', (tester) async {
+      await configurarAlertas(tester, SistemaFalso(notificacoes: true, marca: 'samsung'));
+      await imagem('configurar_alertas');
+    });
+
+    testWidgets('configurar alertas: tudo concedido ("Começar" destacado)', (tester) async {
+      await configurarAlertas(tester, SistemaFalso(notificacoes: true, bateria: true));
+      await imagem('configurar_alertas_pronto');
+    });
+
+    testWidgets('inicio: alertas com o app fechado desativados', (tester) async {
+      final servico = await calmo();
+      final c = await configuracaoDe(servico.prefs, SistemaFalso(notificacoes: true), concluida: true);
+      await mostrar(tester, servico, alertas: c, preferencias: await comNome(servico));
+      await imagem('inicio_aviso_monitoramento');
     });
 
   });
@@ -375,8 +401,13 @@ void main() {
     });
 
     testWidgets('ajustes, com Aparencia (captura longa)', (tester) async {
-      await mostrar(tester, await painelEPulseiraOffline(), aba: 3, escuro: true, altura: 1400);
+      await mostrar(tester, await painelEPulseiraOffline(), aba: 3, escuro: true, altura: 1650);
       await imagem('escuro_ajustes');
+    });
+
+    testWidgets('configurar alertas: Samsung, so as notificacoes concedidas', (tester) async {
+      await configurarAlertas(tester, SistemaFalso(notificacoes: true, marca: 'samsung'), escuro: true);
+      await imagem('escuro_configurar_alertas');
     });
 
   });
@@ -431,7 +462,7 @@ void main() {
     });
 
     testWidgets('ajustes', (tester) async {
-      await mostrar(tester, await calmo(), aba: 3, escala: 1.3, altura: 1700);
+      await mostrar(tester, await calmo(), aba: 3, escala: 1.3, altura: 2000);
       await imagem('fonte_130_ajustes');
     });
   });
