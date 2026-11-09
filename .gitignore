@@ -20,3 +20,9 @@ mobile/macos/
 mobile/linux/
 mobile/windows/
 mobile/web/
+
+# Configuracao local do Claude Code (MCP)
+.mcp.json
+
+# Configuracao local do Claude Code (MCP)
+.mcp.json
