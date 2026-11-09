@@ -182,6 +182,8 @@ ela precisa desse tempo para voltar ao ambiente calmo (ver
 | `barulho_sem_crise` | `npm run barulho-sem-crise` | Ruído alto (~85 dB) e luz forte (~1200 lux) por 3 min, mas a criança continua calma | 450 s |
 | `ruido_depois_da_crise` | `npm run ruido-depois-da-crise` | A fisiologia sobe primeiro; o ruído só sobe ~30 s depois (criança gritando) | 357 s |
 | `crise_e_recuperacao` | `npm run crise-e-recuperacao` | Calmo → crise com ruído (~2 min) → volta gradual e ≥ 90 s calmo (o episódio fecha) | 417 s |
+| `crise_com_agitacao` | `npm run crise-com-agitacao` | Crise com movimento intenso e irregular (~125 dps, como se debater): BPM e EDA sobem, a HRV cai, sem sinal ambiental | 357 s |
+| `exercicio_e_crise` | `npm run exercicio-e-crise` | Exercício e, 60 s depois de chegar ao platô, uma crise por cima (BPM, EDA e HRV somam); ambiente estável | 510 s |
 | `demo` | `npm run demo` | Apresentação: calmo → exercício → calmo → crise com ruído → recuperação → crise sem gatilho → recuperação | 630 s |
 | `eventos_aleatorios` | `npm run eventos-aleatorios` | Eventos sorteados de vários tipos, com pausas calmas aleatórias (ver abaixo) | sem fim |
 | `controle` | `npm run controle` | Segue os valores-alvo do "Controle da pulseira" do painel; sem comando, fica calmo (ver acima) | sem fim |
@@ -190,7 +192,13 @@ Os cenários isolados começam com **2 minutos calmos** (linha de base da regra
 de gatilho); a `demo` começa com 60 s. As transições são rampas de 20 a 40 s,
 menos a subida da fisiologia nas crises: no 1º ciclo (nominal) ela é súbita,
 em 10 s, e nos seguintes é sorteada (tabela acima). O exercício e a
-estereotipia continuam subindo aos poucos (40 s).
+estereotipia continuam subindo aos poucos (40 s). Os dois últimos cenários da
+tabela (`crise_com_agitacao` e `exercicio_e_crise`) vieram do estudo
+"exercício x crise" ([modelo.md](modelo.md#estudo-exercício-x-crise-112026)):
+servem para garantir que nenhuma regra contra o alarme do exercício esconda
+uma crise que vem com movimento. Ficam fora do sorteio do
+`eventos_aleatorios`; o `verificar.js` os roda no laço, e com
+`--nivel leve|moderada|alta` na intensidade pedida.
 A linha do tempo do roteiro aparece no início da execução, e cada leitura é
 impressa com a fase atual. Em loop, cada ciclo dura o trecho ativo do roteiro
 (~2,5 a 4 min) mais a pausa.
@@ -264,5 +272,6 @@ vírgula decimal, UTF-8 com BOM), para comparar os dois no Excel. Passo a passo:
 roda ao vivo (`createEdgeProcessor`, em `borda.js`). Ele roda cada cenário em loop (3 ciclos, 20
 sementes) e o `eventos_aleatorios` com seed fixa, comparando o gabarito com
 os episódios detectados. `node verificar.js --uma-vez` repete a verificação
-antiga, só com o roteiro nominal. Resultados esperados × obtidos e o roteiro
+antiga, só com o roteiro nominal; `--nivel leve|moderada|alta` fixa a
+intensidade da crise no laço. Resultados esperados × obtidos e o roteiro
 da apresentação: [docs/testes.md](testes.md).

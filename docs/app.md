@@ -112,10 +112,13 @@ fosse atual.
 - Chegou um alerta de `atencao` ou `alto_risco`: notificação local com
   título **Atenção** ou **Possível crise** e o texto do gatilho. Usa um canal
   Android de alta importância, com som e vibração.
-- **No máximo uma por episódio.** Se o mesmo episódio subir de atenção para
-  possível crise, a mesma notificação é atualizada para "Possível crise" sem
-  tocar de novo. Os episódios já notificados ficam salvos, então reabrir o app
-  não repete a notificação. Alertas com mais de 10 minutos não notificam.
+- **No máximo uma por episódio, mais a subida.** Se o mesmo episódio subir
+  de atenção para possível crise, a mesma notificação é substituída por
+  "Possível crise" e **toca de novo** (pode ser uma crise começando dentro de
+  um episódio que já estava aberto, por exemplo durante um exercício).
+  Alerta repetido no mesmo nível ou descendo não notifica. Os episódios já
+  notificados ficam salvos, então reabrir o app não repete a notificação.
+  Alertas com mais de 10 minutos não notificam.
 - **Alertas sonoros** desligado: a notificação aparece num canal sem som e
   sem vibração. O Android não deixa mudar o som de um canal depois de criado,
   por isso existem dois canais.

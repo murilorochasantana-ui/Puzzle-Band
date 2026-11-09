@@ -11,6 +11,14 @@
 //   node model/comparar_episodios.mjs <forest.json>... [--cenarios-antigos <scenarios.js>] [--limiares 0.35,0.65]
 // --limiares troca, so na copia, os limiares de atencao e possivel crise do
 // predict.js (padrao 0,4 e 0,7).
+// --politica '<json>' liga, so na copia, a politica de contexto do
+// frontend/src/model/contexto.js (ex.: {"tipo":"persistencia","n":20} ou
+// {"tipo":"rebaixa"}); --politica null desliga (modelo sem politica, como
+// antes de 11/2026); sem a opcao, vale a do contexto.js. --nome da um nome a
+// versao na tabela.
+// Alem do verificar.js padrao, roda os cenarios crise_com_agitacao e
+// exercicio_e_crise no laco (20 sementes x 3 ciclos) nas 3 intensidades e
+// guarda o resultado ciclo a ciclo (comparacao pareada com o modelo atual).
 // Os forest.json saem do model/comparar_modelos.py.
 
 import { execFileSync } from 'node:child_process';
@@ -27,6 +35,14 @@ const iAntigos = args.indexOf('--cenarios-antigos');
 const antigos = iAntigos >= 0 ? args.splice(iAntigos, 2)[1] : null;
 const iLimiares = args.indexOf('--limiares');
 const limiares = iLimiares >= 0 ? args.splice(iLimiares, 2)[1].split(',').map(Number) : null;
+const iPolitica = args.indexOf('--politica');
+// sem --politica, a copia usa a do contexto.js; --politica null desliga
+const temPolitica = iPolitica >= 0;
+const politica = temPolitica ? JSON.parse(args.splice(iPolitica, 2)[1]) : null;
+const iNome = args.indexOf('--nome');
+const nomeFixo = iNome >= 0 ? args.splice(iNome, 2)[1] : null;
+const iSaida = args.indexOf('--saida');
+const saidaJson = iSaida >= 0 ? args.splice(iSaida, 2)[1] : join(process.cwd(), 'comparacao_episodios.json');
 const florestas = args;
 if (!florestas.length) {
   console.error('Uso: node model/comparar_episodios.mjs <forest.json>... [--cenarios-antigos <scenarios.js>]');
@@ -44,6 +60,12 @@ function montar(dir, floresta, cenarios) {
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
   cpSync(floresta, join(dir, 'frontend/src/model/forest.json'));
   if (cenarios) cpSync(cenarios, join(dir, 'simulator/scenarios.js'));
+  if (temPolitica) {
+    const arq = join(dir, 'frontend/src/model/contexto.js');
+    const novo = readFileSync(arq, 'utf8').replace(/^export const POLITICA = .*;$/m, `export const POLITICA = ${JSON.stringify(politica)};`);
+    if (!novo.includes(JSON.stringify(politica))) throw new Error('politica nao aplicada');
+    writeFileSync(arq, novo);
+  }
   if (limiares) {
     const arq = join(dir, 'frontend/src/model/predict.js');
     const [atencao, crise] = limiares;
@@ -113,10 +135,46 @@ for (let i = 0; i < leituras.length; i += 1) classifyAt(leituras.slice(Math.max(
 console.log(Number(process.hrtime.bigint() - inicio) / 1e6 / leituras.length);
 `;
 
+// Cenarios novos nas 3 intensidades, ciclo a ciclo
+const EXTRAS = `
+import { simulateProgram, exerciseCrisisCheck, LOOP_EXPECTED } from './simulator/verificar.js';
+import { programTicks } from './simulator/scenarios.js';
+const out = {};
+for (const cenario of ['crise_com_agitacao', 'exercicio_e_crise']) {
+  for (const nivel of ['leve', 'moderada', 'alta']) {
+    const ciclos = [];
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const run = simulateProgram(programTicks({ cenario, ciclos: 3, pausa: 120, seed, nivel }), seed);
+      for (const c of run.cycles) {
+        const eps = run.episodes.filter((ep) => ep.t_inicio >= c.tInicio && ep.t_inicio < c.tFim + 60);
+        let det;
+        let t;
+        let como;
+        if (cenario === 'exercicio_e_crise') {
+          const r = exerciseCrisisCheck(eps, c);
+          det = r.resultado !== 'falhou';
+          t = r.tAlerta;
+          como = r.como;
+        } else {
+          det = eps.length > 0;
+          t = det ? Math.min(...eps.map((e) => e.t_inicio)) - c.tFisiologia : null;
+          como = det ? 'episodio' : 'perdida';
+        }
+        ciclos.push({ seed, ciclo: c.numero, det, t, como, eps: eps.length, resultado: LOOP_EXPECTED[cenario].avaliar(eps, c),
+          alto: eps.some((e) => e.nivel_maximo === 'alto_risco') });
+      }
+    }
+    out[cenario + ':' + nivel] = ciclos;
+  }
+}
+console.log(JSON.stringify(out));
+`;
+
 const pct = (n, d) => `${Math.round((100 * n) / d)}%`;
 const resultados = [];
 for (const floresta of florestas) {
-  const nome = basename(floresta, '.json') + (limiares ? ` (${limiares.join(' / ')})` : '');
+  const nome = nomeFixo ?? basename(floresta, '.json') + (limiares ? ` (${limiares.join(' / ')})` : '')
+    + (politica ? ` ${JSON.stringify(politica)}` : '');
   const r = { nome, kb: statSync(floresta).size / 1024 };
   for (const [rotulo, cenarios] of [['novos', null], ['antigos', antigos]]) {
     if (rotulo === 'antigos' && !antigos) continue;
@@ -133,6 +191,8 @@ for (const floresta of florestas) {
       if (rotulo === 'novos') {
         writeFileSync(join(dir, 'medir.mjs'), MEDIR);
         r.msPorLeitura = Number(execFileSync(process.execPath, ['medir.mjs'], { cwd: dir, encoding: 'utf8' }));
+        writeFileSync(join(dir, 'extras.mjs'), EXTRAS);
+        r.extras = JSON.parse(execFileSync(process.execPath, ['extras.mjs'], { cwd: dir, encoding: 'utf8', maxBuffer: 1 << 26 }));
       }
     } finally {
       rmSync(dir, { recursive: true, force: true });
@@ -142,7 +202,7 @@ for (const floresta of florestas) {
   console.error(`${nome}: ok`);
 }
 
-writeFileSync(join(process.cwd(), 'comparacao_episodios.json'), JSON.stringify(resultados, null, 1));
+writeFileSync(saidaJson, JSON.stringify(resultados, null, 1));
 for (const rotulo of ['novos', 'antigos']) {
   if (rotulo === 'antigos' && !antigos) continue;
   console.log(`\n### Cenários ${rotulo === 'novos' ? 'com subida súbita (70%) e gradual' : 'antigos (subida de 30 s)'}\n`);

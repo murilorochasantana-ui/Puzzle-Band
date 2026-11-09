@@ -11,6 +11,13 @@ Como rodar o treino: [Treino](#treino-trainpy), abaixo.
 - `model/gerar_dataset_v4.py` — gerador do dataset sintético v4 (semente
   fixa)
 - `data/raw/dataset_pulseira_TEA_estresse_v4.xlsx` — o dataset do treino
+- `frontend/src/model/contexto.js` — política de contexto entre a
+  probabilidade e o nível (estudo "exercício x crise")
+- Scripts dos estudos: `model/comparar_modelos.py` e
+  `model/comparar_episodios.mjs` ("Versão simplificada");
+  `model/diagnostico_exercicio.mjs`/`.py`, `model/estudo_exercicio.py`,
+  `model/calibrar_simulador.py`, `model/tabela_estudo.mjs` e
+  `model/validar_sementes.mjs` ("Estudo: exercício x crise")
 
 ## Modelo em produção
 
@@ -25,6 +32,13 @@ Desde 08/11/2026 o arquivo é **compactado**: limiares e probabilidades com
 4 casas decimais e JSON sem espaços (366 → 273 KB). O `train.py` já grava
 assim. Por episódio, isso muda 1 de 1000 eventos do `verificar.js` (ver
 "Versão simplificada").
+
+**Política de contexto (desde 11/2026).** Entre a probabilidade e o nível,
+o `classify.js` aplica a política "E4d, 20 s" de `frontend/src/model/contexto.js`:
+no exercício recente sem EDA elevada e com o batimento explicado pelo
+movimento, o alerta exige 20 s seguidos com p ≥ 0,4 e fica no máximo em
+"atenção". As árvores e os limiares (0,4 / 0,7) não mudaram. Detalhes,
+números e limitações em [Estudo: exercício x crise](#estudo-exercício-x-crise-112026).
 
 O `forest.json` tem um campo `meta` (script de origem, dataset, número de
 árvores, data do treino). O `predict.js` ignora esse campo; a pulseira o
@@ -136,6 +150,21 @@ onset súbito/gradual do v3, e adiciona:
   amostragem é 1Hz, não reconstruímos a forma de onda de alta frequência
   (1-5Hz típico de estereotipia) — simulamos direto o índice resumido,
   como um MPU6050 real reportaria após análise a bordo em alta frequência.
+
+  > **Limitação: escala do acelerômetro irreal (encontrada em 11/2026).** No
+  > gerador do v4 (`gerar_dataset_v4.py`) e no simulador (`simulate.js`) o
+  > acelerômetro é o giroscópio (dps) × 0,55 × um fator aleatório de 0,5 a
+  > 1,6, limitado a [0,02; 20] g. Os dois lados usam a mesma unidade (g) e a
+  > mesma fórmula, e o `features.py` e o `predict.js` usam o valor cru, então
+  > não há mistura de unidades. Mas a escala não é física: em repouso dá
+  > ~2,9 g (o movimento de quem está parado é perto de 0 g) e, acima de ~36
+  > dps, satura em 20 g, inclusive em todo exercício e agitação. Uma criança
+  > correndo dá ~2–4 g, e o MPU6050 real mede em faixas de ±2, ±4, ±8 ou
+  > ±16 g (nunca 20 g). Na prática, o acelerômetro do dataset é uma cópia
+  > ruidosa e saturada do giroscópio, sem informação própria (importância
+  > somada de 2,3%). As features dele continuam no modelo; o estudo
+  > "exercício x crise" usa o **giroscópio** como medida de movimento. A
+  > correção da escala fica para um dataset v5 ou para os dados reais.
 - **Sensores ambientais** (`luminosidade_lux`, `ruido_db`) — em ~40% dos
   episódios há um pico ambiental coincidente (gatilho plausível); nos
   outros 60% não há correlato externo (crise sem causa óbvia, tão real
@@ -386,10 +415,351 @@ mantido (só compactado). Distinguir exercício de crise continua sendo a
 principal limitação do sistema; a hipótese, implementada só nos dados
 sintéticos, precisa de dados reais para ser confirmada ou descartada, e
 outras pistas (contexto da atividade, confirmação do cuidador) tendem a ser
-necessárias.
+necessárias. O estudo seguinte ([Estudo: exercício x crise](#estudo-exercício-x-crise-112026))
+testou essas pistas.
 
 O que fica no código: o modelo atual compactado; as features de memória em
 `features.py` e `predict.js`, prontas para testar com dados reais (só são
 calculadas se um `forest.json` as pedir; com o atual, o `verificar.js` e os
 testes não mudam); os dois scripts de comparação; e os cenários com subida
 súbita/gradual.
+
+## Estudo: exercício x crise (11/2026)
+
+Pergunta: dá para reduzir os alarmes falsos do exercício (o modelo da
+"Versão simplificada" alertava em 96 de 96 exercícios dos eventos aleatórios
+e em 60 de 60 ciclos do laço) e do barulho sem crise (20 de 60 ciclos), **sem
+perder nenhuma crise**? O estudo seguiu abordagens da literatura. Os tópicos
+MQTT, os formatos, a regra de gatilho (`trigger.js`) e os sensores não
+mudaram.
+
+**Decisão (09/11/2026): política de contexto "E4d, 20 s" em produção**
+(`frontend/src/model/contexto.js`), **sem trocar o `forest.json`** (as mesmas
+60 árvores). É a versão mais simples entre as testadas e a única que não
+perdeu crise nas sementes do estudo.
+
+- **O critério de 0 crises engolidas não foi cumprido nas sementes novas**
+  (101–300): sobram 2 por intensidade no `exercicio_e_crise`, as mesmas que o
+  modelo sem política engole.
+- **A política foi mantida porque** reduz as engolidas de 30–37 para 2 por
+  intensidade e os alarmes do exercício em 43% (de 409 para 234 de 409
+  eventos), **sem perder nenhuma crise** que o modelo sem política detecta.
+- **O custo são atrasos de até 45 s** em relação ao modelo sem política, no
+  mesmo ciclo: acima de +30 s em 1 de 600 ciclos do `exercicio_e_crise` leve
+  (máximo +36 s) e em 3 de 600 da `crise_com_agitacao` leve (máximo +45 s).
+- O E4d 10 s não foi escolhido: tem os mesmos atrasos e mais alarmes no
+  exercício (269/409). O E4d 30 s teve 1 engolida por intensidade e 224/409,
+  com os mesmos atrasos; a troca só foi avaliada para o 10 s, e o 20 s foi
+  mantido.
+
+Detalhes em [Validação com sementes novas](#validação-com-sementes-novas-101300).
+Os resultados negativos estão registrados de propósito.
+
+### Fundamentação
+
+- **Contexto de atividade em duas etapas.** Gjoreski et al. (2016, 2017) e
+  Cvetković et al. (2017) reconhecem primeiro a atividade pelo acelerômetro e
+  usam essa atividade (e o histórico das previsões) como contexto do detector
+  de estresse; um estudo da *BMC Medical Informatics and Decision Making*
+  (2022) mostra que modelos com contexto de atividade superam os só
+  fisiológicos.
+- **Batimento adicional (não metabólico).** Myrtek et al. (2000) e Brouwer et
+  al. (2018, *Frontiers in Human Neuroscience*) estimam o batimento esperado
+  pelo movimento e usam o que sobra; Verkuil et al. (2016) e Versluis et al.
+  (2020) fazem o mesmo com a HRV ("additional HRV reduction"), com calibração
+  individual.
+- **EDA x esforço.** Bosch (2026, arXiv 2605.15756): a EDA tônica responde de
+  forma aditiva ao estresse e ao esforço; o BPM e a RMSSD são dominados pelo
+  esforço físico.
+- **Modelos por pessoa e movimento como pista.** Goodwin et al. (2019):
+  modelos personalizados (AUC média 0,84) superam o global (0,71) no TEA, e o
+  movimento também é pista de crise.
+
+### Diagnóstico
+
+Scripts: `model/diagnostico_exercicio.mjs` (curvas, exercício parecido com o
+dataset, features do simulador) e `model/diagnostico_exercicio.py` (dataset
+v4 e gráficos).
+
+- **Onde o alarme nasce.** No cenário `exercicio`, o alerta dispara no
+  **início** (20–50 s, "começando a correr") e de novo na **desaceleração**
+  (180–205 s), quase sempre como "atenção":
+
+  ![Curvas do exercício, roteiro nominal](imagens/estudo-exercicio/exercicio_nominal.png)
+
+  (também [semente 2](imagens/estudo-exercicio/exercicio_seed2.png) e
+  [semente 3](imagens/estudo-exercicio/exercicio_seed3.png); faixa vermelha =
+  episódio aberto, linhas vermelhas = alertas.)
+- **Não é diferença entre simulador e dataset.** Um exercício montado com o
+  BPM calmo do dataset (85, 92, 100 bpm em vez de 78) e a subida em cosseno de
+  30–50 s (em vez da rampa reta de 40 s) alarmou em 60 de 60 execuções em
+  todas as variantes (pico mediano 0,62–0,65). O cenário oficial não mudou.
+- **O problema existe no próprio dataset.** O v4 tem 66 entradas em
+  brincadeira_ativa (56 sem estresse nos 90 s seguintes; 3.811 s de início,
+  3,8% dos segundos sem estresse). Fora do fold, **44 dos 56 inícios passam de
+  0,4 e 10 de 0,7**; por segundo, p ≥ 0,4 em 29,8% do início, 8,3% do platô e
+  30,3% da saída do exercício.
+- **Causa 1, as inclinações.** Zerar as inclinações de EDA, HRV e BPM nos
+  inícios derruba p ≥ 0,4 de 15,7% para 3,3% (modelo final). "EDA subindo e
+  HRV caindo com movimento ainda médio" se parece com as crises com agitação
+  do v4 (2.673 s de estresse com giroscópio médio de 40–80 dps).
+- **Causa 2, níveis absolutos.** No repouso do v4, C03 (HRV de repouso 29 ms)
+  e C06 (45 ms) ficam com p ≥ 0,4 em 99% e 98% do tempo; as outras 10
+  crianças, em no máximo 6%. O modelo usa níveis absolutos de HRV, EDA e BPM.
+- **Acelerômetro** (ver a limitação na seção v4): é uma cópia saturada do
+  giroscópio; o estudo usa o giroscópio como medida de movimento.
+
+**Cenários novos** (`simulator/scenarios.js`; no laço do `verificar.js`, com
+`--nivel leve|moderada|alta`; fora do sorteio do `eventos_aleatorios`):
+
+- `crise_com_agitacao`: crise com giroscópio ~125 dps e regularidade baixa
+  (movimento intenso e **irregular**). O movimento não soma batimento extra,
+  como nos episódios com agitação do v4: é o caso mais difícil para quem
+  desconta o batimento explicado pelo movimento.
+- `exercicio_e_crise`: a crise soma por cima do exercício, 60 s depois do
+  platô. Conta como detectada se um episódio próprio começa na crise **ou** se
+  o episódio aberto pelo exercício **sobe de nível** (atenção → possível
+  crise) durante ela; senão, a crise foi "engolida".
+
+**Subida de nível no app.** A pulseira já publicava um alerta a cada subida
+de nível no mesmo episódio, mas o app só atualizava a notificação em
+silêncio. Desde 11/2026 a subida toca de novo (mesma notificação), e só ela:
+alerta repetido no mesmo nível ou descendo não notifica
+([app.md](app.md#notificações)).
+
+### Experimentos
+
+| Versão | O que muda | `forest.json` |
+|---|---|---|
+| **E4** persistência N s | Política de alerta: no exercício recente (giroscópio ≥ 40 dps nos últimos 60 s, sem movimento repetitivo) e sem EDA nem batimento elevados, o alerta exige p ≥ 0,4 em cada um dos últimos N s (N = 10, 20, 30) | igual |
+| **E4** rebaixa | Mesma condição; em vez de esperar, rebaixa para "atenção" | igual |
+| **E4b** | E4 + "batimento explicado": a política só vale se o batimento também não estiver muito **abaixo** do esperado pelo movimento | igual |
+| **E4c** | E4b + teto de "atenção" dentro da mesma condição | igual |
+| **E4d** | E4b + teto de "atenção" com condição própria: exercício recente, EDA não elevada e batimento não muito abaixo do esperado (não olha se o batimento está acima) | igual |
+| **E2a** | + features relativas à linha de base (percentil 10 dos últimos 300 s; 90 na HRV): BPM, HRV, EDA tônica, giroscópio e a inclinação suave do giroscópio | novo |
+| **E2b** | E2a + batimento esperado pelo movimento, resíduo do BPM e da HRV (coeficientes por mínimos quadrados, ajustados só nas crianças de treino de cada dobra) | novo |
+| **E2c** | E2b + inclinações de EDA, HRV e BPM descontadas da parte explicada pela inclinação do movimento (variante pedida: desconta, não zera) | novo |
+| E2 "só relativas" | E2a ou E2c **sem** os níveis absolutos (bpm, eda, hrv e suas médias) | novo |
+| **E2d** com rótulo | E2c com calibração individual: linha de base e coeficientes de cada criança a partir dos primeiros 10 min calmos e 5 min ativos **sem estresse** (usa os rótulos) | novo |
+| **E2d** sem rótulo | Linha de base fixa dos primeiros 5 min de cada criança, sem olhar rótulo nenhum; coeficientes globais | novo |
+| **E3** | + contexto de atividade por regras (repouso, andando, exercício irregular, movimento repetitivo, exercício nos últimos 60 s) como feature; regularidade alta é sempre "repetitivo" | novo |
+| **E5** | Combinações: E2 só relativas + E4b/E4c | novo |
+| E1 (v5) | Dataset com mais transições e crises agitadas | **não rodado**: só se nenhuma outra cumprisse o critério |
+
+Features novas: `model/features.py` (`BASE_FEATURES`, `RESIDUAL_FEATURES`,
+`SLOPE_RESIDUAL_FEATURES`, `CONTEXT_FEATURES`) e as mesmas contas no
+`predict.js` (só calculadas se um `forest.json` as usar; diferença máxima
+Python × JS de 7·10⁻¹⁴ em 4.410 s de 3 crianças). O `train.py` continua
+gerando as mesmas 60 árvores.
+
+### Como foi comparado
+
+- **Por segundo:** `python model/estudo_exercicio.py --saida <pasta>` (mesmo
+  GroupKFold por criança do `train.py`). Diferente da "Versão simplificada",
+  as métricas são no **ponto de operação do alerta**: alerta = p ≥ 0,4 depois
+  da política (por isso a precisão do atual aqui é 0,330, não 0,470). "Repouso
+  com alerta" = % dos segundos calmos sem estresse com alerta, por criança.
+- **Por episódio:** `node model/comparar_episodios.mjs <forest.json> [--politica '<json>' | --politica null]`
+  (o `verificar.js` padrão: laço de 20 sementes × 3 ciclos e 1000 eventos,
+  seeds 1–50) e, ciclo a ciclo, os cenários novos nas 3 intensidades;
+  `node model/tabela_estudo.mjs` monta as tabelas. Calibração da criança
+  simulada: `python model/calibrar_simulador.py`.
+- **Validação:** `node model/validar_sementes.mjs` com as sementes 101–300,
+  nunca usadas no estudo.
+
+### Por segundo (dataset v4)
+
+| Versão | AUC | Precisão | Recall | F1 | Precisão por criança (mín · mediana · máx) | Repouso com alerta por criança (mín · mediana · máx) | C03 · C06 em repouso | KB |
+|---|---|---|---|---|---|---|---|---|
+| atual (sem política) | 0,960 | 0,330 | 0,911 | 0,484 | 0,08 · 0,82 · 0,91 | 0% · 2% · 99% | **99% · 98%** | 267 |
+| E4 persistência 10 / 20 / 30 s | 0,960 | 0,345 / 0,349 / 0,352 | 0,889 / 0,882 / 0,881 | 0,497 / 0,500 / 0,503 | 0,08 · 0,89 · 0,94 | 0% · 1% · 98–99% | 98–99% · 93–96% | 267 |
+| E4 rebaixa | 0,960 | 0,330 | 0,911 | 0,484 | 0,08 · 0,82 · 0,91 | 0% · 2% · 99% | 99% · 98% | 267 |
+| **E4b/E4c/E4d 20 s** (10 / 30 s quase iguais) | 0,960 | **0,342** | **0,885** | **0,494** | 0,08 · 0,85 · 0,93 | 0% · 2% · 99% | **99% · 96%** | 267 |
+| E2a | 0,975 | 0,769 | 0,929 | 0,842 | 0,38 · 0,87 · 0,93 | 0% · 1% · 3% | 1% · 3% | 270 |
+| E2b | 0,976 | 0,829 | 0,927 | 0,876 | 0,40 · 0,90 · 0,95 | 0% · 1% · 1% | 1% · 1% | 253 |
+| E2c | 0,977 | 0,823 | 0,932 | 0,874 | 0,40 · 0,89 · 0,93 | 0% · 1% · 1% | 1% · 1% | 258 |
+| E2a só relativas | 0,977 | 0,853 | 0,931 | 0,890 | 0,73 · 0,86 · 0,90 | 0% · 1% · 2% | 1% · 2% | 273 |
+| E2c só relativas | 0,978 | 0,883 | 0,933 | 0,907 | 0,82 · 0,88 · 0,91 | 0% · 1% · 1% | 1% · 1% | 261 |
+| E2d com rótulo (E2c) | 0,977 | 0,885 | 0,933 | 0,908 | 0,76 · 0,90 · 0,94 | 0% · 1% · 1% | 1% · 1% | 257 |
+| E2d com rótulo (só relativas) | 0,977 | 0,886 | 0,935 | 0,910 | 0,81 · 0,89 · 0,93 | 0% · 1% · 2% | 1% · 1% | 247 |
+| E2d sem rótulo (E2c) | 0,975 | 0,875 | 0,933 | 0,903 | 0,78 · 0,89 · 0,94 | 0% · 1% · 3% | 2% · 1% | 258 |
+| E2d sem rótulo (só relativas) | 0,976 | 0,895 | 0,932 | 0,913 | 0,83 · 0,91 · 0,95 | 0% · 0% · 2% | 1% · 1% | 255 |
+| E3 | 0,961 | 0,340 | 0,913 | 0,496 | 0,08 · 0,83 · 0,93 | 0% · 2% · 99% | 99% · 77% | 245 |
+
+As features relativas à linha de base resolvem C03 e C06 (99%/98% → 1%) e
+sobem a precisão de 0,33 para 0,77–0,90, com recall maior. Os coeficientes
+ajustados no treino (0,30 bpm/dps; 0,13 ms/dps) ficam perto da relação do
+gerador (0,34 bpm/dps). A calibração sem rótulo mantém o resultado por
+segundo, mesmo com 6 das 12 crianças em crise nos primeiros 5 min e C04
+começando em brincadeira (linha de base de 132 bpm; recall dela 0,92 →
+0,91). A política (E4) quase não muda as métricas por segundo: os alarmes
+falsos do dataset estão sobretudo no repouso de C03 e C06, que ela não toca.
+
+### Por episódio (simulador, sementes do estudo)
+
+`exercicio_e_crise` e `crise_com_agitacao`: laço de 20 sementes × 3 ciclos em
+cada intensidade (leve · moderada · alta, de 60). Exercício no laço: sem
+alerta · só atenção · possível crise (de 60).
+
+| Versão | Crises (1000 eventos) | Crises no laço (7 cenários) | Agitada L · M · A | Exercício + crise L · M · A (engolidas) | Exercício no laço | Exercício (eventos) com alarme | Barulho sem crise sem alerta | Calmo · pausas | ms/leitura |
+|---|---|---|---|---|---|---|---|---|---|
+| atual (sem política) | 852/852 | 420/420 | 60 · 60 · 60 | 55 · 55 · 54 (5 · 5 · 6) | 0 · 37 · 23 | 96/96 | 40 | 60 · 0 | 0,012 |
+| E4 persistência 10 s | 852 | 420 | **48** · 60 · 60 | 58 · 58 · 58 (2 · 2 · 2) | 23 · 28 · 9 | 65 | 40 | 60 · 0 | 0,083 |
+| E4 persistência 20 s | 852 | 420 | **36** · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 30 · 27 · 3 | 55 | 40 | 60 · 0 | 0,082 |
+| E4 persistência 30 s | 852 | 420 | **27** · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 30 · 27 · 3 | 52 | 40 | 60 · 0 | 0,078 |
+| E4 rebaixa | 852 | 420 | 60 · 60 · 60 | 59 · 59 · 59 (1 · 1 · 1) | 0 · 57 · 3 | 96 | 40 | 60 · 0 | 0,077 |
+| E4b 10 s | 852 | 420 | 60 · 60 · 60 | 58 · 58 · 58 (2 · 2 · 2) | 21 · 30 · 9 | 67 | 40 | 60 · 0 | 0,061 |
+| E4b 20 s (E4c igual) | 852 | 420 | 60 · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 27 · 30 · 3 | 58 | 40 | 60 · 0 | 0,060 |
+| E4b 30 s | 852 | 420 | 60 · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 27 · 30 · 3 | 57 | 40 | 60 · 0 | 0,068 |
+| E4d 10 s | 852 | 420 | 60 · 60 · 60 | 60 · 60 · 60 (0) | 21 · 39 · 0 | 67 | 40 | 60 · 0 | 0,072 |
+| **E4d 20 s (em produção)** | **852** | **420** | **60 · 60 · 60** | **60 · 60 · 60 (0)** | **27 · 33 · 0** | **58** | **40** | **60 · 0** | 0,086 |
+| E4d 30 s | 852 | 420 | 60 · 60 · 60 | 60 · 60 · 60 (0) | 27 · 33 · 0 | 57 | 40 | 60 · 0 | 0,059 |
+| E2a | **850** | **414** | 59 · 59 · 59 | 60 · 60 · 60 (0) | 0 · 57 · 3 | 96 | 45 | **52 · 26** | 0,210 |
+| E2b | 852 | 420 | **31** · 60 · 60 | 60 · 60 · 60 (0) | 28 · 32 · 0 | 38 | 60 | 60 · 0 | 0,179 |
+| E2c | 852 | 420 | **47** · 60 · 60 | 60 · 60 · 60 (0) | 27 · 33 · 0 | 40 | 60 | 60 · 1 | 0,212 |
+| E2a só relativas | 852 | 420 | 60 · 60 · 60 | 58 · 58 · 58 (2 · 2 · 2) | 0 · 54 · 6 | 96 | 60 | 60 · **2** | 0,192 |
+| E2c só relativas | 852 | 420 | **45** · 60 · 60 | 60 · 60 · 60 (0) | 29 · 30 · 0 | 49 | 60 | 60 · 0 | 0,229 |
+| E2d com rótulo (E2c) | 852 | 420 | **46** · 60 · 60 | 60 · 60 · 60 (0) | 34 · 24 · 2 | 51 | 60 | 60 · 0 | 0,014 |
+| E2d com rótulo (só relativas) | 852 | 420 | **34** · 60 · 60 | 56 · 56 · 56 (4 · 4 · 4) | 29 · 22 · 9 | 60 | 60 | 60 · 0 | 0,016 |
+| E2d sem rótulo (E2c) | **850** | **410** | **42** · 59 · 59 | 60 · 60 · 60 (0) | 31 · 29 · 0 | 44 | 53 | **56 · 32** | 0,022 |
+| E2d sem rótulo (só relativas) | 852 | 420 | **29** · 60 · 60 | 59 · 59 · 59 (1 · 1 · 1) | 28 · 32 · 0 | 54 | 58 | 60 · 0 | 0,021 |
+| E3 | **837** | **406** | 60 · 58 · 58 | 59 · 59 · 59 (1 · 1 · 1) | 0 · 55 · 5 | 96 | **20** | **48 · 79** | 0,040 |
+| E5: E2a só relativas + E4b 20 / 30 s | 852 | 420 | 60 · 60 · 60 | 58 · 58 · 58 (2 · 2 · 2) | 40 · 15 · 5 | 39 / 35 | 60 | 60 · **2** | 0,24 |
+| E5: E2a só relativas + E4c 30 s | 852 | 420 | 60 · 60 · 60 | 59 · 59 · 59 (1 · 1 · 1) | 40 · 19 · 0 | 35 | 60 | 60 · **2** | 0,248 |
+| E5: E2c só relativas + E4b 20 s | 852 | 420 | **43** · 60 · 60 | 60 · 60 · 60 (0) | 47 · 12 · 0 | 21 | 60 | 60 · 0 | 0,231 |
+
+Com o E4d 20 s: crises leves 248/248, gatilho certo 851/852 e tempo médio
+até o alerta 6,4 s, iguais ao atual; `demo` 60/60 no laço (atual 51/60).
+Maior atraso contra o atual, no mesmo ciclo: +12 s no `exercicio_e_crise`
+(leve) e +20 s num ciclo da crise agitada leve (máximo 51 s, atual 43 s).
+
+O que os números dizem:
+
+- **Descontar o movimento esconde a crise agitada.** Todas as versões com
+  resíduo do batimento (E2b, E2c, E2d, E5 com E2c) perdem de 13 a 31 das 60
+  crises agitadas leves. É o risco previsto: a crise leve com agitação forte
+  (BPM +11 com 125 dps) tem batimento **abaixo** do que o movimento
+  explicaria. No v4, a crise leve com agitação tem giroscópio de só 14–41
+  dps, então esse caso não existe no treino.
+- **A persistência sozinha também esconde** (E4: 12 a 33 agitadas leves
+  perdidas). A regra "batimento explicado" (E4b) corrige: com batimento muito
+  abaixo do esperado, o movimento não é um exercício típico.
+- **O caso que o E4b ainda engolia** (1 ciclo): aos 80 s de exercício, o
+  resíduo do batimento encostou em 10 bpm por ruído, a política desligou, saiu
+  "possível crise" no exercício e a crise, 28 s depois, só gerou um alerta que
+  o app não notifica (o episódio já estava em possível crise). O teto de
+  "atenção" do E4d, que só a EDA libera, resolve esse caso.
+- **O E3 piora** (perde 15 crises, 79 episódios nas pausas, barulho 20/60): o
+  contexto como feature, treinado no v4, não generaliza para o simulador.
+- **As relativas resolvem o barulho sem crise** (60/60), mas só sem o resíduo
+  (E2a só relativas) elas não escondem a crise agitada, e aí o exercício
+  continua alarmando (96/96) e aparecem episódios de 1 s nas pausas.
+
+### Validação com sementes novas (101–300)
+
+O E4d foi ajustado depois de ver o caso da semente 3. Rodado de novo com as
+sementes 101–300 (nunca usadas no estudo): 4.000 eventos, 600 ciclos por
+cenário e intensidade.
+
+| Versão | Crises (eventos) | Crises no laço (7 cenários) | Agitada L · M · A | Exercício + crise L · M · A | Engolidas | Exercício no laço (de 600) | Exercício (eventos) com alarme | Barulho sem crise sem alerta | Calmo | Pausas |
+|---|---|---|---|---|---|---|---|---|---|---|
+| sem política | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 570 · 566 · 563 | 30 · 34 · 37 | 0 · 438 · 162 | 409/409 | 382/600 | 600/600 | 2 |
+| E4d 10 s | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 598 · 598 · 598 | 2 · 2 · 2 | 205 · 387 · 8 | 269/409 | 382/600 | 600/600 | 2 |
+| **E4d 20 s** | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 598 · 598 · 598 | **2 · 2 · 2** | 263 · 329 · 8 | **234/409** | 382/600 | 600/600 | 2 |
+| E4d 30 s | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 599 · 599 · 599 | 1 · 1 · 1 | 277 · 315 · 8 | 224/409 | 382/600 | 600/600 | 2 |
+
+- **Nenhuma crise perdida pela política:** o E4d detecta todas as que o
+  modelo sem política detecta (a crise de 3402 que falta é a mesma nos
+  dois).
+- **Engolidas: 2 por intensidade (sementes 107 e 143), e são os mesmos
+  ciclos que o modelo sem política engole**: o E4d não as cria, mas não as
+  resolve. O critério pedia 0.
+- **Atrasos acima de 30 s** contra o modelo sem política, no mesmo ciclo
+  (iguais com N = 10, 20 e 30 s): no `exercicio_e_crise` leve, máximo +36 s e
+  1 de 600 ciclos acima de +30 s; na `crise_com_agitacao` leve, máximo +45 s
+  e 3 de 600 acima de +30 s. Nas outras intensidades, no máximo +15 s
+  (moderada) e +11 s (alta) no `exercicio_e_crise` e 0 na agitada. Nos casos
+  leves, o início da crise ainda parece exercício (EDA abaixo de 3,5 µS,
+  batimento perto do esperado), e a política espera a persistência.
+- **Exercício:** de 409/409 para 234/409 eventos com alarme e de 0 para
+  263/600 ciclos sem nenhum alerta; "possível crise" no exercício de 162 para
+  8 ciclos.
+
+### Origem dos limites do E4d
+
+Os limites (`CONTEXTO`, em `contexto.js`) foram tirados das **constantes do
+gerador do v4** (`model/gerar_dataset_v4.py`), não do simulador nem de dados
+reais:
+
+| Limite | Valor | Regra |
+|---|---|---|
+| EDA elevada | 3,5 µS acima da linha de base | ponto médio entre a EDA da brincadeira ativa (+2,6 µS) e a da brincadeira + crise leve (+2,6 + 2,1 = 4,7), arredondado para baixo (desliga a política antes: lado seguro) |
+| Batimento muito acima / abaixo do esperado | ±10 bpm | o BPM da crise leve (+11), arredondado para baixo |
+| Batimento esperado pelo movimento | 0,34 bpm/dps | +38 bpm para +112 dps da brincadeira ativa |
+| Exercício | giroscópio ≥ 40 dps (média de 10 s) nos últimos 60 s | abaixo da atividade leve (~48 dps) |
+| Movimento repetitivo | regularidade ≥ 0,4 | entre o movimento livre (< 0,15) e a estereotipia (0,65–0,95) |
+| Linha de base | percentil 10 dos últimos 300 s | a janela de 5 min da pulseira |
+
+Conferido no v4, com as mesmas contas (`contexto` do
+`model/estudo_exercicio.py`):
+
+| Trecho do v4 | Segundos | EDA acima da base (p5 · mediana · p95) | ≥ 3,5 µS | Resíduo do batimento (p5 · mediana · p95) | ≥ +10 | ≤ −10 |
+|---|---|---|---|---|---|---|
+| brincadeira ativa sem estresse | 20.401 | 0,2 · 1,9 · 3,0 | 0% | −21,1 · −2,4 · 7,6 | 2% | 26% |
+| atividade leve sem estresse | 23.408 | 0,1 · 0,8 · 1,5 | 0% | −8,8 · −1,4 · 4,1 | 0% | 3% |
+| estresse leve | 3.677 | 0,3 · 2,3 · 4,6 | 20% | −8,5 · 6,7 · 37,7 | 35% | 4% |
+| estresse moderado | 2.369 | 0,4 · 4,1 · 6,7 | 68% | −0,6 · 20,7 · 42,4 | 73% | 0% |
+| estresse alto | 2.585 | 0,6 · 6,7 · 8,6 | 77% | −7,6 · 20,7 · 45,0 | 68% | 3% |
+| estresse durante brincadeira ativa | 1.757 | 0,6 · 3,9 · 8,1 | 56% | −13,6 · 20,0 · 48,0 | 67% | 7% |
+
+No exercício sem crise, a EDA nunca passa de 3,5 µS. Mas o resíduo fica
+≤ −10 bpm em 26% dos segundos (a regra "batimento explicado" desliga a
+política em 1/4 do exercício do v4) e ≥ +10 em 2% (os "falsos
+desligamentos", como o da semente 3).
+
+### Limitações (para Resultados e Limitações do TCC)
+
+- **(a) Repouso de C03 e C06.** Por segundo, as duas crianças continuam com
+  alerta em 96–99% do repouso: em uso real, duas das 12 receberiam alertas
+  quase o tempo todo. A solução encontrada (features relativas à linha de
+  base: 1%) esconde crises agitadas leves e depende de dados com crises
+  agitadas para ser treinada com segurança.
+- **(b) Barulho sem crise** continua em 40/60 ciclos sem alerta (o E4d não
+  mexe no ambiente; só as versões com features relativas chegaram a 60/60).
+- **(c) Ajustado no simulador.** As regras do E4d ("batimento explicado" e o
+  teto pela EDA) foram criadas depois de ver falhas no simulador; com
+  sementes novas ainda sobram 2 crises engolidas por intensidade e atrasos de
+  até +45 s (acima de +30 s em 4 de 1.200 ciclos de crise leve). Precisa ser
+  validado com dados reais no piloto.
+- **(d) Calibração individual com rótulo** exigiria uma sessão supervisionada
+  por criança (~10 min em repouso e ~5 min de atividade típica, com o
+  cuidador confirmando que não houve crise), repetida quando a criança mudar
+  (crescimento, medicação). A versão sem rótulo (primeiros 5 min) mantém o
+  resultado por segundo, mas não por episódio.
+- **(e) Limites vindos do próprio gerador.** EDA 3,5 µS, ±10 bpm e 0,34
+  bpm/dps refletem como os dados sintéticos foram fabricados, não uma criança
+  real. No piloto, devem ser reestimados com dados reais, de preferência por
+  criança.
+- **(f) Crise leve no exercício.** A EDA só passa do limite em ~20% dos
+  segundos de crise leve; numa crise leve durante o exercício, a detecção
+  depende do resíduo do batimento e da persistência (daí os atrasos de até
+  +36 s).
+- **Dados sintéticos gerados pelos próprios autores**, com o risco de ajustar
+  o gerador (ou a política) ao problema: os cenários novos e as regras do E4d
+  foram desenhados por quem conhecia a falha.
+- **Risco de esconder crises agitadas:** qualquer regra que descanse o alerta
+  durante movimento pode esconder uma crise agitada real; os testes cobrem só
+  a agitação como o simulador a fabrica.
+- **Outros pontos:** a linha de base precisa de ~5 min de pulseira no braço
+  (antes disso, o percentil usa o que houver); no exercício real o batimento
+  sobe com atraso em relação ao movimento (10–30 s), o que faria o resíduo
+  ficar negativo no início e a regra "batimento explicado" desligar a
+  política; a escala do acelerômetro é irreal (seção v4); o custo de cálculo
+  sobe de ~0,01 para ~0,09 ms por leitura, ainda irrisório.
+
+O que fica no código: a política E4d em produção (`contexto.js`, com as
+outras variantes para reproduzir o estudo); as features relativas, residuais
+e de contexto em `features.py` e `predict.js`, inativas com o `forest.json`
+atual, prontas para testar com dados reais; os cenários novos; os scripts
+`diagnostico_exercicio.*`, `estudo_exercicio.py`, `calibrar_simulador.py`,
+`comparar_episodios.mjs`, `tabela_estudo.mjs` e `validar_sementes.mjs`.

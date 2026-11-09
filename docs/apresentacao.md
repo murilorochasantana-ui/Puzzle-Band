@@ -190,8 +190,8 @@ dos sensores.
 | Tempo | Fase no log | O que aparece no painel (e no app) | O que mostrar ou dizer |
 |---|---|---|---|
 | 0:00–1:00 | `demo 1/7 · calmo` | "Sem sinais de crise"; o modelo começa a avaliar após 31 s de leituras | Os 7 sensores; o modelo roda na própria pulseira (processamento na borda) |
-| 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise", mas pode aparecer **"Atenção"** e, às vezes, "Possível crise" por alguns segundos | Limitação real do modelo: a EDA também sobe no exercício. É por isso que o sistema é apoio e o cuidador avalia |
-| 2:30–3:30 | `demo 3/7 · calmo` | Volta ao normal; os alertas do exercício viram 1–2 episódios encerrados no histórico | Histerese: o episódio só fecha após 30 s calmos |
+| 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise"; às vezes aparece um **"Atenção"** curto e quase nunca "Possível crise" | A pulseira reconhece o exercício (movimento irregular sem EDA elevada) e espera 20 s antes de alertar; limitação real: a EDA também sobe no exercício, por isso o sistema é apoio e o cuidador avalia |
+| 2:30–3:30 | `demo 3/7 · calmo` | Volta ao normal; um eventual alerta do exercício vira 1 episódio encerrado no histórico | Histerese: o episódio só fecha após 30 s calmos |
 | 3:30 | `demo 4/7 · crise com ruído: ruído subindo` | O ruído sobe para ~88 dB; o modelo continua em baixo risco | O ambiente mudou, mas a criança ainda está bem |
 | 3:47 | `… fisiologia subindo` | BPM e EDA sobem de repente (em ~10 s), HRV cai | — |
 | ~3:49 | ainda `… fisiologia subindo` (a fase `demo 4/7 · crise com ruído` começa às 3:57) | **"Possível crise"** + *"Provável gatilho: ruído (45 → 87 dB, cerca de 11 s antes da alteração fisiológica)"* (ou "… antes do alerta do modelo", quando o modelo alerta antes de BPM e EDA passarem da margem); episódio "em andamento" no histórico | Detectar a crise (modelo) × indicar o provável gatilho (regra explicável); "provável", nunca causa |
@@ -199,11 +199,12 @@ dos sensores.
 | ~6:50 | — | O episódio encerra no histórico (~2 min 30 s) | Clicar em **Confirmar gatilho** e escrever uma observação ("som alto na sala") |
 | 7:00 | `demo 6/7 · crise sem gatilho` | Por volta de 7:02: **"Possível crise"** + *"Sem gatilho ambiental aparente: luz e ruído estáveis. A causa pode ser outra (social, rotina, desconforto físico)."* | O sistema não inventa uma causa quando o ambiente não mudou |
 | 9:00 | `demo 7/7 · recuperação` | O alerta some por volta de 9:50; o episódio encerra por volta de 10:20 | — |
-| 9:25–11:25 | `pausa calma final · encerra em … s` | Resumo de padrões, por exemplo "Ruído como provável gatilho: 1 de 4 episódios · 1 confirmado pelo cuidador" | Clicar em **Exportar CSV** (registro de testes do TCC); o histórico fica guardado na pulseira (LGPD) |
+| 9:25–11:25 | `pausa calma final · encerra em … s` | Resumo de padrões, por exemplo "Ruído como provável gatilho: 1 de 3 episódios · 1 confirmado pelo cuidador" | Clicar em **Exportar CSV** (registro de testes do TCC); o histórico fica guardado na pulseira (LGPD) |
 
-O total do resumo costuma ser 3 ou 4 episódios: as duas crises mais 1 ou 2
-alertas do exercício. Dá para clicar em **Descartar** nos do exercício
-durante a fala sobre limitações e mostrar a avaliação do cuidador.
+O total do resumo costuma ser 2 ou 3 episódios: as duas crises e, às
+vezes, 1 alerta curto do exercício. Se ele aparecer, dá para clicar em
+**Descartar** durante a fala sobre limitações e mostrar a avaliação do
+cuidador.
 
 ### Plano B (sem internet ou sem broker)
 

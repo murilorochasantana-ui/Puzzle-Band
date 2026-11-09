@@ -10,7 +10,9 @@
 // Com VARIACAO_NOMINAL ela devolve o roteiro original: o 1o ciclo do loop, o
 // --uma-vez e o que as tabelas do docs/testes.md descrevem. programTicks(),
 // no fim do arquivo, encadeia os ciclos em LOOP com uma pausa calma entre
-// eles e monta o cenario eventos_aleatorios com os mesmos roteiros.
+// eles e monta o cenario eventos_aleatorios com os mesmos roteiros. `nivel`
+// (leve/moderada/alta) fixa a intensidade da resposta de estresse em todos os
+// ciclos de um cenario isolado (usado no estudo exercicio x crise).
 //
 // Os cenarios isolados comecam com BASELINE_S segundos calmos: a regra de
 // gatilho provavel (frontend/src/model/trigger.js) precisa de >= 60 s de
@@ -251,6 +253,86 @@ function crisisScenario(v, { ruido = false, luz = false, envLabel = null } = {})
   };
 }
 
+// Soma de roteiros do mesmo sinal que se sobrepoem (ex.: crise por cima do
+// exercicio): em cada instante, calmo + soma das mudancas de cada um. Como
+// os roteiros sao rampas lineares, basta somar nos pontos de todos eles.
+function sumOf(key, ...series) {
+  const calm = CALMO[key];
+  const times = [...new Set(series.flatMap((s) => s.map(([t]) => t)))].sort((a, b) => a - b);
+  return times.map((t) => [t, round2(calm + series.reduce((acc, s) => acc + valueAt(s, t, calm) - calm, 0))]);
+}
+
+// Crise com agitacao: a crise "alta" (BPM, EDA e HRV iguais aos da crise
+// parada) com movimento intenso e IRREGULAR (giroscopio ~125 dps,
+// regularidade baixa), como numa crise agitada (se debater, correr sem
+// rumo). O movimento NAO soma batimento extra, como nos episodios com
+// agitacao do dataset v4: e o caso mais dificil para quem desconta o
+// batimento explicado pelo movimento. A intensidade (nivel) so mexe na
+// resposta de estresse; o movimento continua intenso.
+const AGITATION_GYRO = 120;
+
+function agitatedCrisisScenario(v) {
+  const tl = crisisTimeline(v);
+  const gyroTo = round2(CALMO.gyro + AGITATION_GYRO * v.pico);
+  return {
+    duracao: tl.tCalm + CALM_TAIL_S,
+    canais: { ...crisis(tl.tPhysio, v, tl), gyro: pulse(tl.tPhysio, tl.up, tl.hold, tl.down, null, gyroTo) },
+    fases: [
+      [0, 'baseline (calmo)'],
+      [tl.tPhysio, 'crise agitada: fisiologia e movimento subindo'],
+      [tl.tPeak, 'crise agitada (movimento intenso e irregular)'],
+      [tl.tRecovery, 'recuperação'],
+      [tl.tCalm, 'calmo (recuperado)'],
+    ],
+    tFisiologia: tl.tPhysio,
+    antecedencia: null,
+    resumo: [...crisisSummary(v, tl), `agitação ${fmt(gyroTo)} dps`],
+  };
+}
+
+// Exercicio e crise: o exercicio do cenario "exercicio" (sem mudar com a
+// intensidade) e, 60 s depois de ele chegar ao plato, a crise "alta" soma
+// por cima (BPM, EDA e HRV, como no gerador do dataset v4: a crise e um
+// incremento sobre a atividade). O exercicio continua ate 30 s depois da
+// recuperacao da crise e entao desacelera.
+const EXERCISE_BEFORE_CRISIS_S = 60;
+const EXERCISE_AFTER_CRISIS_S = 30;
+
+function exerciseCrisisScenario(v) {
+  const exUp = scaled(v, 'subida', ACT.up);
+  const exDown = scaled(v, 'descida', ACT.down);
+  const tStart = BASELINE_S;
+  const tExPeak = tStart + exUp;
+  const tPhysio = tExPeak + EXERCISE_BEFORE_CRISIS_S;
+  const { up, hold } = crisisRise(v, PLATEAU_S);
+  const down = scaled(v, 'descida', RECOVERY_RAMP_S);
+  const tRecovery = tPhysio + up + hold;
+  const tExDown = tRecovery + down + EXERCISE_AFTER_CRISIS_S;
+  const tCalm = tExDown + exDown;
+  const ex = activity(tStart, { up: exUp, hold: tExDown - tExPeak, down: exDown }, EXERCISE, { ...v, nivel: 1 });
+  const cr = crisis(tPhysio, v, { up, hold, down });
+  return {
+    duracao: tCalm + CALM_TAIL_S,
+    canais: { gyro: ex.gyro, bpm: sumOf('bpm', ex.bpm, cr.bpm), eda: sumOf('eda', ex.eda, cr.eda), hrv: sumOf('hrv', ex.hrv, cr.hrv) },
+    fases: [
+      [0, 'baseline (calmo)'],
+      [tStart, 'começando a correr'],
+      [tExPeak, 'exercício (correndo/brincando)'],
+      [tPhysio, 'crise durante o exercício: fisiologia subindo'],
+      [tPhysio + up, 'crise durante o exercício'],
+      [tRecovery, 'recuperação (ainda em exercício)'],
+      [tRecovery + down, 'exercício'],
+      [tExDown, 'desacelerando'],
+      [tCalm, 'calmo (recuperado)'],
+    ],
+    tFisiologia: tPhysio,
+    tFimCrise: tRecovery + down, // a fisiologia volta ao nivel do exercicio (verificar.js)
+    antecedencia: null,
+    resumo: [peakSummary(v), `exercício: subida ${exUp} s, descida ${exDown} s`, `crise ${tPhysio - tStart} s depois do início do exercício`,
+      onsetSummary(v, up), `platô ${hold} s`, `descida ${down} s`],
+  };
+}
+
 // Atividade isolada: sobe em 40 s, fica 120 s, volta em 40 s
 const ACT = { up: 40, hold: 120, down: 40 };
 
@@ -474,6 +556,16 @@ export const SCENARIOS = {
       };
     },
   },
+  crise_com_agitacao: {
+    descricao: 'Crise com movimento intenso e irregular (~125 dps, como se debater): BPM e EDA sobem, a HRV cai, sem sinal ambiental',
+    esperado: { crise: true, gatilho: 'nenhum_ambiental' },
+    construir: agitatedCrisisScenario,
+  },
+  exercicio_e_crise: {
+    descricao: 'Exercício e, 60 s depois de chegar ao platô, uma crise por cima (BPM, EDA e HRV somam); ambiente estável',
+    esperado: { crise: true, gatilho: 'nenhum_ambiental' },
+    construir: exerciseCrisisScenario,
+  },
   demo: {
     descricao: 'Apresentação (10,5 min): calmo → exercício → calmo → crise com ruído → recuperação → crise sem gatilho → recuperação',
     esperado: { crise: true, gatilho: 'ruido+nenhum_ambiental' },
@@ -666,7 +758,7 @@ const ONSET_SEED_SALT = 0x5bd1e995;
 // 30 s para o episodio anterior fechar + 60 s de linha de base calma
 export const PAUSA_MIN_S = 90;
 
-function newCycle({ numero, cenario, rng, onsetRng, tipos, seed }) {
+function newCycle({ numero, cenario, rng, onsetRng, tipos, seed, nivel }) {
   let nome = cenario;
   let tipo = cenario;
   let intensidade = null;
@@ -679,6 +771,12 @@ function newCycle({ numero, cenario, rng, onsetRng, tipos, seed }) {
     v = { ...drawVariation(rng, SCENARIOS[nome].limites), nivel: intensidade ? INTENSIDADES[intensidade] : 1, ...drawOnset(onsetRng) };
   } else if (numero > 1) {
     v = { ...drawVariation(rng, SCENARIOS[nome].limites), ...drawOnset(onsetRng) };
+  }
+  // intensidade fixa para todos os ciclos (estudo exercicio x crise); sem
+  // ela, nada muda
+  if (nivel && cenario !== EVENTOS_ALEATORIOS) {
+    intensidade = nivel;
+    v = { ...v, nivel: INTENSIDADES[nivel] };
   }
   const { esperado } = SCENARIOS[nome];
   return {
@@ -729,7 +827,7 @@ export function cycleDetails(ciclo) {
 // pausa final, para o ultimo episodio fechar no site. umaVez: so o roteiro
 // nominal, do inicio ao fim (com a cauda calma original), como antes do loop.
 export function* programTicks({
-  cenario, umaVez = false, ciclos = Infinity, pausa = PAUSA_PADRAO_S, seed = 1, idade = 8,
+  cenario, umaVez = false, ciclos = Infinity, pausa = PAUSA_PADRAO_S, seed = 1, idade = 8, nivel = null,
 }) {
   const aleatorio = cenario === EVENTOS_ALEATORIOS;
   if (!aleatorio && !SCENARIOS[cenario]) throw new Error(`Cenário desconhecido: ${cenario}`);
@@ -743,7 +841,7 @@ export function* programTicks({
   let t = 0;
 
   for (let numero = 1; numero <= total; numero += 1) {
-    const ciclo = newCycle({ numero, cenario, rng, onsetRng, tipos, seed });
+    const ciclo = newCycle({ numero, cenario, rng, onsetRng, tipos, seed, nivel });
     const r = ciclo.roteiro;
     const t0 = numero === 1 ? 0 : t - r.inicioAtivo;
     Object.assign(ciclo, {

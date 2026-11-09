@@ -487,6 +487,302 @@ tabelas do `docs/testes.md` (falhas conhecidas: exercicio, barulho_sem_crise
 e demo); `flutter analyze` 0; `flutter test` 170/170; links dos `.md`: 0
 quebrados.
 
+## Estudo exercício x crise (branch `estudo-exercicio`, a partir de `a520460`)
+
+Pedido (09/11/2026): reduzir os alarmes falsos do exercício (96/96 eventos,
+60/60 ciclos) e do barulho sem crise (20/60) **sem perder crises**, com
+abordagens da literatura (contexto de atividade, batimento adicional,
+calibração individual). Regras: sem commit; tópicos MQTT, formatos,
+`trigger.js` (limites e textos), `.env` e `mobile/env.json` intactos; sem
+navegador; sensores todos mantidos; não recriar `mobile/ios`, `macos`,
+`linux`, `windows`, `web`. Trocar o modelo só com "aprovado".
+
+Situação: **E4d 20 s aprovado (09/11/2026) e ligado em produção
+(`POLITICA` no `contexto.js`; `forest.json` igual). Passo 5 feito. Sem
+commit.**
+
+Decisões do usuário (09/11/2026): plano aprovado; cenários novos só no laço
+(pesos do `eventos_aleatorios` intactos); v5 no scratchpad (vai para
+`data/raw/` só se a versão escolhida usar o v5). Ajustes: teste do exercício
+"parecido com o dataset" (só diagnóstico, cenário oficial intacto); no E4,
+o `exercicio_e_crise` é o teste principal (descartar N que atrase o alerta
+da crise > 30 s ou perca crise); poucos PNGs (nominal + 2 sementes).
+
+### Passo 1 — feito (sem commit)
+
+Arquivos: `model/diagnostico_exercicio.mjs` (curvas, exercício "parecido
+com o dataset", features do simulador) e `model/diagnostico_exercicio.py`
+(inícios no v4, probabilidade fora do fold, faixas v4 × simulador, PNGs);
+`docs/imagens/estudo-exercicio/exercicio_{nominal,seed2,seed3}.png` (~170 KB
+cada). Saídas em `<scratchpad desta sessão>\diag\`.
+
+- **Curvas:** alerta no **início** (t ≈ 20–50 s, "começando a correr") e de
+  novo na **desaceleração** (t ≈ 180–205 s); nunca "possível crise" no
+  nominal (pico 0,55). O acelerômetro satura em 20 g já no início.
+- **Exercício parecido com o dataset** (60 sementes cada): 78/85/92/100
+  bpm × reta/cosseno 30/40/50 s → episódio em **60/60 em todas**, pico
+  mediano 0,62–0,65. A diferença simulador × dataset **não** é a causa.
+- **No próprio v4 (fora do fold):** 66 entradas em brincadeira_ativa (56
+  sem estresse nos 90 s seguintes; 3.811 s de início sem estresse = 3,8% dos
+  não-estresse). **44/56 passam de 0,4 e 10/56 de 0,7.** Por segundo,
+  p ≥ 0,4 em 29,8% do início, 8,3% do platô, 30,3% da saída e 17,4% do calmo.
+- **Por quê:** (1) as inclinações: zerar `eda_slope_long`, `hrv_slope_long`
+  e `bpm_slope_long` no início derruba p ≥ 0,4 de 15,7% para 3,3% (modelo
+  final); com o giroscópio médio já no valor do platô, 7,6%. "EDA subindo e
+  HRV caindo com movimento ainda médio" se parece com as crises com agitação
+  do v4 (2.673 s de estresse com `gyro_mean_long` 40–80). (2) Linha de base:
+  no calmo do v4, C03 (HRV de repouso 29 ms) e C06 (45 ms) ficam com
+  p ≥ 0,4 em 99% e 98% do tempo, e as outras 10 crianças em ≤ 6%. O modelo
+  usa níveis absolutos: reforça o E2 (features relativas à linha de base).
+- **Cenários novos** (`scenarios.js`, `verificar.js`; `--nivel` no
+  `verificar.js` e `nivel` no `programTicks`; sem eles nada muda):
+  `crise_com_agitacao` (crise + giroscópio ~125 dps irregular, sem batimento
+  extra do movimento) e `exercicio_e_crise` (crise somada 60 s depois do
+  platô; avaliação: episódio próprio que começa na crise; episódio do
+  exercício ainda aberto quando a crise começa = "engolida" = falhou; alarme
+  do exercício fora da crise = limitação). Modelo atual, laço 60 ciclos:
+
+  | Cenário | leve | moderada | alta |
+  |---|---|---|---|
+  | crise_com_agitacao | 39/60 (21 = 2 episódios só de atenção; **0 sem episódio**) | 60/60 | 60/60 |
+  | exercicio_e_crise | 0/60 (51 lim. · 9 engolidas) | 0/60 (51 · 9) | 0/60 (49 · 11) |
+
+- `verificar.js` padrão: tudo igual a `linha-de-base/etapa4-final/` (só
+  as 2 linhas novas e a largura de uma coluna); `npm test` do simulador 30/30.
+
+### Passo 1 aprovado (09/11/2026) — conferências pedidas antes dos experimentos
+
+Decisões: variante nova do E2 = descontar só a parte da inclinação da
+EDA/HRV explicada pelo movimento (ajustada no treino de cada dobra), sem
+zerar; `crise_com_agitacao` nas 3 intensidades é a trava (nenhuma variante
+pode piorá-lo). Ordem: E4 → E2 → E3 → E5; E1 (v5) só se nenhum cumprir o
+critério. Tabela com a precisão por criança em repouso (destacar C03 e C06).
+
+- **Acelerômetro:** mesma unidade (g) e mesma fórmula no gerador do v4
+  (`gerar_dataset_v4.py:261`) e no simulador (`simulate.js:43`):
+  giroscópio (dps) × 0,55 × U(0,5; 1,6), limitado a [0,02; 20]. O
+  `features.py` e o `predict.js` usam o valor cru (sem conversão). **Não há
+  mistura de unidades nem saturação só no simulador**, mas a escala é
+  irreal: repouso ~2,9 g (deveria ser ~0–0,3 g dinâmico), exercício e
+  agitação saturam em 20 g (real ~2–4 g; o MPU6050 vai no máximo a ±16 g).
+  O acelerômetro é uma cópia ruidosa do giroscópio, saturada acima de ~36
+  dps. **Mostrado ao usuário; nada corrigido.**
+- **Subida de nível dentro do episódio aberto:** a pulseira já publica um
+  alerta a cada mudança de nível para atenção/alto (`episodes.js`,
+  `ingestReadings`), inclusive atenção → alto no mesmo episódio. O app
+  (`mqtt_service.dart`, `_notificarSePreciso`) notifica uma vez por
+  episódio; na subida atenção → possível crise só **atualiza a mesma
+  notificação sem som** (`silent`/`onlyAlertOnce`); se o episódio já estava
+  em possível crise, nada. É o caso (b). Medido no `exercicio_e_crise` (60
+  ciclos por intensidade, modelo atual): episódio próprio 51/51/49 (leve,
+  moderada, alta; mediana 4/2/2 s, máx. 23 s); dentro do episódio aberto com
+  subida atenção → alto 4/4/5 (mediana 9/5/2 s, máx. 10 s); dentro de
+  episódio que já estava em possível crise (sem alerta novo) 5/5/6; sem
+  nenhuma subida 0. **Correção proposta, não aplicada.**
+
+### Conferências aprovadas (09/11/2026) — aplicado (sem commit)
+
+- **App:** `_notificarSePreciso` (`mqtt_service.dart`) continua notificando
+  só quando o nível SOBE no episódio; a subida agora toca de novo.
+  `notification_service.dart`: `silent` e `onlyAlertOnce` eram `true` na
+  atualização (deixavam a reemissão com o mesmo id em silêncio); agora são
+  `false` explícitos. Teste `mqtt_service_test.dart` (nome e asserts da
+  subida) e `docs/app.md` ajustados. `flutter analyze` 0; `flutter test`
+  170/170; nenhum golden mudou (`git status` só mostra os 3 arquivos). O
+  flag do Android não é coberto por teste de unidade (o teste usa um
+  serviço falso): conferir no emulador (semente 15, abaixo).
+- **`verificar.js`:** `simulateProgram` guarda, por ciclo, os alertas e o
+  episódio aberto no início da fisiologia; `exerciseCrisisCheck` conta a
+  crise como detectada com episódio próprio OU subida de nível do episódio
+  aberto (tempo desde o início da crise); senão "engolida"/"perdida". Modelo
+  atual: falhas 5/5/6 (só as engolidas em episódio que já estava em
+  possível crise). Laço padrão e `--uma-vez --sementes 50` idênticos à
+  referência (fora as linhas novas); simulador 30/30.
+- `simulator/package.json`: atalhos `crise-com-agitacao` e
+  `exercicio-e-crise`. **Pendente para o Passo 5:** cenários novos no
+  `docs/pulseira.md` e no `docs/testes.md`.
+- `docs/modelo.md`: limitação da escala do acelerômetro (seção v4).
+- Emulador: `npm run exercicio-e-crise -- --uma-vez --seed 15` → episódio
+  do exercício abre em atenção ~2:18, sobe para possível crise ~3:42 (crise
+  começa 3:40).
+
+### E4 — feito (sem commit; produção inalterada: `POLITICA = null`)
+
+Código: `frontend/src/model/contexto.js` (contexto por regras sobre o
+giroscópio e a regularidade; linha de base = percentil 10 de 300 s; política
+desligada por padrão), `classify.js` (aplica a política se houver),
+`model/comparar_episodios.mjs` (`--politica`, `--nome`, `--saida`; roda os 2
+cenários novos × 3 intensidades ciclo a ciclo), `model/tabela_estudo.mjs`
+(tabelas), `model/estudo_exercicio.py` (por segundo, com a política
+reproduzida). Saídas: `<scratchpad>\e4\`.
+
+- Persistência 10/20/30 s (sem "bilateral"): exercício nos eventos 96 →
+  65/55/52; laço do exercício sem alerta 0 → 23/30/30; engolidas 5/5/6 →
+  2/0–1/0–1; **mas perde crise_com_agitacao leve** (12/24/33 de 60): viola
+  a trava. Rebaixar: nada perdido, engolidas 1/1/1, exercício "possível
+  crise" 23 → 3, mas os episódios continuam (96/96).
+- **E4b (batimento explicado pelo movimento: |resíduo| < 10 bpm)**: N = 10,
+  20, 30 → 852/852, 420/420, crise_com_agitacao 60/60 nas 3 intensidades;
+  exercicio_e_crise 58/58/58 (N=10) e 60/59/59 (N=20/30), engolidas 0/1/1;
+  exercício nos eventos 67/58/57 de 96; laço do exercício sem alerta
+  21/27/27; barulho 40 (igual); calmo 60; pausas 0; maior atraso no
+  exercicio_e_crise +12 s (≤ 30 s: nenhum N descartado); crise agitada leve:
+  um ciclo +20 s (máx. 51 s contra 43 s). Por segundo: precisão 0,341–0,344
+  (atual 0,330), recall 0,884–0,891 (atual 0,911); C03/C06 em repouso
+  99%/95–97% (atual 99%/98%). ~0,06 ms/leitura (atual 0,012).
+
+### E2 e E3 — feito (sem commit; produção inalterada)
+
+Código: `features.py` (`BASE_FEATURES`, `RESIDUAL_FEATURES`,
+`SLOPE_RESIDUAL_FEATURES`, `COEFICIENTES`, `fit_coeficientes`,
+`residual_features`, `CONTEXT_FEATURES`) e `predict.js` (mesmas contas, só
+se o `forest.json` usar; coeficientes em `"coeficientes"`, calibração em
+`"calibracao"`; `FEATURE_HISTORY` 300 quando usa linha de base). Paridade
+Python × JS: diferença máxima 7·10⁻¹⁴ em 4.410 s (C03, C07, C11). O
+`train.py` continua gerando as mesmas 60 árvores. `model/estudo_exercicio.py`
+(versões e2a…e2c_rel_cal, e3; coeficientes ajustados só no treino de cada
+dobra; `--exportar`) e `model/calibrar_simulador.py` (calibração da criança
+simulada). Saídas: `<scratchpad>\e2\`, `\e3\`.
+
+- Por segundo: relativas à linha de base resolvem C03/C06 (99%/98% → 1%);
+  precisão 0,33 → 0,77–0,89; melhor = E2d (calibração individual) 0,885.
+  Coeficientes no treino: 0,30 bpm/dps, 0,13 ms/dps (gerador: 0,34).
+- Por episódio: E2b/E2c/E2c só relativas cortam o exercício (96 → 38–49
+  eventos) e o barulho (40 → 60/60), mas **perdem crise_com_agitacao leve**
+  (29/13/15 de 60): o resíduo do batimento esconde a crise agitada (no v4,
+  crise leve com agitação tem giroscópio de só 14–41 dps; a de 125 dps não
+  existe no treino). E2a só relativas: 852/852, agitação 60/60, barulho
+  60/60, mas exercício 96/96 (54 só atenção), 2 episódios nas pausas e a
+  agitada leve mais lenta (mediana 34 s, máx. 126 s). E2a (com absolutas):
+  perde 2/852, calmo 52/60, 26 nas pausas.
+- E3 por segundo: precisão 0,340 (atual 0,330); C06 em repouso 77%.
+- E3 por episódio: perde 15/852 e 14/420, calmo 48/60, 79 nas pausas,
+  barulho 20/60 (pior). E2d por episódio (calibração rotulada): E2c 852/852,
+  exercício 51/96, barulho 60, mas agitada leve 46/60; E2c só relativas
+  agitada leve 34/60 e 4 engolidas.
+- E5 (1ª rodada): E2a só relativas + E4b 20/30 s: 852/852, agitação 60/60,
+  exercício 39/35 de 96, barulho 60, calmo 60, mas 2 episódios de 1 s nas
+  pausas (110 s depois de ambiente_sem_crise, sementes 10 e 47) e 2
+  engolidas por intensidade; agitada leve lenta (mediana 38 s, máx. 126 s).
+  E2c só relativas + E4b 20 s: exercício 21/96, 0 engolidas, mas agitada
+  leve 43/60.
+
+### Perguntas do usuário (09/11/2026) antes da recomendação
+
+1. **Calibração do E2d:** usava os rótulos (primeiros 600 s com atividade
+   "calmo" e sem estresse + 300 s ativos sem estresse). Refeita **sem
+   rótulo**: linha de base fixa = percentis dos primeiros 300 s de cada
+   criança (6 das 12 têm estresse nesse trecho; C04 começa em brincadeira,
+   base 132 bpm), coeficientes globais do treino de cada dobra
+   (`e2c_jan`, `e2c_rel_jan`; `calibrar_simulador.py --janela`). Por
+   segundo se mantém (precisão 0,875/0,895; recall por criança igual,
+   C04 0,92 → 0,91). Por episódio não: E2c 850/852, 410/420, calmo 56,
+   32 nas pausas; só relativas 852/852 mas agitada leve 29/60.
+2. **0 engolidas:** E4c (teto de atenção dentro da política) não muda nada
+   (0/1/1). O caso que sobra é um só (semente 3, ciclo 2, moderada e alta):
+   aos 80 s de exercício o resíduo do batimento encosta em 10 bpm (ruído),
+   a política desliga, sai "possível crise" no exercício, o episódio fica
+   aberto e a crise (108 s) só gera um alerta que o app não notifica (já
+   tinha notificado possível crise). **E4d** (`contexto.js`, `tetoAtivo`;
+   `teto: 'atencao_eda'`): teto de "atenção" no exercício recente enquanto a
+   EDA não está elevada e o batimento não está muito abaixo do esperado
+   (não olha o resíduo acima). N = 10/20/30: **852/852, 420/420, agitação
+   60/60 ×3, exercicio_e_crise 60/60 ×3 (0 engolidas)**, calmo 60, pausas 0,
+   barulho 40 (igual), demo 60/60 (atual 51), leves 248/248, gatilho
+   851/852, exercício nos eventos 67/58/57 de 96, laço do exercício 21/27/27
+   sem alerta e 0 possível crise; atraso máx. +12 s no exercicio_e_crise;
+   agitada leve: 1 ciclo +20 s (máx. 51 s, atual 43 s). forest.json igual
+   (267 KB); ~0,06–0,09 ms/leitura. Por segundo = E4b. **Cumpre o
+   critério. E1 (v5) não rodado** (só se nada cumprisse).
+3. **Recomendação (aguardando "aprovado"):** E4d com N = 20 s — só a
+   política (`POLITICA` no `contexto.js`), sem trocar o `forest.json`.
+
+### Validação pedida antes do "aprovado" (09/11/2026)
+
+- O usuário desfez o `git reset` (branch de novo em `a520460`). Não mexer
+  no git.
+- Sementes novas 101–300 (`model/validar_sementes.mjs`): E4d 20 s com 0
+  crises perdidas que o modelo sem política detecta (3401/3402 nos dois;
+  4200/4200; agitada 600/600 ×3), mas **2 engolidas por intensidade**
+  (sementes 107 e 143, as mesmas do modelo sem política) e atrasos de até
+  +36 s (exercicio_e_crise leve) e +45 s (agitada leve). Exercício 409 → 234
+  de 409 eventos com alarme. **Não cumpriu a condição** posta pelo usuário
+  (0 engolidas); o "aprovado" chegou antes de o resultado ser mostrado —
+  aplicado e registrado no `modelo.md`, com o aviso ao usuário.
+- Origem dos limites do E4d (para o `docs/modelo.md`): constantes do gerador
+  v4, não do simulador. EDA elevada = 3,5 µS: ponto médio entre a EDA da
+  brincadeira ativa (+2,6) e brincadeira + crise leve (+2,6 + 2,1 = 4,7),
+  arredondado para baixo (lado seguro: desliga a política antes). Batimento
+  muito acima/abaixo = ±10 bpm: o BPM da crise leve (+11), arredondado para
+  baixo. 0,34 bpm/dps = +38 bpm / +112 dps da brincadeira ativa. Conferido no
+  v4 (`contexto` do `estudo_exercicio.py`): brincadeira sem estresse tem EDA
+  acima da base ≥ 3,5 em 0% dos segundos e resíduo ≥ 10 em 2% (os "falsos
+  desligamentos", como a semente 3) e ≤ −10 em 26% (a regra "bilateral"
+  desliga a política em 1/4 do exercício do v4); estresse leve: EDA ≥ 3,5 em
+  20%, resíduo ≥ 10 em 35%; estresse moderado/alto: 68–77% e 68–73%.
+- Limitações a registrar no Passo 5 (pedido do usuário): (a) C03 e C06 com
+  alerta em 96–99% do repouso por segundo (2 de 12 crianças com alerta quase
+  o tempo todo; a solução, features relativas, depende de dados com crises
+  agitadas); (b) barulho sem crise continua 40/60; (c) o E4d foi ajustado no
+  simulador e precisa de validação com dados reais no piloto; (d) a
+  calibração individual com rótulo exigiria sessão supervisionada (~10 min em
+  repouso e ~5 min de atividade).
+
+Testes depois de tudo (política desligada): site 67/67, lint 0, simulador
+30/30, `verificar.js` padrão idêntico à referência (fora as linhas novas),
+`cenarios.mjs` idêntico.
+
+**Encontrado e não alterado:** às 03:17 de 09/11 alguém rodou
+`git reset HEAD~1` na branch `estudo-exercicio` (reflog): o HEAD dela foi
+para `c8f1f3d` e o conteúdo do commit `a520460` (Etapa 4) voltou a aparecer
+como alterações não commitadas (forest.json, train.py, testes.md,
+pulseira.md, apresentacao.md, comparar_*.py/mjs). Nada se perdeu: a `main`
+continua em `a520460` e a árvore = `a520460` + este estudo. Para voltar o
+ponteiro sem mexer na árvore: `git reset a520460` (decisão do usuário).
+
+- Na árvore ao criar a branch: `.gitignore` modificado pelo usuário
+  (plataformas do Flutter ignoradas), não é deste estudo.
+- Ambiente Python: o venv da Etapa 4
+  (`C:\Users\muril\AppData\Local\Temp\claude\b5482cacf0edafbe\0c3f5ef8-564c-4f0f-82e4-542346fac298\scratchpad\venv`,
+  scikit-learn 1.9.1) ainda funciona.
+- Primeira medição (v4): 47 inícios calmo → brincadeira_ativa e 17
+  atividade_leve → brincadeira_ativa (64 inícios; 3.840 s nos 60 s
+  seguintes, 149 deles com estresse). Há exemplos de início de exercício no
+  treino: a suspeita principal passa a ser diferença simulador × dataset
+  (a confirmar no Passo 1). 1.146 dos 8.631 s de estresse têm movimento
+  alto e irregular (giroscópio > 60, regularidade < 0,4).
+
+### Passo 5 — feito (09/11/2026, sem commit)
+
+- `contexto.js`: `POLITICA = { tipo: 'persistencia', n: 20, bilateral: true,
+  teto: 'atencao_eda' }`. `comparar_episodios.mjs` e `validar_sementes.mjs`:
+  `--politica null` desliga (sem a opção, vale a do `contexto.js`).
+- `docs/modelo.md`: seção "Estudo: exercício x crise" (fundamentação,
+  diagnóstico, experimentos, tabelas por segundo e por episódio com os
+  negativos, validação 101–300, origem dos limites, decisão e limitações
+  a–f + dados sintéticos, risco de ajustar o gerador e de esconder crises
+  agitadas); "Modelo em produção" e "Arquivos" atualizados.
+- `docs/testes.md`: tabelas do `verificar.js` trocadas pelas novas (com a
+  política), texto do exercício e da `demo`, seção "Cenários novos nas 3
+  intensidades". `docs/pulseira.md` (cenários novos, `--nivel`),
+  `docs/gatilho.md` (13 cenários), `docs/apresentacao.md` (exercício da
+  `demo` sem "possível crise"; resumo com 2–3 episódios). Links: 0 quebrados.
+
+### Escolha de N (09/11/2026, pedido do usuário)
+
+Validação 101–300 por N (perdidas contra o modelo sem política · engolidas ·
+exercício com alarme · atraso máx. e ciclos acima de +30 s no
+exercicio_e_crise leve e na agitada leve): 10 s — 0 · 2/2/2 · 269/409 ·
++36 s (1/600) e +45 s (3/600); 20 s — 0 · 2/2/2 · 234/409 · iguais; 30 s —
+0 · 1/1/1 · 224/409 · iguais. Regra do usuário (trocar para 10 s só sem
+atraso acima de +30 s): **mantido o E4d 20 s**. `docs/modelo.md`: decisão
+reescrita (critério de 0 engolidas não cumprido; mantida por reduzir
+engolidas de 30–37 para 2 e alarmes do exercício em 43% sem perder crise;
+custo: atrasos até 45 s, acima de +30 s em 1 + 3 de 600 ciclos de crise
+leve). `docs/apresentacao.md`: "quase nunca Possível crise".
+
 ## Próximo passo
 
-Aguardando revisão da Etapa 4. Depois: Etapa 5 (relatório final). S2 e S3 continuam fora.
+Estudo exercício x crise: concluído, sem commit (revisão do usuário). Etapa
+4 aguardando revisão; depois, Etapa 5 (relatório final). S2 e S3 continuam
+fora.

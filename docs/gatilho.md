@@ -191,7 +191,7 @@ regra. Os do simulador da pulseira, abaixo, usam rampas graduais.
 
 ### Cenários do simulador da pulseira (`simulator/`)
 
-Os 11 cenários do simulador (`simulator/scenarios.js`, com fase calma inicial
+Os 13 cenários do simulador (`simulator/scenarios.js`, com fase calma inicial
 e rampas de 20 a 40 s) são validados offline por
 `cd simulator && npm run verificar`. A tabela completa (esperado × obtido,
 50 sementes por cenário) e a análise dos casos que não batem estão em
@@ -205,7 +205,9 @@ e rampas de 20 a 40 s) são validados offline por
 - a regra só aponta gatilho quando o **modelo** alerta. Em
   `barulho_sem_crise` o modelo dá "atenção" curta só por causa da luz forte
   em 23 de 50 execuções, e a regra então indica ruído e luz. O mesmo vale para
-  o `exercicio`, em que o modelo às vezes chega a "possível crise". Ver
+  o `exercicio`, em que o modelo ainda dá "atenção" curta em parte das
+  execuções (com a política de contexto de 11/2026, quase nunca "possível
+  crise"). Ver
   [testes.md](testes.md#casos-que-não-batem).
 
 ## Limitações

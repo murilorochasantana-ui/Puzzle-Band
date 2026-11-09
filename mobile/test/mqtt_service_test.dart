@@ -76,7 +76,7 @@ void main() {
     expect(service.ultimoErro, contains('MQTT_PASS'));
   });
 
-  test('uma notificacao por episodio; subir para possivel crise atualiza sem som', () async {
+  test('uma notificacao por episodio; subir para possivel crise toca de novo na mesma', () async {
     final (service, n) = await criar(prefs);
 
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao'));
@@ -89,7 +89,8 @@ void main() {
     service.tratarMensagem(_alertas, alerta('ep_1', 'alto_risco'));
     expect(n.chamadas.length, 2);
     expect(n.chamadas[1].titulo, 'Possível crise');
-    expect(n.chamadas[1].atualizacao, isTrue, reason: 'mesma notificacao, sem tocar de novo');
+    expect(n.chamadas[1].atualizacao, isTrue, reason: 'substitui a mesma notificacao');
+    expect(n.chamadas[1].comSom, isTrue, reason: 'subiu de nivel: toca de novo');
     expect(n.chamadas[1].id, n.chamadas[0].id);
 
     service.tratarMensagem(_alertas, alerta('ep_1', 'atencao')); // desceu: nada

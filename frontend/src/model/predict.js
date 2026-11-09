@@ -16,9 +16,33 @@ const BPM_PER_GYRO = 0.34;
 const MIN_RISE_BPM = 10;
 const MEMORY_FEATURES = ['bpm_jerk_max_90', 'bpm_excesso_mov', 'bpm_tempo_subida'];
 const USES_MEMORY = forest.featureColumns.some((name) => MEMORY_FEATURES.includes(name));
+
+// Estudo "exercicio x crise" (docs/modelo.md): features relativas a linha de
+// base e residuos do movimento - mesmas contas de model/features.py
+// (_base_features, residual_features). So sao calculadas se o forest.json as
+// usar; os coeficientes vem do proprio forest.json ("coeficientes").
+const BASE_WINDOW = 300;
+const GYRO_SMOOTH = 10;
+const BASE_FEATURES = ['bpm_acima_base', 'hrv_abaixo_base', 'eda_acima_base', 'gyro_acima_base', 'gyro_slope_suave'];
+const RESIDUAL_FEATURES = ['bpm_esperado_mov', 'bpm_residuo_mov', 'hrv_residuo_mov', 'eda_slope_residuo', 'hrv_slope_residuo', 'bpm_slope_residuo'];
+const USES_BASE = forest.featureColumns.some((name) => BASE_FEATURES.includes(name) || RESIDUAL_FEATURES.includes(name));
+// Calibracao individual (estudo, E2d): linha de base fixa e coeficientes da
+// crianca, no lugar do percentil dos ultimos 300 s e dos coeficientes globais
+const CAL = forest.calibracao ?? null;
+const COEF = CAL?.coeficientes ?? forest.coeficientes ?? null;
+
+// Contexto de atividade por regras (model/features.py, _context_features)
+const CTX_WINDOW = 10;
+const CTX_MEMORY = 60;
+const CTX_GYRO_ANDANDO = 20;
+const CTX_GYRO_EXERCICIO = 70;
+const CTX_REG_REPETITIVO = 0.4;
+const CONTEXT_FEATURES = ['ctx_repouso', 'ctx_andando', 'ctx_exercicio', 'ctx_repetitivo', 'ctx_exercicio_recente'];
+const USES_CTX = forest.featureColumns.some((name) => CONTEXT_FEATURES.includes(name));
+
 // Leituras que o calculo pode olhar para tras (o jerk mais antigo da janela
-// precisa de 30 s antes dele)
-export const FEATURE_HISTORY = LONG_WINDOW + MEMORY_WINDOW;
+// precisa de 30 s antes dele; a linha de base, de 300 s)
+export const FEATURE_HISTORY = USES_BASE ? BASE_WINDOW : LONG_WINDOW + MEMORY_WINDOW;
 
 const mean = (arr) => arr.reduce((a, b) => a + b, 0) / arr.length;
 const std = (arr, avg) => Math.sqrt(mean(arr.map((v) => (v - avg) ** 2)));
@@ -76,6 +100,64 @@ function memoryFeatures(history) {
   return { bpm_jerk_max_90: jerkMax, bpm_excesso_mov: excesso, bpm_tempo_subida: tempo };
 }
 
+// Valor na posicao floor(p x (n-1)) dos valores ordenados (= quantile com
+// interpolation='lower' do pandas)
+function quantilLower(values, p) {
+  const s = [...values].sort((a, b) => a - b);
+  return s[Math.floor(p * (s.length - 1))];
+}
+
+// Features relativas a linha de base (ultimos BASE_WINDOW s) e, com os
+// coeficientes, os residuos do movimento
+function baseFeatures(history, f) {
+  const n = history.length;
+  const base = history.slice(Math.max(0, n - BASE_WINDOW));
+  const col = (rows, key) => rows.map((r) => r[key]);
+  const out = {
+    bpm_acima_base: f.bpm_mean_long - (CAL ? CAL.bpm : quantilLower(col(base, 'bpm'), 0.1)),
+    hrv_abaixo_base: (CAL ? CAL.hrv : quantilLower(col(base, 'hrv_ms'), 0.9)) - f.hrv_mean_long,
+    eda_acima_base: f.eda_mean_long - (CAL ? CAL.eda : quantilLower(col(base, 'eda_uS'), 0.1)),
+    gyro_acima_base: f.gyro_mean_long - (CAL ? CAL.gyro : quantilLower(col(base, 'gyro_mag_dps'), 0.1)),
+  };
+  const suave = (end) => mean(col(history.slice(Math.max(0, end - GYRO_SMOOTH + 1), end + 1), 'gyro_mag_dps'));
+  out.gyro_slope_suave = (suave(n - 1) - suave(n - 1 - LONG_WINDOW)) / LONG_WINDOW;
+  if (COEF) {
+    out.bpm_esperado_mov = COEF.bpm_por_giro * out.gyro_acima_base;
+    out.bpm_residuo_mov = out.bpm_acima_base - out.bpm_esperado_mov;
+    out.hrv_residuo_mov = out.hrv_abaixo_base - COEF.hrv_por_giro * out.gyro_acima_base;
+    out.eda_slope_residuo = f.eda_slope_long - COEF.eda_slope_por_giro_slope * out.gyro_slope_suave;
+    out.hrv_slope_residuo = f.hrv_slope_long - COEF.hrv_slope_por_giro_slope * out.gyro_slope_suave;
+    out.bpm_slope_residuo = f.bpm_slope_long - COEF.bpm_slope_por_giro_slope * out.gyro_slope_suave;
+  }
+  return out;
+}
+
+// Atividade nas CTX_WINDOW leituras que terminam em `end` (exclusivo)
+function atividadeAte(history, end) {
+  const w = history.slice(Math.max(0, end - CTX_WINDOW), end);
+  const giro = mean(w.map((r) => r.gyro_mag_dps));
+  const reg = mean(w.map((r) => r.regularidade));
+  if (reg >= CTX_REG_REPETITIVO) return 'repetitivo';
+  if (giro >= CTX_GYRO_EXERCICIO) return 'exercicio';
+  return giro >= CTX_GYRO_ANDANDO ? 'andando' : 'repouso';
+}
+
+function contextFeatures(history) {
+  const n = history.length;
+  const agora = atividadeAte(history, n);
+  let recente = 0;
+  for (let end = n; end > Math.max(0, n - CTX_MEMORY) && !recente; end -= 1) {
+    if (atividadeAte(history, end) === 'exercicio') recente = 1;
+  }
+  return {
+    ctx_repouso: agora === 'repouso' ? 1 : 0,
+    ctx_andando: agora === 'andando' ? 1 : 0,
+    ctx_exercicio: agora === 'exercicio' ? 1 : 0,
+    ctx_repetitivo: agora === 'repetitivo' ? 1 : 0,
+    ctx_exercicio_recente: recente,
+  };
+}
+
 // Recebe o historico de leituras (mais antiga -> mais recente) e calcula as
 // mesmas features usadas no treino em Python (model/features.py). Retorna
 // null se ainda nao ha janela suficiente (equivalente ao dropna() do treino).
@@ -100,7 +182,7 @@ export function computeFeatures(history) {
   const bpmSlopeShort = (cur.bpm - lagShort.bpm) / SHORT_WINDOW;
   const bpmSlopeLong = (cur.bpm - lagLong.bpm) / LONG_WINDOW;
 
-  return {
+  const f = {
     bpm: cur.bpm,
     bpm_mean_long: mean(bpm30),
     bpm_slope_short: bpmSlopeShort,
@@ -132,6 +214,11 @@ export function computeFeatures(history) {
 
     idade: cur.idade,
     ...(USES_MEMORY ? memoryFeatures(history) : {}),
+  };
+  return {
+    ...f,
+    ...(USES_BASE ? baseFeatures(history, f) : {}),
+    ...(USES_CTX ? contextFeatures(history) : {}),
   };
 }
 

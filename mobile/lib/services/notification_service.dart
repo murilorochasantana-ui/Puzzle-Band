@@ -63,8 +63,10 @@ class NotificationService {
     }
   }
 
-  /// `atualizacao`: o episodio ja foi notificado e so subiu de nivel - a
-  /// mesma notificacao (mesmo id) e atualizada, sem tocar de novo.
+  /// `atualizacao`: o episodio ja foi notificado e SUBIU de nivel (atencao ->
+  /// possivel crise) - a mesma notificacao (mesmo id) e substituida e toca de
+  /// novo: pode ser uma crise comecando dentro de um episodio que ja estava
+  /// aberto. Quem chama so manda atualizacao quando o nivel sobe.
   Future<void> mostrarAlerta({
     required int id,
     required String titulo,
@@ -83,8 +85,10 @@ class NotificationService {
       priority: Priority.high,
       styleInformation: BigTextStyleInformation(texto),
       ticker: titulo,
-      silent: atualizacao,
-      onlyAlertOnce: atualizacao,
+      // Explicito: com onlyAlertOnce, a reemissao com o mesmo id (subida de
+      // nivel) ficaria em silencio
+      silent: false,
+      onlyAlertOnce: false,
     );
     try {
       await _plugin.show(

@@ -519,8 +519,10 @@ class MqttService extends ChangeNotifier {
 
     final chave = alerta.episodioId ?? 'sem_id_${(ts ?? DateTime.now()).millisecondsSinceEpoch}';
     final anterior = _notificados[chave];
-    // Mesmo episodio: nao notifica de novo. Se subiu de nivel (atencao ->
-    // possivel crise), a MESMA notificacao e atualizada, sem som.
+    // Mesmo episodio no mesmo nivel ou descendo: nao notifica de novo. Se
+    // SUBIU de nivel (atencao -> possivel crise), a MESMA notificacao e
+    // substituida e toca de novo (pode ser uma crise comecando dentro do
+    // episodio aberto).
     if (anterior != null && alerta.nivel.rank <= anterior.rank) return;
     final atualizacao = anterior != null;
 

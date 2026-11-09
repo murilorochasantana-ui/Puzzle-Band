@@ -17,6 +17,8 @@
     "barulho-sem-crise": "node index.js --cenario barulho_sem_crise",
     "ruido-depois-da-crise": "node index.js --cenario ruido_depois_da_crise",
     "crise-e-recuperacao": "node index.js --cenario crise_e_recuperacao",
+    "crise-com-agitacao": "node index.js --cenario crise_com_agitacao",
+    "exercicio-e-crise": "node index.js --cenario exercicio_e_crise",
     "demo": "node index.js --cenario demo",
     "eventos-aleatorios": "node index.js --cenario eventos_aleatorios",
     "controle": "node index.js --cenario controle",

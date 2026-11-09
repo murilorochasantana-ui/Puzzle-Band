@@ -13,3 +13,10 @@ mobile/env.json
 
 # Saidas da linha de base da limpeza (docs/progresso.md)
 linha-de-base/
+
+# Plataformas do Flutter que o app nao usa (o app e so Android)
+mobile/ios/
+mobile/macos/
+mobile/linux/
+mobile/windows/
+mobile/web/

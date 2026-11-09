@@ -24,6 +24,7 @@
 //   node verificar.js --cenario eventos_aleatorios --seed 7 --eventos 40 --agregado 0
 //   node verificar.js --uma-vez --sementes 50      # verificacao antiga: roteiro nominal, uma vez
 //   node verificar.js --markdown                   # tabelas em Markdown (docs/testes.md)
+//   node verificar.js --cenario exercicio_e_crise --nivel leve   # laco com a intensidade fixa (leve/moderada/alta)
 //
 // Sai com codigo 1 se algum cenario nao der o resultado esperado
 // ("limitacao conhecida" do exercicio nao conta como falha). O
@@ -69,18 +70,29 @@ export function simulateProgram(ticks, seed, { extraCalmS = 0, idade = 8 } = {})
 
     const step = (t, alvos, fase) => {
       const reading = generateReading({ ...alvos, timestamp: new Date(T0 + t * 1000).toISOString() });
-      const { tier } = processor.ingest(reading);
+      const { tier, alerts } = processor.ingest(reading);
 
       if (TIER_RANK[tier] > TIER_RANK[nivelMax]) nivelMax = tier;
       if (tier !== 'baixo_risco' && primeiroAlerta === null) primeiroAlerta = t;
       if (!tiersByPhase.has(fase)) tiersByPhase.set(fase, { baixo_risco: 0, atencao: 0, alto_risco: 0 });
       tiersByPhase.get(fase)[tier] += 1;
+      return alerts;
     };
 
     let last = { t: -1, fase: 'calmo' };
     for (const tick of ticks) {
-      if (tick.inicioCiclo) cycles.push(tick.ciclo);
-      step(tick.t, tick.alvos, tick.fase);
+      const { ciclo } = tick;
+      if (tick.inicioCiclo) {
+        cycles.push(ciclo);
+        ciclo.alertas = [];
+      }
+      // episodio aberto quando a fisiologia da crise comeca (exercicio_e_crise)
+      if (tick.t === ciclo.tFisiologia) {
+        const open = processor.openEpisode();
+        ciclo.abertoNaFisiologia = open ? { id: open.id, nivel_maximo: open.nivel_maximo } : null;
+      }
+      const alerts = step(tick.t, tick.alvos, tick.fase);
+      for (const a of alerts) ciclo.alertas?.push({ t: tick.t, nivel: a.nivel, episodio_id: a.episodio_id });
       last = tick;
     }
     const calm = calmTargets(idade);
@@ -235,8 +247,49 @@ export const EXPECTED = {
     avaliar: (run) => ok(run.episodes.length === 1 && run.episodes[0].encerramento === 'normalizou'
       && run.episodes[0].duracao_s > 0 && run.episodes[0].fim !== null),
   },
+  crise_com_agitacao: { texto: 'atenção/alto · nenhum_ambiental', avaliar: alertWith(['atencao', 'alto_risco'], 'nenhum_ambiental') },
+  exercicio_e_crise: {
+    texto: 'alerta na crise (episódio próprio ou subida de nível)',
+    avaliar: (run) => exerciseCrisisCheck(run.episodes, run.cycles[0]).resultado,
+  },
   demo: { texto: '2 episódios principais (ruido, nenhum_ambiental)', avaliar: demoCheck },
 };
+
+// exercicio_e_crise: a crise conta como detectada (o cuidador recebe um
+// alerta com notificacao) entre o inicio da alteracao fisiologica dela e a
+// volta ao nivel do exercicio (tFimCrise) se:
+//   - um episodio proprio COMECA nesse trecho (atencao/alto, gatilho
+//     nenhum_ambiental); ou
+//   - o episodio do exercicio, ainda aberto quando a crise comeca, SOBE de
+//     nivel nesse trecho (atencao -> possivel crise): a pulseira publica o
+//     alerta e o app notifica de novo, com som.
+// Senao, falhou: "engolida" (episodio aberto que ja estava no nivel maximo,
+// ou que nao subiu) ou "perdida". Tempo ate o alerta = desde o inicio da
+// alteracao fisiologica. Outros episodios (exercicio antes ou depois da
+// crise) = limitacao (alarme falso do exercicio).
+export function exerciseCrisisCheck(eps, ciclo) {
+  const tFis = ciclo.tFisiologia;
+  const tFimCrise = ciclo.t0 + ciclo.roteiro.tFimCrise;
+  const aberto = ciclo.abertoNaFisiologia ?? null;
+  const own = eps.filter((ep) => ep.t_inicio >= tFis && ep.t_inicio < tFimCrise);
+  const others = eps.filter((ep) => !own.includes(ep));
+  let tAlerta = null;
+  let como = null;
+  if (own.length && ['atencao', 'alto_risco'].includes(own[0].nivel_maximo) && own[0].gatilho?.tipo === 'nenhum_ambiental') {
+    tAlerta = own[0].t_inicio - tFis;
+    como = 'episodio';
+  }
+  if (aberto) {
+    const subida = (ciclo.alertas ?? []).find((a) => a.episodio_id === aberto.id && a.t >= tFis && a.t < tFimCrise
+      && TIER_RANK[a.nivel] > TIER_RANK[aberto.nivel_maximo]);
+    if (subida && (tAlerta === null || subida.t - tFis < tAlerta)) {
+      tAlerta = subida.t - tFis;
+      como = 'subida';
+    }
+  }
+  if (tAlerta === null) return { resultado: 'falhou', tAlerta, como: aberto ? 'engolida' : 'perdida' };
+  return { resultado: others.length ? 'limitacao' : 'ok', tAlerta, como };
+}
 
 // --- loop: cada ciclo, com os episodios que comecaram nele ---
 
@@ -263,6 +316,14 @@ export const LOOP_EXPECTED = {
     avaliar: oneEpisode(['alto_risco'], 'nenhum_ambiental', (ep) => ep.gatilho.sinais.ruido.status === 'possivel_consequencia'),
   },
   crise_e_recuperacao: { texto: '1 episódio fechado · alto_risco · ruido', avaliar: oneEpisode(['alto_risco'], 'ruido') },
+  crise_com_agitacao: { texto: '1 episódio fechado · atenção/alto · nenhum_ambiental', avaliar: oneEpisode(['atencao', 'alto_risco'], 'nenhum_ambiental') },
+  exercicio_e_crise: {
+    texto: 'alerta na crise (episódio próprio ou subida), fechado',
+    avaliar: (eps, ciclo) => {
+      const r = exerciseCrisisCheck(eps, ciclo).resultado;
+      return r !== 'falhou' && !eps.every(isClosed) ? 'falhou' : r;
+    },
+  },
   demo: {
     texto: '2 episódios fechados (ruido, nenhum_ambiental) + só "atenção" no exercício',
     avaliar: (eps, ciclo) => {
@@ -300,10 +361,10 @@ function triggerOfCycle(name, eps, ciclo) {
   return mainOf(eps).gatilho.tipo;
 }
 
-function evaluateLoop(name, seeds, { ciclos, pausa }) {
+function evaluateLoop(name, seeds, { ciclos, pausa, nivel = null }) {
   const runs = [];
   for (let seed = 1; seed <= seeds; seed += 1) {
-    const run = simulateProgram(programTicks({ cenario: name, ciclos, pausa, seed }), seed);
+    const run = simulateProgram(programTicks({ cenario: name, ciclos, pausa, seed, nivel }), seed);
     const { byCycle, orphans } = assignEpisodes(run);
     const results = run.cycles.map((c, i) => LOOP_EXPECTED[name].avaliar(byCycle[i], c));
     runs.push({ seed, run, byCycle, orphans, results, resultado: orphans.length ? 'falhou' : worstOf(results) });
@@ -316,6 +377,10 @@ function evaluateLoop(name, seeds, { ciclos, pausa }) {
   // primeiro episodio de cada ciclo com crise
   const firsts = cycles.filter((x) => x.eps.length && x.ciclo.tFisiologia !== null)
     .map((x) => ({ ...x, ep: [...x.eps].sort((a, b) => a.t_inicio - b.t_inicio)[0], main: mainOf(x.eps) }));
+  // tempo ate o alerta: no exercicio_e_crise, o alerta da crise (exerciseCrisisCheck)
+  const delays = name === 'exercicio_e_crise'
+    ? cycles.map((x) => exerciseCrisisCheck(x.eps, x.ciclo).tAlerta).filter(Number.isFinite)
+    : firsts.map((x) => x.ep.t_inicio - x.ciclo.tFisiologia);
   const signals = ENV_SIGNALS[name] ?? [];
   const leads = signals.map((key) => firsts.map((x) => x.main.gatilho.sinais[key].antecedencia_s).filter(Number.isFinite));
   const planned = cycles.map((x) => x.ciclo.roteiro.antecedencia).filter(Number.isFinite);
@@ -344,7 +409,7 @@ function evaluateLoop(name, seeds, { ciclos, pausa }) {
       cenario: name,
       nominal: tally(nominal.map((x) => x.resultado)),
       variados: tally(varied.map((x) => x.resultado)),
-      alerta: leadSummary(firsts.map((x) => x.ep.t_inicio - x.ciclo.tFisiologia)).replace(/(\d)\.(\d)/g, '$1,$2'),
+      alerta: leadSummary(delays).replace(/(\d)\.(\d)/g, '$1,$2'),
       antecedencia: signals.length
         ? `${signals.map((key, i) => `${signals.length > 1 ? `${key === 'ruido' ? 'ruído' : 'luz'} ` : ''}${range(leads[i], ' s')}`).join(', ')} (planejada ${range(planned, ' s')})`
         : '—',
@@ -669,6 +734,7 @@ function main() {
       eventos: { type: 'string', default: String(RANDOM_EVENTS) },
       agregado: { type: 'string', default: String(RANDOM_AGGREGATE_SEEDS) },
       'uma-vez': { type: 'boolean', default: false },
+      nivel: { type: 'string' },
       markdown: { type: 'boolean', default: false },
     },
   });
@@ -706,7 +772,14 @@ function main() {
     console.log(`Verificação offline em LOOP: ${ciclos} ciclos por execução (1º nominal, os outros com variação), `
       + `pausa calma de ${pausa} s, ${seeds} sementes por cenário`);
     console.log('Mesmo processamento da pulseira (borda.js): classifyAt (predict.js) → episódios (episodes.js) → gatilho (trigger.js)\n');
-    for (const name of loopNames) evaluations.push(evaluateLoop(name, seeds, { ciclos, pausa }));
+    const nivel = values.nivel ?? null;
+    if (nivel && !INTENSIDADES[nivel]) {
+      console.error(`Intensidade inválida: "${nivel}". Válidas: ${Object.keys(INTENSIDADES).join(', ')}`);
+      process.exit(1);
+    }
+    if (nivel) console.log(`Intensidade da resposta de estresse fixa em todos os ciclos: ${nivel} (×${String(INTENSIDADES[nivel]).replace('.', ',')})
+`);
+    for (const name of loopNames) evaluations.push(evaluateLoop(name, seeds, { ciclos, pausa, nivel }));
     printTable(LOOP_COLUMNS, evaluations.map((e) => e.linha), markdown);
     console.log(`\nDetalhes${markdown ? '' : ' (por ciclo)'}:\n`);
     printTable(LOOP_DETAIL_COLUMNS, evaluations.map((e) => e.detalhe), markdown);
