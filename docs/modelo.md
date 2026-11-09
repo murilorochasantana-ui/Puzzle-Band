@@ -34,9 +34,9 @@ assim. Por episódio, isso muda 1 de 1000 eventos do `verificar.js` (ver
 "Versão simplificada").
 
 **Política de contexto (desde 11/2026).** Entre a probabilidade e o nível,
-o `classify.js` aplica a política "E4d, 20 s" de `frontend/src/model/contexto.js`:
+o `classify.js` aplica a política "E4d, 30 s" de `frontend/src/model/contexto.js`:
 no exercício recente sem EDA elevada e com o batimento explicado pelo
-movimento, o alerta exige 20 s seguidos com p ≥ 0,4 e fica no máximo em
+movimento, o alerta exige 30 s seguidos com p ≥ 0,4 e fica no máximo em
 "atenção". As árvores e os limiares (0,4 / 0,7) não mudaram. Detalhes,
 números e limitações em [Estudo: exercício x crise](#estudo-exercício-x-crise-112026).
 
@@ -433,24 +433,30 @@ perder nenhuma crise**? O estudo seguiu abordagens da literatura. Os tópicos
 MQTT, os formatos, a regra de gatilho (`trigger.js`) e os sensores não
 mudaram.
 
-**Decisão (09/11/2026): política de contexto "E4d, 20 s" em produção**
+**Decisão (09/11/2026): política de contexto "E4d, 30 s" em produção**
 (`frontend/src/model/contexto.js`), **sem trocar o `forest.json`** (as mesmas
-60 árvores). É a versão mais simples entre as testadas e a única que não
-perdeu crise nas sementes do estudo.
+60 árvores). É a versão mais simples entre as testadas e a única família que
+não perdeu crise nas sementes do estudo.
 
-- **O critério de 0 crises engolidas não foi cumprido nas sementes novas**
-  (101–300): sobram 2 por intensidade no `exercicio_e_crise`, as mesmas que o
-  modelo sem política engole.
-- **A política foi mantida porque** reduz as engolidas de 30–37 para 2 por
-  intensidade e os alarmes do exercício em 43% (de 409 para 234 de 409
+- **N = 30 s foi escolhido depois de ver a validação com sementes novas**
+  (101–300). Antes dela, a recomendação era N = 20 s. O 30 s é igual ou
+  melhor que o 20 s em todas as medidas, nas sementes do estudo e nas novas.
+- **O critério de 0 crises engolidas não foi cumprido nas sementes novas:**
+  sobra 1 por intensidade no `exercicio_e_crise` (semente 143, também
+  engolida pelo modelo sem política).
+- **A política foi mantida porque** reduz as engolidas de 30–37 para 1 por
+  intensidade e os alarmes do exercício em 45% (de 409 para 224 de 409
   eventos), **sem perder nenhuma crise** que o modelo sem política detecta.
 - **O custo são atrasos de até 45 s** em relação ao modelo sem política, no
   mesmo ciclo: acima de +30 s em 1 de 600 ciclos do `exercicio_e_crise` leve
   (máximo +36 s) e em 3 de 600 da `crise_com_agitacao` leve (máximo +45 s).
-- O E4d 10 s não foi escolhido: tem os mesmos atrasos e mais alarmes no
-  exercício (269/409). O E4d 30 s teve 1 engolida por intensidade e 224/409,
-  com os mesmos atrasos; a troca só foi avaliada para o 10 s, e o 20 s foi
-  mantido.
+- **Os atrasos são iguais com N = 10, 20 e 30 s.** Não vêm do teto pela EDA
+  nem do tamanho de N: testado nos 8 ciclos atrasados, só o teto (sem
+  persistência) não atrasa nenhum; a persistência com N = 10 ou 30 dá os
+  mesmos tempos. Nesses ciclos, a probabilidade da crise leve oscila perto de
+  0,4 e nunca fica 10 s seguidos acima; o alerta só sai quando a condição da
+  política desliga (a EDA passa de 3,5 µS ou o batimento sai da faixa de
+  ±10 bpm).
 
 Detalhes em [Validação com sementes novas](#validação-com-sementes-novas-101300).
 Os resultados negativos estão registrados de propósito.
@@ -574,7 +580,9 @@ gerando as mesmas 60 árvores.
 | atual (sem política) | 0,960 | 0,330 | 0,911 | 0,484 | 0,08 · 0,82 · 0,91 | 0% · 2% · 99% | **99% · 98%** | 267 |
 | E4 persistência 10 / 20 / 30 s | 0,960 | 0,345 / 0,349 / 0,352 | 0,889 / 0,882 / 0,881 | 0,497 / 0,500 / 0,503 | 0,08 · 0,89 · 0,94 | 0% · 1% · 98–99% | 98–99% · 93–96% | 267 |
 | E4 rebaixa | 0,960 | 0,330 | 0,911 | 0,484 | 0,08 · 0,82 · 0,91 | 0% · 2% · 99% | 99% · 98% | 267 |
-| **E4b/E4c/E4d 20 s** (10 / 30 s quase iguais) | 0,960 | **0,342** | **0,885** | **0,494** | 0,08 · 0,85 · 0,93 | 0% · 2% · 99% | **99% · 96%** | 267 |
+| E4b/E4c/E4d 10 s | 0,960 | 0,341 | 0,891 | 0,493 | 0,08 · 0,85 · 0,93 | 0% · 2% · 99% | 99% · 97% | 267 |
+| E4b/E4c/E4d 20 s | 0,960 | 0,342 | 0,885 | 0,494 | 0,08 · 0,85 · 0,93 | 0% · 2% · 99% | 99% · 96% | 267 |
+| **E4b/E4c/E4d 30 s (em produção)** | 0,960 | **0,344** | **0,884** | **0,496** | 0,08 · 0,85 · 0,93 | 0% · 2% · 99% | **99% · 95%** | 267 |
 | E2a | 0,975 | 0,769 | 0,929 | 0,842 | 0,38 · 0,87 · 0,93 | 0% · 1% · 3% | 1% · 3% | 270 |
 | E2b | 0,976 | 0,829 | 0,927 | 0,876 | 0,40 · 0,90 · 0,95 | 0% · 1% · 1% | 1% · 1% | 253 |
 | E2c | 0,977 | 0,823 | 0,932 | 0,874 | 0,40 · 0,89 · 0,93 | 0% · 1% · 1% | 1% · 1% | 258 |
@@ -612,8 +620,8 @@ alerta · só atenção · possível crise (de 60).
 | E4b 20 s (E4c igual) | 852 | 420 | 60 · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 27 · 30 · 3 | 58 | 40 | 60 · 0 | 0,060 |
 | E4b 30 s | 852 | 420 | 60 · 60 · 60 | 60 · 59 · 59 (0 · 1 · 1) | 27 · 30 · 3 | 57 | 40 | 60 · 0 | 0,068 |
 | E4d 10 s | 852 | 420 | 60 · 60 · 60 | 60 · 60 · 60 (0) | 21 · 39 · 0 | 67 | 40 | 60 · 0 | 0,072 |
-| **E4d 20 s (em produção)** | **852** | **420** | **60 · 60 · 60** | **60 · 60 · 60 (0)** | **27 · 33 · 0** | **58** | **40** | **60 · 0** | 0,086 |
-| E4d 30 s | 852 | 420 | 60 · 60 · 60 | 60 · 60 · 60 (0) | 27 · 33 · 0 | 57 | 40 | 60 · 0 | 0,059 |
+| E4d 20 s | 852 | 420 | 60 · 60 · 60 | 60 · 60 · 60 (0) | 27 · 33 · 0 | 58 | 40 | 60 · 0 | 0,086 |
+| **E4d 30 s (em produção)** | **852** | **420** | **60 · 60 · 60** | **60 · 60 · 60 (0)** | **27 · 33 · 0** | **57** | **40** | **60 · 0** | 0,059 |
 | E2a | **850** | **414** | 59 · 59 · 59 | 60 · 60 · 60 (0) | 0 · 57 · 3 | 96 | 45 | **52 · 26** | 0,210 |
 | E2b | 852 | 420 | **31** · 60 · 60 | 60 · 60 · 60 (0) | 28 · 32 · 0 | 38 | 60 | 60 · 0 | 0,179 |
 | E2c | 852 | 420 | **47** · 60 · 60 | 60 · 60 · 60 (0) | 27 · 33 · 0 | 40 | 60 | 60 · 1 | 0,212 |
@@ -628,7 +636,7 @@ alerta · só atenção · possível crise (de 60).
 | E5: E2a só relativas + E4c 30 s | 852 | 420 | 60 · 60 · 60 | 59 · 59 · 59 (1 · 1 · 1) | 40 · 19 · 0 | 35 | 60 | 60 · **2** | 0,248 |
 | E5: E2c só relativas + E4b 20 s | 852 | 420 | **43** · 60 · 60 | 60 · 60 · 60 (0) | 47 · 12 · 0 | 21 | 60 | 60 · 0 | 0,231 |
 
-Com o E4d 20 s: crises leves 248/248, gatilho certo 851/852 e tempo médio
+Com o E4d 30 s (e o 20 s): crises leves 248/248, gatilho certo 851/852 e tempo médio
 até o alerta 6,4 s, iguais ao atual; `demo` 60/60 no laço (atual 51/60).
 Maior atraso contra o atual, no mesmo ciclo: +12 s no `exercicio_e_crise`
 (leve) e +20 s num ciclo da crise agitada leve (máximo 51 s, atual 43 s).
@@ -665,25 +673,27 @@ cenário e intensidade.
 |---|---|---|---|---|---|---|---|---|---|---|
 | sem política | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 570 · 566 · 563 | 30 · 34 · 37 | 0 · 438 · 162 | 409/409 | 382/600 | 600/600 | 2 |
 | E4d 10 s | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 598 · 598 · 598 | 2 · 2 · 2 | 205 · 387 · 8 | 269/409 | 382/600 | 600/600 | 2 |
-| **E4d 20 s** | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 598 · 598 · 598 | **2 · 2 · 2** | 263 · 329 · 8 | **234/409** | 382/600 | 600/600 | 2 |
-| E4d 30 s | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 599 · 599 · 599 | 1 · 1 · 1 | 277 · 315 · 8 | 224/409 | 382/600 | 600/600 | 2 |
+| E4d 20 s | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 598 · 598 · 598 | 2 · 2 · 2 | 263 · 329 · 8 | 234/409 | 382/600 | 600/600 | 2 |
+| **E4d 30 s (em produção)** | 3401/3402 | 4200/4200 | 600 · 600 · 600 | 599 · 599 · 599 | **1 · 1 · 1** | 277 · 315 · 8 | **224/409** | 382/600 | 600/600 | 2 |
 
 - **Nenhuma crise perdida pela política:** o E4d detecta todas as que o
   modelo sem política detecta (a crise de 3402 que falta é a mesma nos
   dois).
-- **Engolidas: 2 por intensidade (sementes 107 e 143), e são os mesmos
-  ciclos que o modelo sem política engole**: o E4d não as cria, mas não as
-  resolve. O critério pedia 0.
+- **Engolidas: 1 por intensidade com N = 30 s (semente 143) e 2 com N = 10
+  ou 20 s (sementes 107 e 143); são ciclos que o modelo sem política também
+  engole**: o E4d não as cria, mas não as resolve todas. O critério pedia 0.
 - **Atrasos acima de 30 s** contra o modelo sem política, no mesmo ciclo
   (iguais com N = 10, 20 e 30 s): no `exercicio_e_crise` leve, máximo +36 s e
   1 de 600 ciclos acima de +30 s; na `crise_com_agitacao` leve, máximo +45 s
   e 3 de 600 acima de +30 s. Nas outras intensidades, no máximo +15 s
   (moderada) e +11 s (alta) no `exercicio_e_crise` e 0 na agitada. Nos casos
   leves, o início da crise ainda parece exercício (EDA abaixo de 3,5 µS,
-  batimento perto do esperado), e a política espera a persistência.
-- **Exercício:** de 409/409 para 234/409 eventos com alarme e de 0 para
-  263/600 ciclos sem nenhum alerta; "possível crise" no exercício de 162 para
-  8 ciclos.
+  batimento perto do esperado): a probabilidade oscila perto de 0,4, a
+  persistência nunca se completa, e o alerta só sai quando a condição da
+  política desliga. Por isso o atraso não depende de N.
+- **Exercício (N = 30 s):** de 409/409 para 224/409 eventos com alarme e de
+  0 para 277/600 ciclos sem nenhum alerta; "possível crise" no exercício de
+  162 para 8 ciclos.
 
 ### Origem dos limites do E4d
 
@@ -720,7 +730,7 @@ desligamentos", como o da semente 3).
 ### Limitações (para Resultados e Limitações do TCC)
 
 - **(a) Repouso de C03 e C06.** Por segundo, as duas crianças continuam com
-  alerta em 96–99% do repouso: em uso real, duas das 12 receberiam alertas
+  alerta em 95–99% do repouso: em uso real, duas das 12 receberiam alertas
   quase o tempo todo. A solução encontrada (features relativas à linha de
   base: 1%) esconde crises agitadas leves e depende de dados com crises
   agitadas para ser treinada com segurança.
@@ -728,9 +738,10 @@ desligamentos", como o da semente 3).
   mexe no ambiente; só as versões com features relativas chegaram a 60/60).
 - **(c) Ajustado no simulador.** As regras do E4d ("batimento explicado" e o
   teto pela EDA) foram criadas depois de ver falhas no simulador; com
-  sementes novas ainda sobram 2 crises engolidas por intensidade e atrasos de
-  até +45 s (acima de +30 s em 4 de 1.200 ciclos de crise leve). Precisa ser
-  validado com dados reais no piloto.
+  sementes novas ainda sobra 1 crise engolida por intensidade e há atrasos de
+  até +45 s (acima de +30 s em 4 de 1.200 ciclos de crise leve). N = 30 s foi
+  escolhido depois de ver essa validação. Precisa ser validado com dados
+  reais no piloto.
 - **(d) Calibração individual com rótulo** exigiria uma sessão supervisionada
   por criança (~10 min em repouso e ~5 min de atividade típica, com o
   cuidador confirmando que não houve crise), repetida quando a criança mudar
@@ -743,7 +754,7 @@ desligamentos", como o da semente 3).
 - **(f) Crise leve no exercício.** A EDA só passa do limite em ~20% dos
   segundos de crise leve; numa crise leve durante o exercício, a detecção
   depende do resíduo do batimento e da persistência (daí os atrasos de até
-  +36 s).
+  +36 s, que duram até a condição da política desligar).
 - **Dados sintéticos gerados pelos próprios autores**, com o risco de ajustar
   o gerador (ou a política) ao problema: os cenários novos e as regras do E4d
   foram desenhados por quem conhecia a falha.

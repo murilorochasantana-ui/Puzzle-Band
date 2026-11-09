@@ -3,11 +3,11 @@
 // -> mais recente), as mesmas que classify.js recebe.
 //
 // POLITICA = null: nada muda (o nivel sai so da probabilidade). Em producao
-// desde 11/2026 (aprovada no estudo, "E4d 20 s"): quando houve exercicio
+// desde 11/2026 (aprovada no estudo, "E4d 30 s"): quando houve exercicio
 // irregular nos ultimos 60 s e nem a EDA nem o batimento acima do esperado
 // pelo movimento estao elevados (e o batimento tambem nao esta muito ABAIXO
 // do esperado), o alerta exige persistencia (p >= limiar de atencao em cada
-// um dos ultimos 20 s); e, no exercicio sem EDA elevada, o nivel fica no
+// um dos ultimos 30 s); e, no exercicio sem EDA elevada, o nivel fica no
 // maximo em "atencao" (teto), para uma crise que comece dentro do episodio
 // ainda subir o nivel e notificar. As outras variantes (rebaixa, teto
 // 'atencao', sem bilateral) ficam para reproduzir o estudo.
@@ -15,7 +15,7 @@
 // Movimento = giroscopio (o acelerometro do dataset e uma copia saturada do
 // giroscopio: docs/modelo.md, limitacao da escala do acelerometro).
 
-export const POLITICA = Object.freeze({ tipo: 'persistencia', n: 20, bilateral: true, teto: 'atencao_eda' });
+export const POLITICA = Object.freeze({ tipo: 'persistencia', n: 30, bilateral: true, teto: 'atencao_eda' });
 
 // Limites tirados do dataset v4 (model/gerar_dataset_v4.py), nao do simulador:
 //   giroscopio: repouso ~5, atividade leve ~48, brincadeira ativa ~112 dps

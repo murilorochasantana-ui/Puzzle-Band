@@ -190,7 +190,7 @@ dos sensores.
 | Tempo | Fase no log | O que aparece no painel (e no app) | O que mostrar ou dizer |
 |---|---|---|---|
 | 0:00–1:00 | `demo 1/7 · calmo` | "Sem sinais de crise"; o modelo começa a avaliar após 31 s de leituras | Os 7 sensores; o modelo roda na própria pulseira (processamento na borda) |
-| 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise"; às vezes aparece um **"Atenção"** curto e quase nunca "Possível crise" | A pulseira reconhece o exercício (movimento irregular sem EDA elevada) e espera 20 s antes de alertar; limitação real: a EDA também sobe no exercício, por isso o sistema é apoio e o cuidador avalia |
+| 1:00–2:30 | `demo 2/7 · exercício` | BPM, EDA e movimento sobem juntos. Na maior parte do tempo, "Sem sinais de crise"; às vezes aparece um **"Atenção"** curto e quase nunca "Possível crise" | A pulseira reconhece o exercício (movimento irregular sem EDA elevada) e espera 30 s antes de alertar; limitação real: a EDA também sobe no exercício, por isso o sistema é apoio e o cuidador avalia |
 | 2:30–3:30 | `demo 3/7 · calmo` | Volta ao normal; um eventual alerta do exercício vira 1 episódio encerrado no histórico | Histerese: o episódio só fecha após 30 s calmos |
 | 3:30 | `demo 4/7 · crise com ruído: ruído subindo` | O ruído sobe para ~88 dB; o modelo continua em baixo risco | O ambiente mudou, mas a criança ainda está bem |
 | 3:47 | `… fisiologia subindo` | BPM e EDA sobem de repente (em ~10 s), HRV cai | — |

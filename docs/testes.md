@@ -26,7 +26,7 @@ broker. Ele gera em memória as mesmas leituras que a pulseira publicaria
    `computeFeatures`, `predictCrisisProbability` e `riskTierFromProbability`
    do `predict.js` nas 31 leituras mais recentes e, desde 11/2026, a
    política de contexto do `contexto.js` (no exercício sem sinal de crise, o
-   alerta exige 20 s de persistência e fica no máximo em "atenção"; ver
+   alerta exige 30 s de persistência e fica no máximo em "atenção"; ver
    [modelo.md](modelo.md#estudo-exercício-x-crise-112026));
 3. episódios com histerese de 30 s (`episodes.js`, `ingestReadings`);
 4. gatilho provável (`trigger.js`) no início de cada episódio e na
@@ -134,7 +134,7 @@ resultado (20 sementes cada).
 [modelo.md](modelo.md#estudo-exercício-x-crise-112026)): no roteiro nominal,
 20/50 execuções sem alerta, 29 só com "atenção" e 1 com "alto_risco"; no
 laço, 27/60 ciclos sem alerta, 33 só com "atenção" e nenhum com
-"alto_risco"; nos eventos aleatórios, 58 de 96 exercícios com alarme (antes,
+"alto_risco"; nos eventos aleatórios, 57 de 96 exercícios com alarme (antes,
 96/96), com episódios de 5 s em média. A análise abaixo é do modelo sozinho,
 antes da política:
 
@@ -234,15 +234,15 @@ Critério por ciclo:
 | `ruido_depois_da_crise` | 1 episódio fechado · alto_risco · nenhum_ambiental (ruído = consequência) | 3 | 60/60 | nenhum_ambiental | 60/60 | 20/20 |
 | `crise_e_recuperacao` | 1 episódio fechado · alto_risco · ruido | 3 | 60/60 | ruido | 60/60 | 20/20 |
 | `crise_com_agitacao` | 1 episódio fechado · atenção/alto · nenhum_ambiental | 3 | 60/60 | nenhum_ambiental | 60/60 | 20/20 |
-| `exercicio_e_crise` | alerta na crise (episódio próprio ou subida), fechado | 4–9 | 130/130 | nenhum_ambiental | 11/60 (49 limitação) | 0/20 (20 limitação) |
-| `demo` | 2 episódios fechados (ruido, nenhum_ambiental) + só "atenção" no exercício | 7–9 | 162/162 | ruido + nenhum_ambiental | 60/60 | 20/20 |
+| `exercicio_e_crise` | alerta na crise (episódio próprio ou subida), fechado | 4–9 | 131/131 | nenhum_ambiental | 11/60 (49 limitação) | 0/20 (20 limitação) |
+| `demo` | 2 episódios fechados (ruido, nenhum_ambiental) + só "atenção" no exercício | 7–9 | 161/161 | ruido + nenhum_ambiental | 60/60 | 20/20 |
 
 Detalhes por ciclo:
 
 | Cenário | 1º ciclo (nominal) | Ciclos variados | Alerta após a fisiologia | Antecedência medida | Linha de base confiável | Duração dos episódios | Episódios nas pausas |
 |---|---|---|---|---|---|---|---|
 | `calmo` | 20/20 | 40/40 | — | — | — | — | 0 |
-| `exercicio` | 7/20 (13 limitação) | 20/40 (20 limitação) | 7–182 s (mediana 14 s) | — | 33/33 (70–300 leituras) | 1–31 s | 0 |
+| `exercicio` | 7/20 (13 limitação) | 20/40 (20 limitação) | 7–182 s (mediana 14 s) | — | 33/33 (70–300 leituras) | 1–27 s | 0 |
 | `estereotipia` | 20/20 | 40/40 | 3–11 s (mediana 8 s) | — | 60/60 (65–112 leituras) | 185–235 s | 0 |
 | `crise_ruido` | 20/20 | 40/40 | 1–11 s (mediana 2 s) | 5–16 s (planejada 8–15 s) | 60/60 (79–165 leituras) | 133–162 s | 0 |
 | `crise_luz` | 20/20 | 40/40 | 1–11 s (mediana 2 s) | 5–15 s (planejada 8–15 s) | 60/60 (79–165 leituras) | 131–164 s | 0 |
@@ -252,7 +252,7 @@ Detalhes por ciclo:
 | `ruido_depois_da_crise` | 20/20 | 40/40 | 1–11 s (mediana 2 s) | — | 60/60 (79–152 leituras) | 133–164 s | 0 |
 | `crise_e_recuperacao` | 20/20 | 40/40 | 1–11 s (mediana 2 s) | 6–17 s (planejada 8–15 s) | 60/60 (79–138 leituras) | 157–197 s | 0 |
 | `crise_com_agitacao` | 20/20 | 40/40 | 1–11 s (mediana 2 s) | — | 60/60 (79–165 leituras) | 128–160 s | 0 |
-| `exercicio_e_crise` | 0/20 (20 limitação) | 11/40 (29 limitação) | 2–11 s (mediana 3 s) | — | 60/60 (157–228 leituras) | 1–206 s | 0 |
+| `exercicio_e_crise` | 0/20 (20 limitação) | 11/40 (29 limitação) | 2–11 s (mediana 3 s) | — | 60/60 (161–228 leituras) | 1–206 s | 0 |
 | `demo` | 20/20 | 40/40 | — | — | 120/120 (146–215 leituras) | 1–188 s | 0 |
 
 Leitura das tabelas:
@@ -303,8 +303,8 @@ fisiológica da crise:
 
 Na crise agitada leve, os ciclos "certos" (1 episódio fechado) são 47/60: nos
 outros, a crise gera 2 episódios só de "atenção". Com sementes novas
-(101–300), sobram 2 crises engolidas por intensidade no `exercicio_e_crise`
-(as mesmas do modelo sem a política) e atrasos de até +45 s
+(101–300), sobra 1 crise engolida por intensidade no `exercicio_e_crise`
+(semente 143, também engolida sem a política) e atrasos de até +45 s
 ([modelo.md](modelo.md#validação-com-sementes-novas-101300)).
 
 ## Teste com eventos aleatórios
@@ -380,11 +380,11 @@ cobre todos os tipos.
 ### Agregado: seeds 1–50 × 20 eventos
 
 - Crises reais detectadas: 852 de 852 (100%) · por intensidade: leve 248/248 · moderada 303/303 · alta 301/301
-- Alertas falsos: 80 de 148 eventos sem crise viraram episódio (exercicio 58/96 · ambiente_sem_crise 22/52)
+- Alertas falsos: 79 de 148 eventos sem crise viraram episódio (exercicio 57/96 · ambiente_sem_crise 22/52)
 - Episódios fora dos eventos (nas pausas): 0
 - Gatilho certo: 851 de 852 crises detectadas (100%)
 - Tempo médio até o alerta: 6,4 s depois do início da alteração fisiológica (14,6 s depois do início do evento)
-- Duração média dos episódios: 150 s nas crises · 6 s nos alertas falsos
+- Duração média dos episódios: 150 s nas crises · 5 s nos alertas falsos
 
 Acerto do gatilho por tipo:
 
@@ -396,7 +396,7 @@ Acerto do gatilho por tipo:
 | interna | nenhum_ambiental | 172 | 172/172 | 172/172 (100%) | 6,1 s | 142 s |
 | motora | nenhum_ambiental | 105 | 105/105 | 105/105 (100%) | 8,2 s | 207 s |
 | consequencia | nenhum_ambiental | 105 | 105/105 | 104/105 (99%) | 7,5 s | 140 s |
-| exercicio | sem episódio | 96 | 58/96 (alerta falso) | 38/96 sem alerta | — | 5 s |
+| exercicio | sem episódio | 96 | 57/96 (alerta falso) | 39/96 sem alerta | — | 4 s |
 | ambiente_sem_crise | sem episódio | 52 | 22/52 (alerta falso) | 30/52 sem alerta | — | 9 s |
 
 Por intensidade (só crises reais):
@@ -419,7 +419,7 @@ Leitura:
   quer dizer que o modelo alertou antes da fisiologia, empurrado pela luz (o
   viés do dataset descrito no `barulho_sem_crise`).
 - **Os alertas falsos vêm dos eventos sem crise, como nos cenários
-  isolados.** Com a política de contexto, 58/96 `exercicio` geraram episódio
+  isolados.** Com a política de contexto, 57/96 `exercicio` geraram episódio
   (antes, 96/96), com 5 s em média (antes, 44 s); o `ambiente_sem_crise`
   gerou em 22/52 (média de 9 s), como antes.
 - **Nenhum episódio começou nas pausas** nestes 1000 eventos (97 h

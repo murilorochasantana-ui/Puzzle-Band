@@ -497,7 +497,7 @@ calibração individual). Regras: sem commit; tópicos MQTT, formatos,
 navegador; sensores todos mantidos; não recriar `mobile/ios`, `macos`,
 `linux`, `windows`, `web`. Trocar o modelo só com "aprovado".
 
-Situação: **E4d 20 s aprovado (09/11/2026) e ligado em produção
+Situação: **E4d 30 s em produção (09/11/2026; antes, 20 s) e ligado
 (`POLITICA` no `contexto.js`; `forest.json` igual). Passo 5 feito. Sem
 commit.**
 
@@ -780,6 +780,29 @@ reescrita (critério de 0 engolidas não cumprido; mantida por reduzir
 engolidas de 30–37 para 2 e alarmes do exercício em 43% sem perder crise;
 custo: atrasos até 45 s, acima de +30 s em 1 + 3 de 600 ciclos de crise
 leve). `docs/apresentacao.md`: "quase nunca Possível crise".
+
+### Troca para N = 30 s (09/11/2026, pedido do usuário)
+
+- `contexto.js`: `n: 30` (comentário atualizado).
+- Hipótese do usuário "os atrasos vêm do teto pela EDA" **não confirmada**:
+  nos 8 ciclos atrasados (agitada leve 102/142/202/220 e exercicio_e_crise
+  leve 173/182/189/245, ciclo 3), só o teto (n = 1) dá os mesmos tempos do
+  modelo sem política; a persistência (com ou sem teto, N = 10 ou 30) dá
+  54/61/70/67/45/44/47/30 s. A probabilidade oscila perto de 0,4 e a
+  persistência nunca se completa: o alerta sai quando a condição da política
+  desliga (EDA ≥ 3,5 ou batimento fora de ±10). Registrado assim no
+  `modelo.md`.
+- `docs/modelo.md` (decisão: N = 30 escolhido depois da validação 101–300;
+  engolidas 1/1/1, semente 143; exercício −45%; atrasos até 45 s, iguais
+  para N = 10/20/30 e por quê; tabelas com a linha em produção; limitação
+  (a) 95–99%), `docs/testes.md` (tabelas do `verificar.js` regeradas com
+  N = 30; exercício 57/96), `docs/apresentacao.md` ("espera 30 s").
+- Emulador: com o E4d a semente 15 não testa mais a subida (a crise abre
+  episódio próprio em possível crise às 3:43). Nova semente: **253**
+  (`npm run exercicio-e-crise -- --uma-vez --seed 253`): "Atenção" às 2:59
+  (toca), outro atenção às 3:13 (não toca), "Possível crise" às 3:43 (a mesma
+  notificação toca de novo); 5:47 atenção do mesmo episódio (não toca); 7:02
+  episódio novo, atenção (notificação nova).
 
 ## Próximo passo
 
