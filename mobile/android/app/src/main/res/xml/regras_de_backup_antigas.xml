@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 ou mais antigo (android:fullBackupContent). Com
+  android:allowBackup="false" o backup ja nao roda; estas regras ficam como
+  segunda barreira: o banco local (files/banco/) e o shared_preferences nunca
+  entram num backup. Ver res/xml/regras_de_backup.xml e docs/app.md.
+-->
+<full-backup-content>
+    <exclude domain="file" path="banco/" />
+    <exclude domain="sharedpref" path="." />
+</full-backup-content>

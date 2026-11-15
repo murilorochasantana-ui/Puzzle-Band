@@ -24,7 +24,10 @@
     <application
         android:label="Puzzle Band"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:allowBackup="false"
+        android:fullBackupContent="@xml/regras_de_backup_antigas"
+        android:dataExtractionRules="@xml/regras_de_backup">
         <activity
             android:name=".MainActivity"
             android:exported="true"

@@ -47,12 +47,14 @@ escuro: [design-app.md](design-app.md).
   regularidade, luz, ruído e probabilidade, uma métrica por vez), com um
   balão que mostra todas as métricas do instante tocado, e as crises dos
   últimos 7 dias pela avaliação do cuidador.
-- **Histórico** dos episódios (os 50 mais recentes que a pulseira publica),
-  separado por dia, com um **calendário** do mês no topo. Cada episódio é um
-  cartão resumido que abre no lugar, com **Confirmar gatilho** / **Descartar**
-  e uma observação curta. A avaliação volta para a pulseira, que aplica e
-  republica o histórico (o painel do site mostra "avaliado pelo app"). A
-  última cópia fica salva no celular para consulta offline.
+- **Histórico** dos episódios, separado por dia, com um **calendário** do
+  mês no topo. A pulseira publica os 50 mais recentes; o app guarda **todos**
+  num banco SQLite no celular (até 1 ano, ver
+  [Armazenamento](#armazenamento)), então os meses antigos continuam
+  completos. Cada episódio é um cartão resumido que abre no lugar, com
+  **Confirmar gatilho** / **Descartar** e uma observação curta. A avaliação
+  volta para a pulseira, que aplica e republica o histórico (o painel do site
+  mostra "avaliado pelo app"). Tudo continua visível sem conexão.
 - **Indicadores de conexão** (Ajustes): servidor, pulseira (online/offline)
   e "Análise (pulseira)" (ao vivo ou sem dados), que indica se o **estado
   publicado pela pulseira** está chegando ao vivo. O modelo roda na pulseira;
@@ -70,7 +72,7 @@ escuro: [design-app.md](design-app.md).
 | Início | Segue o modelo do Figma ([design-app.md](design-app.md#71-início-a-partir-do-modelo-do-figma)). De cima para baixo: o **nome da criança**; o aviso fixo **"Alertas com o app fechado desativados — Corrigir"** (só enquanto o monitoramento com o app fechado não estiver funcionando); a linha de conexão ("Tudo conectado" ou o aviso da pulseira); a **faixa de estado**, com o nível (ícone + palavra + cor), o BPM ao vivo e, ao lado, "Ao vivo" com a média de 5 min; o **cartão do episódio** em andamento (desde quando, nível mais alto, provável gatilho em linguagem simples com o texto do gatilho abaixo e o botão **Estou ciente**) ou, sem episódio, o cartão **Nenhum episódio agora** com o último episódio; a probabilidade estimada e a fonte; e o botão **Hoje: X episódios**, que abre o painel do dia. Sem estado ao vivo, a faixa diz o motivo e o que fazer (conectando, sem conexão, pulseira parou de enviar, aguardando a pulseira, configuração incompleta). |
 | Episódio (detalhe) | Aberto pelo painel do dia ou pelo cartão "Nenhum episódio agora". Mesmo cartão do Histórico (com **Confirmar gatilho** / **Descartar**), o horário de início e fim e o lembrete do episódio. |
 | Gráficos | **Sinais da criança**: as leituras dos últimos 5 minutos recebidas no tópico `estado`. Um seletor no topo escolhe a métrica (batimentos, suor/EDA, HRV, movimento, regularidade, luz, ruído ou probabilidade); o gráfico troca a série, o eixo e a cor. Faixas de fundo marcam os momentos em Atenção e Possível crise. Abaixo, a leitura atual, a mínima, a máxima e a média. Tocar ou arrastar no gráfico abre um balão com **todas** as métricas daquele instante. Com a pulseira parada ou sem conexão, o gráfico fica congelado, com um aviso. **Crises nos últimos 7 dias**: barras empilhadas com as crises confirmadas (cor sólida) e as aguardando confirmação (listradas). Os descartados não entram. Tocar numa barra mostra os totais e a duração somada do dia. |
-| Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. Avisa quando está mostrando a cópia salva. |
+| Histórico | Calendário do mês (recolhível, ver [Calendário do Histórico](#calendário-do-histórico)) e a lista separada por dia ("Hoje", "Ontem", "Ter, 3 de nov."), com o número de episódios no cabeçalho, que fica fixo ao rolar. Cada episódio é um cartão resumido: horário (início–fim), nível (ícone + texto), duração, gatilho em linguagem simples e a avaliação. Tocar abre o cartão no lugar, um por vez: texto técnico do gatilho, probabilidade máxima, "alerta visto às HH:MM", lembrete do episódio, observação (até 200 caracteres) e os botões **Confirmar gatilho** / **Descartar**. A lista carrega 50 episódios por vez e mais ao chegar ao fim. Avisa quando está sem conexão (mostrando o que está salvo no celular). |
 | Ajustes | Criança monitorada (campo **Nome da criança** e o `CHILD_ID`), conexões (servidor/broker com o erro, pulseira e análise ao vivo da pulseira), **Alertas**: **Alertas sonoros** (liga/desliga, salva no celular), **Monitorar com o app fechado** (ligada por padrão; inicia e para o serviço em primeiro plano) e **Configurar alertas** (abre a mesma tela da primeira abertura), **Aparência** (Seguir o sistema, Claro ou Escuro), **Apagar dados deste aparelho** (ver [Apagar os dados](#apagar-os-dados-reset-para-uma-apresentação)), versão e licenças. |
 
 O app respeita a fonte ampliada e o "Remover animações" do Android. Detalhes
@@ -125,7 +127,8 @@ fosse atual.
   Ele mostra uma notificação fixa e discreta, **"Puzzle Band: monitorando
   <nome>"**, num canal próprio de baixa importância (sem som), separado dos
   alertas. Ele assina só `alertas`, `historico` e `status` (não o `estado`,
-  que chega 1 vez por segundo) e mantém a cópia salva do histórico em dia.
+  que chega 1 vez por segundo) e grava os episódios no banco local, que é o
+  mesmo das telas (ver [Armazenamento](#armazenamento)).
   Código: `lib/services/monitor_segundo_plano.dart`.
 - **Tipo do serviço: `specialUse`.** No Android 14 e 15 todo serviço em
   primeiro plano declara um tipo. O `dataSync` não serve: no Android 15 ele
@@ -143,16 +146,20 @@ fosse atual.
   publicar "online" com Last Will **na hora**. O app confere o serviço ao
   abrir, ao voltar para a frente e a cada 5 s enquanto aberto; se ele parou e
   a opção está ligada, inicia de novo. As **mesmas regras** valem para os
-  dois lados (`lib/services/regra_de_notificacao.dart`): como app e serviço
-  rodam em isolates separados, cada um relê do disco a lista de episódios
-  notificados (e a opção de som) antes de decidir e grava logo depois de
-  notificar.
+  dois lados (`lib/services/regra_de_notificacao.dart`): app e serviço rodam
+  em motores Dart separados, cada um com a sua conexão ao mesmo banco SQLite.
+  A lista de episódios notificados fica na tabela `episodios_notificados`, e
+  decidir e gravar é **um só comando** atômico: se os dois receberem o mesmo
+  alerta ao mesmo tempo (na troca de dono), só um notifica. A opção de som é
+  relida do `shared_preferences` a cada alerta. Se o banco falhar, o alerta
+  notifica assim mesmo (uma repetição é melhor que uma crise perdida).
 - **No máximo uma por episódio, mais a subida.** Se o mesmo episódio subir
   de atenção para possível crise, a mesma notificação é substituída por
   "Possível crise" e **toca de novo** (pode ser uma crise começando dentro de
   um episódio que já estava aberto, por exemplo durante um exercício).
   Alerta repetido no mesmo nível ou descendo não notifica. Os episódios já
-  notificados ficam salvos, então reabrir o app não repete a notificação.
+  notificados ficam salvos no banco, então reabrir o app não repete a
+  notificação.
   Alertas com mais de 10 minutos não notificam.
 - **Alertas sonoros** desligado: a notificação aparece num canal sem som e
   sem vibração. O Android não deixa mudar o som de um canal depois de criado,
@@ -285,8 +292,9 @@ sem lembrete. Os de dias anteriores são apagados depois de 30 dias.
 
 **Privacidade (decisão do projeto).**
 
-- Os lembretes e o nome da criança ficam **só neste celular**, no
-  `shared_preferences`.
+- Os lembretes e o nome da criança ficam **só neste celular**: os lembretes
+  no banco local (tabela `lembretes`), o nome no `shared_preferences` (ver
+  [Armazenamento](#armazenamento)).
 - Eles **não são enviados pelo MQTT** (não há tópico nem campo novo nas
   mensagens), não aparecem no site e não vão para outro aparelho.
 - Motivo: são anotações pessoais do cuidador sobre a criança, e o broker é
@@ -304,9 +312,9 @@ Há três jeitos de apagar o que o app guarda, do mais completo ao mais local:
 - **Pelo terminal, sem mexer no celular:** `npm run resetar` em
   `simulator/`, com a pulseira desligada (passo a passo em [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação)). O app assina `puzzleband/<id>/comando`. Ao receber
   a ordem `resetar` com um `id` que ainda não aplicou:
-  - apaga a cópia do histórico, os episódios já notificados, os alertas
-    recebidos, os lembretes (e cancela os avisos agendados deles) e o buffer
-    dos gráficos;
+  - apaga o histórico, os episódios já notificados e os lembretes (as três
+    tabelas do banco local), cancela os avisos agendados dos lembretes e
+    apaga os alertas recebidos e o buffer dos gráficos;
   - com `manter_preferencias: false` (`npm run resetar -- --tudo`), também
     volta ao padrão o nome da criança, a aparência e os alertas sonoros;
   - mostra o SnackBar "Dados apagados para uma nova
@@ -328,7 +336,15 @@ Há três jeitos de apagar o que o app guarda, do mais completo ao mais local:
 
 O app só aceita um `historico` com `"origem": "pulseira"`. Uma lista de
 outra origem, como a de uma aba antiga do site que republicava o
-`localStorage`, não substitui a cópia salva.
+`localStorage`, não entra no banco.
+
+**Mudança de comportamento (11/2026): a lista vazia da pulseira não apaga
+mais o histórico do app.** Antes, `--limpar-historico` publicava a lista vazia
+e o app esvaziava a sua cópia. Agora o app acumula os episódios no banco, e
+uma lista vazia só marca que nenhum está mais na pulseira. Motivo: uma
+pulseira nova, num computador sem a mensagem retida, publicaria uma lista
+vazia e apagaria até 1 ano de histórico. **Para limpar o app, só
+`npm run resetar` ou "Apagar dados deste aparelho".**
 
 ### Calendário do Histórico
 
@@ -388,6 +404,123 @@ confirmadas" ou "5 de novembro: 2 possíveis crises aguardando confirmação".
 - Dá para mudar de ideia: tocar no outro botão reenvia a avaliação à
   pulseira (tópico `avaliacao`, como antes). Sem conexão, o app avisa que não
   enviou.
+- **Episódio que já saiu da lista da pulseira** (mais antigo que os 50 que
+  ela publica): a avaliação é gravada **só no celular**, sem erro e sem
+  precisar de conexão ("Gatilho confirmado e salvo neste celular."). Nada é
+  publicado: a pulseira não republica mais esse episódio, então não haveria
+  confirmação. O painel do site e o arquivo da pulseira ficam com a avaliação
+  anterior.
+- **Pendente de confirmação.** A avaliação feita no app aparece na hora e
+  fica gravada à parte, até a pulseira devolver na lista o **mesmo**
+  `avaliacao_em` que o app enviou (ela guarda o horário da mensagem sem
+  mudança, `simulator/borda.js`) ou um mais novo (outra avaliação, por
+  exemplo do site, depois desta). Uma lista retida antiga, de antes da
+  avaliação, não a desfaz. Os formatos das mensagens não mudaram.
+
+## Armazenamento
+
+O que o app guarda, e onde. Código: `lib/services/banco.dart` (tabelas e
+consultas), `lib/services/historico_local.dart` (o que as telas leem),
+`lib/services/importacao_antiga.dart` (importação única) e
+`lib/services/banco_no_celular.dart` (o arquivo).
+
+| Onde | O quê |
+|---|---|
+| **Banco SQLite do app** (`files/banco/puzzleband.db`) | Histórico de episódios (todos, até 1 ano), lembretes e episódios já notificados (com o par de canais usado) |
+| **`shared_preferences`** | Configurações simples: nome da criança, aparência, alertas sonoros, monitorar com o app fechado, passos da "Configurar alertas", `reset_aplicado_id` e o sufixo do id MQTT |
+| **Pulseira** (`simulator/data/historico_<id>.json`) | O histórico completo dela (até 200 episódios, com o gatilho detalhado); publica os 50 mais recentes em `historico` ([historico.md](historico.md)) |
+| Só na memória | Estado ao vivo, leituras dos gráficos (5 min) e alertas recebidos |
+
+### Banco local
+
+- **Pacote:** `drift` 2.35 com o `sqlite3` 3.9 embutido no APK (a mesma
+  versão do SQLite no celular e no `flutter test`; o Android 7 traria um
+  SQLite sem `UPSERT`). Escolhido em vez do `sqflite` pelos testes com banco
+  em memória, pelas migrações versionadas e por funcionar igual nos dois
+  motores Dart (telas e serviço), sem depender de plugin.
+- **Tabelas** (horários em microssegundos desde 1970, UTC):
+  - `episodios`: id do episódio (chave), início, fim, duração, encerramento,
+    nível máximo, probabilidade máxima, gatilho (tipo e texto), avaliação e
+    observação como a pulseira devolveu (com origem e `avaliacao_em`),
+    "visto às", `recebido_em`, `na_pulseira` (estava na última lista) e a
+    avaliação local pendente de confirmação (`avaliacao_local`,
+    `observacao_local`, `avaliacao_local_em`). Índice
+    `idx_episodios_inicio`: o dia, o mês e os 7 dias são consultas por faixa
+    de início.
+  - `lembretes`: chave (`episodio:<id>` ou `dia:AAAA-MM-DD`), texto (até 120),
+    salvo em e aviso.
+  - `episodios_notificados`: episódio, nível notificado, par de canais
+    (`normal` ou `ignora_nao_perturbe`), quando e quantas vezes (a subida).
+- **Sincronização:** cada `historico` da pulseira (o retido e as
+  atualizações) entra por **upsert pelo id**, numa transação. Os episódios
+  que saem da lista de 50 **continuam no banco**. A avaliação continua indo
+  para a pulseira pelo MQTT, como antes.
+- **App e serviço no mesmo arquivo:** cada um abre a sua conexão (num isolate
+  próprio), em modo **WAL**, com `busy_timeout` de 5 s. Quem grava o quê:
+
+  | Dado | Quem grava |
+  |---|---|
+  | Episódios vindos da pulseira | As duas conexões (as duas assinam `historico`); o upsert é idempotente e não duplica |
+  | Avaliação local, lembretes, reset e retenção | Só as telas |
+  | Episódios notificados | Só quem notifica, num comando atômico (`INSERT ... ON CONFLICT DO UPDATE ... WHERE ... RETURNING`) |
+
+  As telas releem o banco depois de cada gravação e ao voltar para a frente.
+- **Migrações:** `schemaVersion` (hoje 1) no `banco.dart`; o esquema de cada
+  versão fica em `mobile/drift_schemas/` e o teste em
+  `mobile/test/drift/banco/`. Uma versão nova: subir o número, escrever o
+  passo em `onUpgrade` e rodar `dart run drift_dev make-migrations`.
+- **Código gerado:** `lib/services/banco.g.dart` vai no Git. Depois de mudar
+  as tabelas: `dart run build_runner build` (em `mobile/`).
+- **Importação (uma vez):** na primeira abertura depois da atualização, quem
+  abrir o banco primeiro (as telas ou o serviço) importa as chaves antigas do
+  `shared_preferences` (`historico_v1`, `lembretes_v1`,
+  `episodios_notificados`) numa transação e **só depois do commit** as apaga.
+  Só preenche o que falta (não sobrescreve o que o outro lado já gravou); se
+  o app cair no meio, a próxima abertura importa de novo sem duplicar. Um
+  JSON corrompido é pulado item a item. Uma avaliação feita no app que estava
+  na cópia antiga entra como pendente de confirmação.
+
+### Retenção
+
+- **Episódios: 1 ano ou 5.000, o que vier primeiro** (os mais antigos saem).
+  Um episódio ocupa cerca de 300 bytes: 5.000 dão menos de 2 MB. Um ano cobre
+  o calendário e os padrões de uso, e o limite segue o princípio da
+  necessidade da LGPD (art. 6º, III). A limpeza roda ao abrir o app; um
+  episódio mais velho que 1 ano que ainda venha da pulseira não entra.
+- **Lembretes:** os do dia valem 30 dias; no máximo 200; o lembrete de um
+  episódio sai junto com o episódio.
+- **Notificados:** os 100 mais recentes.
+- O que é apagado (retenção ou reset) é sobrescrito no arquivo
+  (`secure_delete`), e o reset esvazia o `-wal`.
+
+### Backup
+
+O manifesto tem `android:allowBackup="false"`, e as regras
+`res/xml/regras_de_backup.xml` (`dataExtractionRules`, Android 12+) e
+`res/xml/regras_de_backup_antigas.xml` (`fullBackupContent`, Android 11 ou
+menos) excluem `files/banco/` e o `shared_preferences` do backup na nuvem
+**e da transferência direta entre aparelhos** (no Android 12+, o
+`allowBackup="false"` sozinho não bloqueia essa transferência). Consequência:
+trocar de celular começa sem histórico local; os 50 mais recentes voltam
+pela pulseira.
+
+### Limitações do armazenamento
+
+- **O banco não é criptografado.** Fica na área privada do app (outros apps
+  não leem) e, com bloqueio de tela, o Android criptografa o armazenamento.
+  Um celular com root ou uma extração forense leem o arquivo. **Trabalho
+  futuro: SQLCipher** (o `sqlite3` aceita uma versão com criptografia, e a
+  chave ficaria no Android Keystore). Prós: atende melhor ao art. 46 da LGPD
+  (segurança de dado sensível de criança) e protege o arquivo fora do app.
+  Contras: mais uma dependência, APK maior, consultas um pouco mais lentas e
+  o risco de perder a chave (o banco fica ilegível).
+- A avaliação de um episódio que já saiu da lista da pulseira fica só no
+  celular (o painel e a pulseira não a recebem).
+- Uma avaliação feita no app que a pulseira nunca aplicar (pulseira
+  desligada quando ela foi enviada) continua valendo no app e diferente na
+  pulseira, até o cuidador avaliar de novo.
+- Desinstalar o app ou "Limpar dados" no Android apaga o banco. Outro
+  cuidador, em outro celular, só vê os 50 que a pulseira publica.
 
 ## Configuração (`env.json`)
 
@@ -474,7 +607,8 @@ flutter build apk --debug --dart-define-from-file=env.json
 
 ```bash
 flutter analyze      # análise estática (deve dar "No issues found!")
-flutter test         # parse das mensagens, resumos, notificação, telas, acessibilidade e imagens (golden)
+flutter test         # parse das mensagens, resumos, notificação, banco local (memória, importação, concorrência), telas, acessibilidade e imagens (golden)
+dart run build_runner build   # só depois de mudar as tabelas do banco (gera lib/services/banco.g.dart)
 flutter test --update-goldens test/goldens_test.dart   # só depois de mudar o visual de propósito
 ```
 
@@ -531,6 +665,10 @@ mobile/
 │   ├── models/resumo.dart      # contagens por dia/mês/7 dias pela avaliação do cuidador; lista por dia
 │   ├── models/sinais.dart      # leituras dos últimos 5 min (todas as métricas), faixas de eixo e trechos de nível
 │   ├── services/
+│   │   ├── banco.dart (+ .g.dart)   # banco SQLite local (drift): tabelas, consultas, retenção
+│   │   ├── banco_no_celular.dart    # onde fica o arquivo do banco (files/banco/)
+│   │   ├── historico_local.dart     # histórico das telas lido do banco (dia, mês, 7 dias, páginas)
+│   │   ├── importacao_antiga.dart   # importação única do shared_preferences para o banco
 │   │   ├── mqtt_service.dart        # conexão MQTT (ChangeNotifier): papel "app" (telas) ou "serviço"
 │   │   ├── notification_service.dart# notificações locais dos alertas, "Monitoramento pausado" e canais Android
 │   │   ├── regra_de_notificacao.dart# regra das notificações e quem notifica (app aberto x serviço)
@@ -538,17 +676,21 @@ mobile/
 │   │   ├── configuracao_de_alertas.dart# passos de "Configurar alertas" e a opção "Monitorar com o app fechado"
 │   │   ├── sistema_android.dart     # janelas do sistema, fabricante e o serviço (interface + Android)
 │   │   ├── app_scope.dart           # entrega o serviço às telas (InheritedNotifier)
-│   │   ├── preferencias_locais.dart # nome da criança e lembretes (só no celular)
+│   │   ├── preferencias_locais.dart # nome da criança e aparência (shared_preferences) e lembretes (banco)
 │   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
 │   ├── screens/                # configurar alertas, início, detalhe do episódio, gráficos, histórico, ajustes
 │   ├── widgets/                # faixa de estado, cartões do episódio (completo e resumido), calendário, selo da avaliação, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
-└── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens)
+├── drift_schemas/              # esquema do banco por versão (migrações)
+├── build.yaml                  # geração de código do drift
+└── test/                       # flutter test (apoio/ = serviço falso, cenários e fontes; goldens/ = imagens; drift/ = migrações)
 ```
 
 Pacote Android: `br.unimar.puzzleband`. O `AndroidManifest.xml` principal
-declara `INTERNET`, `POST_NOTIFICATIONS`, `VIBRATE` e `RECEIVE_BOOT_COMPLETED`.
+declara `INTERNET`, `POST_NOTIFICATIONS`, `VIBRATE` e `RECEIVE_BOOT_COMPLETED`,
+e `android:allowBackup="false"` com as regras de backup que excluem o banco e
+o `shared_preferences` (ver [Backup](#backup)).
 Esta última, junto com os dois receivers do `flutter_local_notifications`,
 reagenda os avisos dos lembretes depois que o celular reinicia (e religa o
 serviço em primeiro plano). Para os alertas com o app fechado:
@@ -604,15 +746,18 @@ rede.
   ([mqtt.md](mqtt.md#acl-sugerida-menor-privilégio)) limita o que essa
   credencial pode fazer. A solução definitiva é a autenticação por usuário
   (tokens emitidos por um backend).
-- O histórico do app tem só os 50 episódios mais recentes que a pulseira publicou.
-  Por isso o calendário, o total do mês e o gráfico de 7 dias contam apenas
-  esses: com muitos episódios, os meses mais antigos ficam incompletos.
+- O histórico do app guarda os episódios que chegaram **desde a instalação
+  (ou o último reset)**, até 1 ano. O que a pulseira publicou antes de o app
+  ser instalado só aparece se ainda estiver entre os 50 que ela publica. Ver
+  [Armazenamento](#armazenamento) (inclui o banco sem criptografia e o
+  SQLCipher como trabalho futuro).
 - A média de BPM é a dos últimos 5 minutos calculada pela pulseira, não a do dia
   inteiro. O app guarda as leituras dos últimos 5 minutos só na memória,
   para o gráfico: fechar o app apaga essas leituras.
 - **Lembretes só no celular.** Por decisão de privacidade, eles não têm
-  cópia na pulseira, no site nem no broker: limpar os dados do app (ou o
-  `npm run resetar`) ou trocar de celular apaga os lembretes. O aviso é inexato (pode atrasar alguns minutos).
+  cópia na pulseira, no site nem no broker (nem no backup do Android): limpar
+  os dados do app (ou o `npm run resetar`) ou trocar de celular apaga os
+  lembretes. O aviso é inexato (pode atrasar alguns minutos).
 - Só Android. A pasta `ios/` veio do projeto original e não foi configurada
   (o bundle id ainda é o de exemplo, e as notificações não foram ajustadas
   para iOS).

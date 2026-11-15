@@ -3,8 +3,9 @@
 // ("Puzzle Band: monitorando <nome>"). Ele roda a tarefa abaixo num motor
 // Dart proprio, que continua vivo quando o app e tirado dos recentes, e
 // mantem a SUA conexao MQTT (MqttService no papel servico: mesmas
-// credenciais do env.json via --dart-define, mesma reconexao). Ver
-// docs/app.md, "Notificacoes" e "Limitacoes".
+// credenciais do env.json via --dart-define, mesma reconexao) e a SUA
+// conexao com o banco local (o mesmo arquivo das telas, em WAL: banco.dart).
+// Ver docs/app.md, "Notificacoes", "Armazenamento" e "Limitacoes".
 //
 //   - tipo specialUse (AndroidManifest.xml): o dataSync tem limite de 6 h a
 //     cada 24 h no Android 15 e nao pode ser iniciado no BOOT_COMPLETED;
@@ -23,6 +24,9 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import 'banco.dart';
+import 'banco_no_celular.dart';
+import 'importacao_antiga.dart';
 import 'mqtt_service.dart';
 import 'notification_service.dart';
 
@@ -109,6 +113,7 @@ void iniciarTarefaDoMonitor() {
 
 class TarefaDoMonitor extends TaskHandler {
   SharedPreferences? _prefs;
+  BancoPuzzleBand? _banco;
   NotificationService? _notificacoes;
   MqttService? _mqtt;
   bool _paradoPeloTutor = false;
@@ -117,12 +122,21 @@ class TarefaDoMonitor extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     final prefs = _prefs = await SharedPreferences.getInstance();
+    final banco = _banco = await abrirBancoDoApp();
+    // Se o servico abrir o banco antes das telas (religado depois da
+    // atualizacao do app ou no boot), e ele que importa a copia antiga
+    try {
+      await importarDoSharedPreferences(banco, prefs);
+    } catch (e) {
+      debugPrint('Falha ao importar do shared_preferences: $e');
+    }
     final notificacoes = _notificacoes = NotificationService();
     await notificacoes.init();
     final config = AppConfig.fromEnvironment();
     final mqtt = _mqtt = MqttService(
       config: config,
       prefs: prefs,
+      banco: banco,
       notificacoes: notificacoes,
       papel: PapelDaConexao.servico,
     );
@@ -175,5 +189,6 @@ class TarefaDoMonitor extends TaskHandler {
     // por elas. Parado pelo sistema: o vigia continua armado.
     await _mqtt?.parar(semOffline: _paradoPeloTutor);
     _mqtt?.dispose();
+    await _banco?.close();
   }
 }

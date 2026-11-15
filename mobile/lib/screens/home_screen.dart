@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import 'configurar_alertas_screen.dart';
-import '../models/resumo.dart';
 import '../services/app_scope.dart';
 import '../services/preferencias_locais.dart';
 import '../theme/app_theme.dart';
@@ -27,8 +26,9 @@ class HomeScreen extends StatelessWidget {
     final service = AppScope.of(context);
     final preferencias = PreferenciasScope.of(context);
     final agora = relogio();
-    // O historico ja vem do mais recente para o mais antigo.
-    final hoje = [for (final e in service.historico) if (mesmoDia(e.inicio, agora)) e];
+    // Episodios de hoje, do banco local (mais recente primeiro)
+    final historico = service.historicoLocal;
+    final hoje = historico.doDia(agora);
     final estado = service.estado;
     final aoVivo = situacaoDe(service) == SituacaoEstado.aoVivo && estado != null;
     final ativo = service.episodioAtivo;
@@ -55,7 +55,7 @@ class HomeScreen extends StatelessWidget {
             )
           else
             CartaoSemEpisodio(
-              ultimo: service.historico.isEmpty ? null : service.historico.first,
+              ultimo: historico.ultimo,
               agora: agora,
               onAbrir: abrirEpisodio,
             ),

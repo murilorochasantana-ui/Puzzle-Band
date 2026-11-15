@@ -13,6 +13,7 @@ import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/configurar_alertas_screen.dart';
 import 'package:puzzleband/services/app_scope.dart';
+import 'package:puzzleband/services/banco.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
 import 'package:puzzleband/services/preferencias_locais.dart';
@@ -34,11 +35,11 @@ import 'apoio/cenarios.dart';
 import 'apoio/fontes.dart';
 import 'apoio/servico_falso.dart';
 
-/// MqttService de verdade (historico, ordem de reset, limpeza), so com o
-/// estado ao vivo fixo: o que as telas mostram vem da lista real.
+/// MqttService de verdade (historico no banco em memoria, ordem de reset,
+/// limpeza), so com o estado ao vivo fixo: o que as telas mostram vem do banco.
 class ServicoComLimpeza extends MqttService {
   ServicoComLimpeza({required super.prefs, required this.estadoFixo})
-      : super(config: configSemSenha, notificacoes: NotificationService());
+      : super(config: configSemSenha, banco: BancoPuzzleBand.emMemoria(), notificacoes: NotificationService());
 
   final EstadoAtual estadoFixo;
 
@@ -412,7 +413,9 @@ void main() {
       expect(find.text('Levar o abafador'), findsOneWidget);
       expect(find.text('Lembrete salvo neste celular.'), findsOneWidget);
       expect(preferencias.lembrete(chave)?.texto, 'Levar o abafador');
-      expect(servico.prefs.getString('lembretes_v1'), contains('Levar o abafador'));
+      // Gravado no banco local (tabela lembretes), nao mais no shared_preferences
+      expect((await servico.banco.lembretesSalvos())[chave]?.texto, 'Levar o abafador');
+      expect(servico.prefs.getString('lembretes_v1'), isNull);
       // Nada vai para o MQTT
       expect(servico.cientes, isEmpty);
       expect(servico.avaliacoes, isEmpty);
@@ -461,7 +464,9 @@ void main() {
       SharedPreferences.setMockInitialValues({});
       final prefs = await SharedPreferences.getInstance();
       final aviso = AvisoFalso();
-      final preferencias = PreferenciasLocais(prefs: prefs, nomePadrao: 'C01', aviso: aviso);
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
+      final preferencias = PreferenciasLocais(prefs: prefs, banco: banco, nomePadrao: 'C01', aviso: aviso);
       final chave = PreferenciasLocais.chaveEpisodio('ep_4');
       final id = PreferenciasLocais.idDoAviso(chave);
       final as17 = DateTime(2026, 11, 5, 17, 0);
@@ -470,8 +475,9 @@ void main() {
           ResultadoLembrete.salvoComAviso);
       expect(aviso.agendados[id], (as17, 'Lembrete', 'Dar água'));
 
-      // Recarregado do shared_preferences (app reaberto)
-      final reaberto = PreferenciasLocais(prefs: prefs, nomePadrao: 'C01', aviso: aviso);
+      // Recarregado do banco (app reaberto)
+      final reaberto = PreferenciasLocais(prefs: prefs, banco: banco, nomePadrao: 'C01', aviso: aviso);
+      await reaberto.carregar();
       expect(reaberto.lembrete(chave)?.texto, 'Dar água');
       expect(reaberto.lembrete(chave)?.avisarEm, as17);
 
@@ -1060,11 +1066,10 @@ void main() {
   });
 
   group('Histórico vazio da pulseira e ordem de reset (serviço real)', () {
-    testWidgets('lista vazia da pulseira: calendário, "Hoje", 7 dias e último episódio ficam vazios', (tester) async {
+    testWidgets('lista vazia da pulseira não apaga mais o histórico do app; a ordem de reset apaga', (tester) async {
       final base = await calmo();
       final servico = ServicoComLimpeza(prefs: base.prefs, estadoFixo: base.estadoAtual!);
       await servico.iniciar();
-      // Cópia antiga (de antes do --limpar-historico), como a que fica salva no celular
       servico.tratarMensagem('puzzleband/C01/historico', mensagemDaPulseira(base.episodios));
 
       await mostrar(tester, servico, aba: 2);
@@ -1073,22 +1078,36 @@ void main() {
       expect(find.text('Hoje: 2 episódios'), findsOneWidget);
       expect(find.textContaining('Último episódio:'), findsOneWidget);
 
-      // Chega o histórico vazio publicado pela pulseira
+      // Chega o histórico vazio publicado pela pulseira (--limpar-historico):
+      // mudança de comportamento, o banco do app continua com os episódios
       expect(servico.tratarMensagem('puzzleband/C01/historico', mensagemDaPulseira(const [])), isTrue);
+      await servico.gravacoesPendentes;
       await tester.pumpAndSettle();
-      expect(find.text('Hoje: nenhum episódio'), findsOneWidget);
-      expect(find.text('Nenhum episódio registrado ainda.'), findsOneWidget);
+      expect(find.text('Hoje: 2 episódios'), findsOneWidget);
       await mostrar(tester, servico, aba: 2);
+      expect(find.byType(CalendarioCrises), findsOneWidget);
+
+      // Uma aba antiga do site republicando uma lista não entra no banco
+      final doSite = jsonEncode({
+        'origem': 'site',
+        'episodios': [Episodio(id: 'ep_site', inicio: DateTime(2026, 11, 5, 8), nivelMaximo: NivelRisco.atencao).toJson()],
+      });
+      expect(servico.tratarMensagem('puzzleband/C01/historico', doSite), isFalse);
+
+      // Só o reset (npm run resetar / "Apagar os dados") limpa
+      servico.tratarMensagem('puzzleband/C01/comando', '{"acao":"resetar","id":"r1","manter_preferencias":true}');
+      await servico.resetEmAndamento;
+      await servico.gravacoesPendentes;
+      await tester.pumpAndSettle();
       expect(find.byType(CalendarioCrises), findsNothing);
       expect(find.text('Nenhum episódio ainda'), findsOneWidget);
+      await mostrar(tester, servico);
+      expect(find.text('Hoje: nenhum episódio'), findsOneWidget);
+      expect(find.text('Nenhum episódio registrado ainda.'), findsOneWidget);
       await mostrar(tester, servico, aba: 1);
       expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
-
-      // Uma aba antiga do site republicando a lista velha não traz os episódios de volta
-      final doSite = jsonEncode({'origem': 'site', 'episodios': [for (final e in base.episodios) e.toJson()]});
-      expect(servico.tratarMensagem('puzzleband/C01/historico', doSite), isFalse);
+      await tester.pump(const Duration(seconds: 7)); // o SnackBar do reset some
       await tester.pumpAndSettle();
-      expect(find.text('Nenhuma crise nos últimos 7 dias'), findsOneWidget);
     });
 
     testWidgets('ordem de reset no app aberto: SnackBar discreto "Dados apagados para uma nova apresentação."', (tester) async {

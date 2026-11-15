@@ -12,8 +12,11 @@ Quem detecta os episódios e guarda o histórico é a **pulseira**
   `simulator/testes/historico.test.js`.
 
 O histórico aparece no app do cuidador e no painel do site, logo abaixo do
-gráfico, com os 50 episódios mais recentes que a pulseira publica em
-`puzzleband/<id>/historico`.
+gráfico. A pulseira publica os 50 episódios mais recentes em
+`puzzleband/<id>/historico`. O painel mostra esses 50; o app guarda todos os
+que recebe num banco SQLite no celular (até 1 ano ou 5.000 episódios), então
+o calendário e os gráficos do app continuam completos depois que um episódio
+sai da lista da pulseira ([app.md](app.md#armazenamento)).
 
 ## O que é um episódio
 
@@ -128,13 +131,16 @@ O painel não apaga mais o histórico: quem guarda é a pulseira. Para começar
 do zero, há dois caminhos. Exporte o CSV antes se quiser guardar.
 
 - `--limpar-historico` (por exemplo, `npm start -- --limpar-historico`): a
-  pulseira esvazia o arquivo e publica a lista vazia em `historico`, que
-  substitui a cópia do app.
+  pulseira esvazia o arquivo e publica a lista vazia em `historico`. O painel
+  fica vazio. **O app não apaga mais o seu histórico com a lista vazia**
+  (mudança de 11/2026: ele acumula os episódios no banco local); para limpar
+  o app também, use `npm run resetar` ou, no celular, **Ajustes → Apagar
+  dados deste aparelho**.
 - `npm run resetar` (com a pulseira desligada), para uma apresentação: apaga
   o arquivo, os retidos no broker e manda o app e o site apagarem os dados
-  locais pela ordem em `comando`. No app saem a cópia do histórico, os
-  episódios notificados, os lembretes e os gráficos (e, com `--tudo`, as
-  preferências). Ver [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação) e
+  locais pela ordem em `comando`. No app saem o histórico, os episódios
+  notificados e os lembretes (as três tabelas do banco local) e os gráficos
+  (e, com `--tudo`, as preferências). Ver [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação) e
   [mqtt.md](mqtt.md#ordem-de-reset-npm-run-resetar).
 
 O app só aceita um `historico` com `"origem": "pulseira"`. Uma aba antiga do
@@ -159,6 +165,13 @@ de volta.
 - Um arquivo corrompido é guardado como
   `historico_<id>.corrompido-<data>.json` e a pulseira segue sem ele.
 - Limite de 200 episódios: ao passar disso, os mais antigos saem.
+- **No app do cuidador**: um banco SQLite local (`files/banco/puzzleband.db`,
+  pacote `drift`), tabela `episodios`. Cada lista recebida entra por upsert
+  pelo id do episódio; os que saem da lista de 50 da pulseira continuam no
+  banco, e uma lista vazia não apaga nada. A avaliação feita no app fica
+  "pendente de confirmação" até a pulseira devolver o mesmo `avaliacao_em`
+  (a pulseira guarda o horário da mensagem sem mudança). Retenção: 1 ano ou
+  5.000 episódios. Detalhes: [app.md](app.md#armazenamento).
 
 ## Privacidade (LGPD)
 
@@ -168,8 +181,13 @@ de volta.
   - Os **50 mais recentes**, resumidos (sem as leituras brutas e com o
     gatilho reduzido a tipo + texto), são publicados no broker MQTT em
     `puzzleband/<id>/historico` com *retain*, para o app do cuidador e o
-    painel. Ficam então também no broker (até a próxima publicação) e no
-    celular do cuidador (`shared_preferences`).
+    painel. Ficam então também no broker (até a próxima publicação).
+  - No **celular do cuidador**, o app acumula os episódios recebidos num
+    banco SQLite local, por até **1 ano** (no máximo 5.000), além dos
+    lembretes e dos episódios já notificados. O banco fica fora do backup do
+    Android e da transferência entre aparelhos (`allowBackup="false"` e
+    regras de exclusão). Não é criptografado: SQLCipher fica como trabalho
+    futuro ([app.md](app.md#limitações-do-armazenamento)).
   - O acesso ao tópico é controlado por usuário e senha e pela ACL do broker
     (ver [mqtt.md](mqtt.md#acl-sugerida-menor-privilégio)).
   - O painel do site não guarda nada.
@@ -187,11 +205,11 @@ de volta.
   consentimento específico de um dos pais ou responsável (art. 14). Num uso
   real, isso deve ser coletado antes do monitoramento.
 - **Eliminação**: `--limpar-historico` esvazia o arquivo da pulseira e
-  republica a lista vazia no broker. A cópia salva no celular é substituída
-  quando o app recebe a nova lista. `npm run resetar` apaga também as
-  mensagens retidas no broker e, pela ordem em `comando`, os dados guardados
-  no celular. No app, **Ajustes → Apagar dados deste aparelho** apaga só o
-  celular.
+  republica a lista vazia no broker; o histórico do app **não** é apagado por
+  ela. `npm run resetar` apaga também as mensagens retidas no broker e, pela
+  ordem em `comando`, os dados guardados no celular (as tabelas do banco,
+  com `secure_delete`). No app, **Ajustes → Apagar dados deste aparelho**
+  apaga só o celular. A retenção apaga sozinha o que tem mais de 1 ano.
 - **Cuidados**: o arquivo da pulseira não é criptografado. Qualquer pessoa
   com acesso ao computador onde a pulseira simulada roda consegue ler os
   dados. Numa pulseira real, a memória do ESP32 deveria ser criptografada

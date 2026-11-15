@@ -1,14 +1,18 @@
 // Alertas com o app fechado (flutter test): quem notifica (app aberto x
-// servico em primeiro plano), a lista de episodios notificados dividida entre
-// os dois isolates, as transicoes sem lacuna e a opcao "Monitorar com o app
-// fechado".
+// servico em primeiro plano), a lista de episodios notificados no banco
+// local dividida entre os dois motores Dart (duas conexoes no mesmo arquivo
+// SQLite, em WAL), as transicoes sem lacuna e a opcao "Monitorar com o app
+// fechado". A concorrencia de verdade (isolates separados) fica em
+// test/banco_test.dart.
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart' show AndroidNotificationChannel;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mqtt_client/mqtt_client.dart' show MqttQos;
 import 'package:puzzleband/config/app_config.dart';
 import 'package:puzzleband/models/models.dart';
+import 'package:puzzleband/services/banco.dart';
 import 'package:puzzleband/services/configuracao_de_alertas.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
@@ -53,8 +57,8 @@ class NotificacoesContadas extends NotificationService {
 
 /// MqttService sem rede que guarda o que publicaria.
 class MqttRegistrado extends MqttService {
-  MqttRegistrado({required super.prefs, required super.notificacoes, super.papel})
-      : super(config: _semRede);
+  MqttRegistrado({required super.prefs, required super.notificacoes, super.papel, BancoPuzzleBand? banco})
+      : super(config: _semRede, banco: banco ?? BancoPuzzleBand.emMemoria());
 
   final publicados = <(String, String, bool)>[];
 
@@ -65,42 +69,31 @@ class MqttRegistrado extends MqttService {
   }
 }
 
-/// Um "disco" (o shared_preferences nativo) e uma copia em memoria por
-/// isolate, como no app: cada lado so ve o que o outro gravou depois de
-/// recarregar.
-class Disco {
-  final valores = <String, Object>{};
+/// Um arquivo de banco novo numa pasta temporaria (apagada no fim).
+Future<File> arquivoNovo() async {
+  final pasta = await Directory.systemTemp.createTemp('puzzleband_banco_');
+  addTearDown(() async {
+    try {
+      await pasta.delete(recursive: true);
+    } catch (_) {}
+  });
+  return File('${pasta.path}${Platform.pathSeparator}puzzleband.db');
 }
 
-class CopiaDoIsolate implements EstadoCompartilhado {
-  CopiaDoIsolate(this.disco, {this.recarregaDeVerdade = true}) {
-    _copia.addAll(disco.valores);
-  }
-
-  final Disco disco;
-  final bool recarregaDeVerdade;
-  final _copia = <String, Object>{};
-
-  @override
-  Future<void> recarregar() async {
-    if (!recarregaDeVerdade) return;
-    _copia
-      ..clear()
-      ..addAll(disco.valores);
-  }
-
-  @override
-  String? lerTexto(String chave) => _copia[chave] as String?;
-
-  @override
-  bool? lerBooleano(String chave) => _copia[chave] as bool?;
-
-  @override
-  Future<void> gravarTexto(String chave, String valor) async {
-    _copia[chave] = valor;
-    disco.valores[chave] = valor;
-  }
+/// Duas conexoes no mesmo arquivo, como as telas e o servico no celular.
+Future<(BancoPuzzleBand, BancoPuzzleBand)> appEServico() async {
+  final arquivo = await arquivoNovo();
+  final app = BancoPuzzleBand.noArquivo(arquivo, emSegundoPlano: false);
+  final servico = BancoPuzzleBand.noArquivo(arquivo, emSegundoPlano: false);
+  addTearDown(() async {
+    await app.close();
+    await servico.close();
+  });
+  return (app, servico);
 }
+
+RegistroDeNotificacoes registro(BancoPuzzleBand banco, {bool comSom = true}) =>
+    RegistroDeNotificacoes(banco: banco, alertasSonoros: () async => comSom);
 
 void main() {
   late SharedPreferences prefs;
@@ -140,11 +133,11 @@ void main() {
     });
   });
 
-  group('lista de notificados dividida entre app e servico', () {
-    test('cada lado relê o disco antes de decidir: sem duplicata, e a subida toca no outro lado', () async {
-      final disco = Disco();
-      final app = RegistroDeNotificacoes(CopiaDoIsolate(disco));
-      final servico = RegistroDeNotificacoes(CopiaDoIsolate(disco));
+  group('lista de notificados no banco, dividida entre app e servico', () {
+    test('cada lado ve o que o outro gravou: sem duplicata, e a subida toca no outro lado', () async {
+      final (bancoApp, bancoServico) = await appEServico();
+      final app = registro(bancoApp);
+      final servico = registro(bancoServico);
 
       expect(await servico.decidir(alertaDe('ep_1', 'atencao')), isNotNull);
       // o app recebeu o mesmo alerta (QoS 1, troca de dono no meio): nada
@@ -159,66 +152,105 @@ void main() {
       expect(await servico.decidir(alertaDe('ep_1', 'atencao')), isNull);
     });
 
-    test('controle: sem recarregar, a copia velha de um lado notificaria de novo', () async {
-      final disco = Disco();
-      final servico = RegistroDeNotificacoes(CopiaDoIsolate(disco));
-      final appSemReload = RegistroDeNotificacoes(CopiaDoIsolate(disco, recarregaDeVerdade: false));
-      expect(await servico.decidir(alertaDe('ep_1', 'atencao')), isNotNull);
-      expect(await appSemReload.decidir(alertaDe('ep_1', 'atencao')), isNotNull, reason: 'duplicata');
+    test('app e servico decidindo o mesmo alerta ao mesmo tempo: so um notifica', () async {
+      final (bancoApp, bancoServico) = await appEServico();
+      final app = registro(bancoApp);
+      final servico = registro(bancoServico);
+      for (var i = 0; i < 20; i++) {
+        final decisoes = await Future.wait([
+          app.decidir(alertaDe('ep_$i', 'alto_risco')),
+          servico.decidir(alertaDe('ep_$i', 'alto_risco')),
+        ]);
+        expect(decisoes.whereType<DecisaoDeNotificacao>().length, 1, reason: 'ep_$i');
+      }
+    });
+
+    test('a conexao do app (MqttService) e a do servico no mesmo arquivo: uma notificacao so', () async {
+      final (bancoApp, bancoServico) = await appEServico();
+      final nApp = NotificacoesContadas();
+      final nServico = NotificacoesContadas();
+      final app = MqttRegistrado(prefs: prefs, notificacoes: nApp, banco: bancoApp);
+      final servico = MqttRegistrado(prefs: prefs, notificacoes: nServico, papel: PapelDaConexao.servico, banco: bancoServico);
+      await app.iniciar();
+      await servico.iniciar();
+      // instante da troca de dono: as duas conexoes acham que notificam
+      expect(app.notificaAlertas && servico.notificaAlertas, isTrue);
+      app.tratarMensagem(_alertas, alerta('ep_1', 'atencao'));
+      servico.tratarMensagem(_alertas, alerta('ep_1', 'atencao'));
+      await Future.wait([app.notificacoesPendentes, servico.notificacoesPendentes]);
+      expect([...nApp.titulos, ...nServico.titulos], ['Atenção']);
     });
 
     test('a opcao "Alertas sonoros" e lida do disco a cada alerta (mudada pelo outro lado)', () async {
-      final disco = Disco();
-      final servico = RegistroDeNotificacoes(CopiaDoIsolate(disco));
-      disco.valores[RegistroDeNotificacoes.chaveAlertasSonoros] = false; // o app desligou
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
+      final servico = RegistroDeNotificacoes(banco: banco, alertasSonoros: alertasSonorosDoDisco(prefs));
+      await prefs.setBool(RegistroDeNotificacoes.chaveAlertasSonoros, false); // o app desligou
       final d = await servico.decidir(alertaDe('ep_1', 'atencao'));
       expect(d!.comSom, isFalse);
     });
 
-    test('com o shared_preferences real: grava logo depois de decidir', () async {
-      final registro = RegistroDeNotificacoes(EstadoNasPreferencias(prefs));
-      await registro.decidir(alertaDe('ep_9', 'atencao'));
-      expect(prefs.getString(RegistroDeNotificacoes.chaveNotificados), contains('ep_9'));
+    test('grava no banco logo ao decidir (antes de mostrar)', () async {
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
+      await registro(banco).decidir(alertaDe('ep_9', 'atencao'));
+      expect((await banco.notificados())['ep_9']?.nivel, NivelRisco.atencao);
+    });
+
+    test('guarda no maximo 100 (os mais recentes)', () async {
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
+      final r = registro(banco);
+      final inicio = DateTime.now();
+      for (var i = 0; i < 105; i++) {
+        await r.decidir(alertaDe('ep_$i', 'atencao'), agora: inicio.add(Duration(milliseconds: i)));
+      }
+      final guardados = await banco.notificados();
+      expect(guardados.length, BancoPuzzleBand.maxNotificados);
+      expect(guardados.containsKey('ep_0'), isFalse);
+      expect(guardados.containsKey('ep_104'), isTrue);
     });
 
     test('alerta com mais de 10 minutos nao notifica', () async {
-      final registro = RegistroDeNotificacoes(CopiaDoIsolate(Disco()));
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
       final velho = Alerta.tryParse(
         alerta('ep_v', 'alto_risco', quando: DateTime.now().subtract(const Duration(minutes: 11))),
       )!;
-      expect(await registro.decidir(velho), isNull);
+      expect(await registro(banco).decidir(velho), isNull);
     });
   });
 
   group('"Nao perturbe": par de canais de alerta', () {
     test('a subida usa o par da notificacao original, mesmo que o acesso mude no meio', () async {
-      final registro = RegistroDeNotificacoes(CopiaDoIsolate(Disco()));
+      final banco = BancoPuzzleBand.emMemoria();
+      addTearDown(banco.close);
+      final r = registro(banco);
       // sem acesso no "Atencao"; o tutor libera; a subida continua no par normal
-      final atencao = await registro.decidir(alertaDe('ep_1', 'atencao'), naoPerturbeLiberado: false);
+      final atencao = await r.decidir(alertaDe('ep_1', 'atencao'), naoPerturbeLiberado: false);
       expect(atencao!.ignoraNaoPerturbe, isFalse);
-      final subida = await registro.decidir(alertaDe('ep_1', 'alto_risco'), naoPerturbeLiberado: true);
+      final subida = await r.decidir(alertaDe('ep_1', 'alto_risco'), naoPerturbeLiberado: true);
       expect(subida!.atualizacao, isTrue);
       expect(subida.ignoraNaoPerturbe, isFalse, reason: 'mesma notificacao, mesmo canal-par');
       expect(subida.id, atencao.id);
 
       // ao contrario: com acesso no "Atencao", revogado antes da subida
-      final outra = await registro.decidir(alertaDe('ep_2', 'atencao'), naoPerturbeLiberado: true);
+      final outra = await r.decidir(alertaDe('ep_2', 'atencao'), naoPerturbeLiberado: true);
       expect(outra!.ignoraNaoPerturbe, isTrue);
-      final subida2 = await registro.decidir(alertaDe('ep_2', 'alto_risco'), naoPerturbeLiberado: false);
+      final subida2 = await r.decidir(alertaDe('ep_2', 'alto_risco'), naoPerturbeLiberado: false);
       expect(subida2!.ignoraNaoPerturbe, isTrue);
 
       // episodio novo segue o acesso atual
-      final nova = await registro.decidir(alertaDe('ep_3', 'atencao'), naoPerturbeLiberado: true);
+      final nova = await r.decidir(alertaDe('ep_3', 'atencao'), naoPerturbeLiberado: true);
       expect(nova!.ignoraNaoPerturbe, isTrue);
     });
 
-    test('o par usado e lido pelo outro lado (app x servico); o formato antigo vale como par normal', () async {
-      final disco = Disco();
-      disco.valores[RegistroDeNotificacoes.chaveNotificados] = jsonEncode([
-        ['ep_velho', 'atencao'],
-      ]);
-      final servico = RegistroDeNotificacoes(CopiaDoIsolate(disco));
-      final app = RegistroDeNotificacoes(CopiaDoIsolate(disco));
+    test('o par usado e lido pelo outro lado (app x servico); o importado do formato antigo vale como par normal', () async {
+      final (bancoApp, bancoServico) = await appEServico();
+      // vindo da lista antiga do shared_preferences ([id, nivel])
+      await bancoServico.importarNotificado('ep_velho', NivelRisco.atencao, ignoraNaoPerturbe: false, em: DateTime.now());
+      final servico = registro(bancoServico);
+      final app = registro(bancoApp);
       final velho = await servico.decidir(alertaDe('ep_velho', 'alto_risco'), naoPerturbeLiberado: true);
       expect(velho!.ignoraNaoPerturbe, isFalse);
       await servico.decidir(alertaDe('ep_n', 'atencao'), naoPerturbeLiberado: true);

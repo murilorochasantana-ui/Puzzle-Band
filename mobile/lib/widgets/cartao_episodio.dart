@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/models.dart';
 import '../services/app_scope.dart';
+import '../services/mqtt_service.dart' show ResultadoDaAvaliacao;
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
 import 'botoes_adaptaveis.dart';
@@ -172,7 +173,8 @@ class _AvaliacaoEpisodioState extends State<AvaliacaoEpisodio> {
     final ep = widget.episodio;
     final service = AppScope.read(context);
     final texto = _obs.text;
-    final enviado = service.enviarAvaliacao(ep, avaliacao, texto);
+    final resultado = service.enviarAvaliacao(ep, avaliacao, texto);
+    final enviado = resultado != ResultadoDaAvaliacao.naoEnviada;
     if (enviado) {
       _obsDoSite = texto.trim();
       setState(() => _obsAberta = false);
@@ -182,11 +184,17 @@ class _AvaliacaoEpisodioState extends State<AvaliacaoEpisodio> {
       ..showSnackBar(
         SnackBar(
           content: Text(
-            enviado
-                ? (avaliacao == Avaliacao.confirmado
-                    ? 'Gatilho confirmado e enviado à pulseira.'
-                    : 'Indicação descartada e enviada à pulseira.')
-                : 'Sem conexão com o servidor: a avaliação não foi enviada. Tente de novo em instantes.',
+            switch (resultado) {
+              ResultadoDaAvaliacao.enviada => avaliacao == Avaliacao.confirmado
+                  ? 'Gatilho confirmado e enviado à pulseira.'
+                  : 'Indicação descartada e enviada à pulseira.',
+              // O episodio ja saiu da lista da pulseira: fica so no celular
+              ResultadoDaAvaliacao.soNoCelular => avaliacao == Avaliacao.confirmado
+                  ? 'Gatilho confirmado e salvo neste celular.'
+                  : 'Indicação descartada e salva neste celular.',
+              ResultadoDaAvaliacao.naoEnviada =>
+                'Sem conexão com o servidor: a avaliação não foi enviada. Tente de novo em instantes.',
+            },
           ),
         ),
       );

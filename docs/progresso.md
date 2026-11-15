@@ -916,9 +916,89 @@ par da notificação original do episódio.
   Observação: durante o teste chegaram também alertas de episódios com t =
   1737 e 2012 s, de outra pulseira publicando no mesmo CHILD_ID.
 
+## Banco SQLite no app (branch `app-sqlite`, a partir de `05ef491`)
+
+Pedido (14/11/2026): guardar o histórico de episódios, os lembretes e os
+episódios notificados num SQLite local (antes: JSON no `shared_preferences`,
+chaves `historico_v1`, `lembretes_v1`, `episodios_notificados`), acumulando
+além dos 50 da pulseira. Regras: sem commit; `.env`, `mobile/env.json`,
+tópicos, formatos, pulseira e site intactos; sem navegador; não recriar
+`mobile/ios`, `macos`, `linux`, `windows`, `web` (as pastas `ios/` e `macos/`
+já existiam no disco desde 08/11, ignoradas pelo Git; não foram tocadas);
+goldens não mudam.
+
+Situação: **implementado e testado, sem commit (revisão do usuário).**
+
+Decisões do usuário (14/11/2026): drift; a lista vazia da pulseira deixa de
+apagar o histórico do app (documentado como mudança de comportamento);
+retenção de 1 ano / 5.000 episódios; SQLCipher fora (trabalho futuro no
+`app.md`); `allowBackup="false"` + `dataExtractionRules` +
+`fullBackupContent` excluindo o banco e o `shared_preferences`. Ajustes:
+conferir na pulseira se o `avaliacao_em` volta original; avaliar episódio
+fora da lista grava só no app.
+
+### Feito
+
+- **Conferido na pulseira:** `simulator/borda.js:126` grava
+  `avaliacao_em: timestamp ?? now()`, e o `parseEvaluation`
+  (`frontend/src/hooks/parseMessages.js`) repassa a string do app sem
+  mudança: o valor que volta é o **original**. Mesmo assim a avaliação do
+  app fica "pendente de confirmação" (colunas `avaliacao_local*`) até a
+  pulseira devolver o mesmo `avaliacao_em` (comparação exata, em
+  microssegundos) ou um mais novo (outra avaliação depois desta); uma lista
+  retida antiga não a desfaz. Formatos sem mudança.
+- **Pacotes:** `drift` 2.35.4, `sqlite3` 3.9.1 (SQLite embutido por build
+  hook), `path_provider` 2.1.6; dev: `drift_dev` 2.35.3, `build_runner`
+  2.17.1. `build.yaml` (geração), `lib/services/banco.g.dart` gerado e
+  versionado, esquema v1 em `mobile/drift_schemas/banco/` e ajudantes em
+  `test/drift/banco/generated/`.
+- **Código novo:** `banco.dart` (tabelas `episodios`, `lembretes`,
+  `episodios_notificados`; índices; WAL, `busy_timeout`, `secure_delete`;
+  upsert da pulseira; registro atômico de notificação com
+  `INSERT ... ON CONFLICT DO UPDATE ... WHERE ... RETURNING`; retenção;
+  reset), `banco_no_celular.dart` (arquivo em `files/banco/`),
+  `historico_local.dart` (cache das telas: dia, mês, 7 dias, por id, lista
+  em páginas de 50 sem cortar dia), `importacao_antiga.dart` (importação
+  única, só depois do commit apaga as chaves), `models/lembrete.dart`.
+- **Mudado:** `MqttService` (histórico no banco; `enviarAvaliacao` devolve
+  `ResultadoDaAvaliacao`: enviada, só no celular ou não enviada),
+  `RegistroDeNotificacoes` (banco + som relido do disco; se o banco falhar,
+  notifica assim mesmo), `PreferenciasLocais` (lembretes no banco;
+  `carregar()`), serviço em primeiro plano (abre a sua conexão e também
+  importa), `main.dart` (abre, importa, retenção, carrega), telas (Início,
+  Histórico, Gráficos, Detalhe leem do `HistoricoLocal`; Histórico carrega
+  mais ao chegar ao fim), `cartao_episodio.dart` (texto "salvo neste
+  celular" para episódio fora da lista). Manifesto e `res/xml/regras_de_backup*.xml`.
+- **Problema achado pelo teste de concorrência:** com app e serviço abrindo
+  o arquivo novo ao mesmo tempo, o `PRAGMA journal_mode = WAL` falhava com
+  "database is locked" (o SQLite não espera o `busy_timeout` nessa troca).
+  Corrigido com novas tentativas (até 50 × 20 ms); passou 10 de 10 vezes.
+- **Testes:** `flutter test` **238** (antes 205): novos
+  `banco_test.dart` (19: upsert, quem sai da lista, acumula além de 50,
+  consultas por faixa, índice usado, CHECK, avaliação pendente, retenção,
+  reset, WAL/secure_delete, lembretes, `HistoricoLocal` e 3 de concorrência
+  com isolates separados no mesmo arquivo), `importacao_test.dart` (6, com
+  dados de exemplo), `test/drift/banco/migracao_test.dart` (3); adaptados
+  `mqtt_service_test.dart` (+ lista que acumula, lista vazia que não apaga,
+  avaliação pendente, mais nova vence, episódio fora da lista grava só no
+  app, banco indisponível), `segundo_plano_test.dart` (o disco simulado
+  virou duas conexões reais no mesmo arquivo: os dois lados, o mesmo alerta
+  ao mesmo tempo só notifica uma vez) e `telas_test.dart` (o cenário da
+  lista vazia virou "não apaga; o reset apaga"). **Nenhum golden mudou.**
+- **Docs:** `app.md` (seção "Armazenamento": banco, `shared_preferences` e
+  pulseira, retenção, backup, limitações e SQLCipher como trabalho futuro;
+  notificações; mudança da lista vazia; avaliação fora da lista; estrutura),
+  `historico.md` (persistência, limpar, LGPD), `mqtt.md`,
+  `apresentacao.md` e `design-app.md` (só os trechos da cópia/limpeza).
+- **Verificação final (14/11/2026):** `flutter analyze` sem avisos;
+  `flutter test` 238/238; `flutter build apk --release
+  --dart-define-from-file=env.json` OK (62,6 MB, com `libsqlite3.so` para
+  arm64-v8a, armeabi-v7a e x86_64). Não testado no emulador.
+
 ## Próximo passo
 
-App em segundo plano: implementado e testado, sem commit (revisão do
+Banco SQLite no app: implementado e testado, sem commit (revisão do
+usuário). App em segundo plano: implementado e testado, sem commit (revisão do
 usuário). Estudo exercício x crise: concluído. Etapa
 4 aguardando revisão; depois, Etapa 5 (relatório final). S2 e S3 continuam
 fora.

@@ -202,7 +202,9 @@ processamento na borda, o site publicava `historico` retido a partir do
 aberta em algum lugar sobrescrevia a lista vazia da pulseira
 (`--limpar-historico`) com os episódios velhos, e o calendário do app voltava
 a mostrar dias com crises. A lista vazia (`"episodios": []`) da pulseira
-substitui a cópia do app normalmente.
+esvazia o painel; o app, desde 11/2026, guarda os episódios num banco local
+e **não** os apaga com a lista vazia (só com a ordem de reset). O formato da
+mensagem não mudou ([app.md](app.md#armazenamento)).
 
 ### `avaliacao` (app e site → pulseira)
 
@@ -364,7 +366,7 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
   grava o arquivo e publica o histórico final.
 - **Para começar do zero:**
   - `npm start -- --limpar-historico` apaga a lista do arquivo e publica a
-    lista vazia, também para o app;
+    lista vazia (o painel esvazia; o app mantém o seu histórico local);
   - `npm run resetar` apaga também os dados do app e do site.
 
 ## Ordem de reset (`npm run resetar`)
@@ -401,9 +403,11 @@ mensagens:
 3. **App** (`mobile/lib/services/mqtt_service.dart`), com uma ordem de `id`
    novo:
    1. grava o id (`reset_aplicado_id`);
-   2. apaga a cópia do histórico, os episódios notificados, os alertas, o
-      "Estou ciente" local, o buffer dos gráficos e o estado;
-   3. apaga os lembretes e cancela os avisos agendados deles;
+   2. apaga o histórico e os episódios notificados (tabelas do banco
+      local), os alertas, o "Estou ciente" local, o buffer dos gráficos e o
+      estado;
+   3. apaga os lembretes (tabela do banco) e cancela os avisos agendados
+      deles;
    4. com `manter_preferencias: false`, também apaga o nome da criança, a
       aparência e os alertas sonoros;
    5. publica `comando/resposta` e mostra o SnackBar "Dados apagados para

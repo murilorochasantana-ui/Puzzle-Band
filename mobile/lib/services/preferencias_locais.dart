@@ -1,56 +1,23 @@
-// Dados que o cuidador escreve e que ficam SO neste celular
-// (shared_preferences): o nome da crianca, os lembretes (de um episodio ou
-// do dia) e a aparencia (claro, escuro ou seguir o sistema). Decisao de privacidade (docs/app.md): nada disto vai para o MQTT,
-// para o painel (site) nem para outro aparelho. A ordem de reset do terminal
-// (npm run resetar) e o botao "Apagar dados deste aparelho" apagam os
-// lembretes (e, com --tudo, o nome e a aparencia): apagarDados.
-
-import 'dart:convert';
+// Dados que o cuidador escreve e que ficam SO neste celular: o nome da
+// crianca e a aparencia (claro, escuro ou seguir o sistema) no
+// shared_preferences, e os lembretes (de um episodio ou do dia) na tabela
+// `lembretes` do banco local (banco.dart). Decisao de privacidade
+// (docs/app.md): nada disto vai para o MQTT, para o painel (site) nem para
+// outro aparelho. A ordem de reset do terminal (npm run resetar) e o botao
+// "Apagar dados deste aparelho" apagam os lembretes (e, com --tudo, o nome e
+// a aparencia): apagarDados.
 
 import 'package:flutter/material.dart' show ThemeMode;
 import 'package:flutter/widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../models/lembrete.dart';
 import '../utils/relogio.dart';
 import 'aviso_de_lembrete.dart';
+import 'banco.dart';
 import 'notification_service.dart' show idDeNotificacao;
 
-/// Lembrete curto do cuidador, com um aviso opcional no celular.
-@immutable
-class Lembrete {
-  const Lembrete({required this.texto, required this.salvoEm, this.avisarEm});
-
-  final String texto;
-  final DateTime salvoEm;
-  final DateTime? avisarEm;
-
-  /// Aviso ainda por vir (os passados nao aparecem mais na tela).
-  DateTime? avisoPendente(DateTime agora) {
-    final aviso = avisarEm;
-    return aviso != null && aviso.isAfter(agora) ? aviso : null;
-  }
-
-  Map<String, dynamic> toJson() => {
-        'texto': texto,
-        'salvo_em': salvoEm.toUtc().toIso8601String(),
-        if (avisarEm != null) 'avisar_em': avisarEm!.toUtc().toIso8601String(),
-      };
-
-  static Lembrete? fromJson(Object? json) {
-    if (json is! Map<String, dynamic>) return null;
-    final texto = json['texto'];
-    final salvo = json['salvo_em'];
-    if (texto is! String || texto.trim().isEmpty || salvo is! String) return null;
-    final salvoEm = DateTime.tryParse(salvo)?.toLocal();
-    if (salvoEm == null) return null;
-    final aviso = json['avisar_em'];
-    return Lembrete(
-      texto: texto,
-      salvoEm: salvoEm,
-      avisarEm: aviso is String ? DateTime.tryParse(aviso)?.toLocal() : null,
-    );
-  }
-}
+export '../models/lembrete.dart';
 
 /// Tema do app escolhido em Ajustes > Aparencia.
 enum Aparencia {
@@ -72,11 +39,15 @@ enum Aparencia {
 enum ResultadoLembrete { salvo, salvoComAviso, avisoFalhou, apagado }
 
 class PreferenciasLocais extends ChangeNotifier {
-  PreferenciasLocais({required this.prefs, required this.nomePadrao, required this.aviso}) {
-    _carregar();
+  /// O nome e a aparencia ficam prontos aqui; os lembretes, depois de
+  /// [carregar] (o main espera antes de abrir as telas).
+  PreferenciasLocais({required this.prefs, required this.banco, required this.nomePadrao, required this.aviso}) {
+    _nome = prefs.getString(_chaveNome) ?? '';
+    _aparencia = Aparencia.fromCodigo(prefs.getString(_chaveAparencia));
   }
 
   final SharedPreferences prefs;
+  final BancoPuzzleBand banco;
 
   /// Nome mostrado quando o cuidador nao digitou um (o CHILD_ID).
   final String nomePadrao;
@@ -89,7 +60,6 @@ class PreferenciasLocais extends ChangeNotifier {
 
   static const _chaveNome = 'nome_crianca';
   static const _chaveAparencia = 'aparencia';
-  static const _chaveLembretes = 'lembretes_v1';
 
   String _nome = '';
   Aparencia _aparencia = Aparencia.sistema;
@@ -181,9 +151,10 @@ class PreferenciasLocais extends ChangeNotifier {
       salvoEm: agora,
       avisarEm: resultado == ResultadoLembrete.avisoFalhou ? null : avisoValido,
     );
-    _limitar();
+    final excedentes = _limitar();
     notifyListeners();
-    await _salvar();
+    await banco.gravarLembrete(chave, _lembretes[chave]!);
+    await banco.apagarLembretes(excedentes);
     return resultado;
   }
 
@@ -192,7 +163,7 @@ class PreferenciasLocais extends ChangeNotifier {
     if (anterior == null) return;
     notifyListeners();
     if (anterior.avisoPendente(relogio()) != null) await aviso.cancelar(idDoAviso(chave));
-    await _salvar();
+    await banco.apagarLembretes([chave]);
   }
 
   // -------------------------------------------------------------------------
@@ -223,7 +194,7 @@ class PreferenciasLocais extends ChangeNotifier {
     for (final chave in chaves) {
       await aviso.cancelar(idDoAviso(chave));
     }
-    await prefs.remove(_chaveLembretes);
+    await banco.apagarTodosOsLembretes();
     if (!manterPreferencias) {
       await prefs.remove(_chaveNome);
       await prefs.remove(_chaveAparencia);
@@ -234,40 +205,37 @@ class PreferenciasLocais extends ChangeNotifier {
   // Persistencia
   // -------------------------------------------------------------------------
 
-  void _carregar() {
-    _nome = prefs.getString(_chaveNome) ?? '';
-    _aparencia = Aparencia.fromCodigo(prefs.getString(_chaveAparencia));
+  /// Le os lembretes do banco. Os lembretes do dia so valem para aquele dia:
+  /// os de mais de 30 dias saem (tambem do banco), e no maximo 200 ficam.
+  Future<void> carregar() async {
     try {
-      final dados = jsonDecode(prefs.getString(_chaveLembretes) ?? '{}');
-      if (dados is Map<String, dynamic>) {
-        for (final MapEntry(:key, :value) in dados.entries) {
-          final lembrete = Lembrete.fromJson(value);
-          if (lembrete != null) _lembretes[key] = lembrete;
-        }
-      }
-    } catch (_) {
-      // lista corrompida: recomeca vazia
+      final salvos = await banco.lembretesSalvos();
+      _lembretes
+        ..clear()
+        ..addAll(salvos);
+    } catch (e) {
+      debugPrint('Falha ao ler os lembretes do banco: $e');
+      return;
     }
-    // Lembrete do dia so vale para aquele dia: os antigos saem.
     final limite = relogio().subtract(const Duration(days: _diasDoLembreteDoDia));
-    _lembretes.removeWhere((chave, l) => chave.startsWith('dia:') && l.salvoEm.isBefore(limite));
-    _limitar();
+    final velhos = [
+      for (final MapEntry(key: chave, value: l) in _lembretes.entries)
+        if (chave.startsWith('dia:') && l.salvoEm.isBefore(limite)) chave,
+    ];
+    velhos.forEach(_lembretes.remove);
+    final excedentes = _limitar();
+    notifyListeners();
+    await banco.apagarLembretes([...velhos, ...excedentes]);
   }
 
-  /// No maximo [_maxLembretes]: os mais antigos saem primeiro.
-  void _limitar() {
-    if (_lembretes.length <= _maxLembretes) return;
+  /// No maximo [_maxLembretes]: os mais antigos saem primeiro. Devolve as
+  /// chaves que sairam (para apagar do banco).
+  List<String> _limitar() {
+    if (_lembretes.length <= _maxLembretes) return const [];
     final ordem = _lembretes.entries.toList()..sort((a, b) => a.value.salvoEm.compareTo(b.value.salvoEm));
-    for (final e in ordem.take(_lembretes.length - _maxLembretes)) {
-      _lembretes.remove(e.key);
-    }
-  }
-
-  Future<void> _salvar() async {
-    await prefs.setString(
-      _chaveLembretes,
-      jsonEncode({for (final e in _lembretes.entries) e.key: e.value.toJson()}),
-    );
+    final sairam = [for (final e in ordem.take(_lembretes.length - _maxLembretes)) e.key];
+    sairam.forEach(_lembretes.remove);
+    return sairam;
   }
 }
 

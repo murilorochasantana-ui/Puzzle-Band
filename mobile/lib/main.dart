@@ -13,7 +13,9 @@ import 'screens/configuracoes_screen.dart';
 import 'screens/configurar_alertas_screen.dart';
 import 'services/app_scope.dart';
 import 'services/aviso_de_lembrete.dart';
+import 'services/banco_no_celular.dart';
 import 'services/configuracao_de_alertas.dart';
+import 'services/importacao_antiga.dart';
 import 'services/monitor_segundo_plano.dart';
 import 'services/mqtt_service.dart';
 import 'services/notification_service.dart';
@@ -35,13 +37,27 @@ Future<void> main() async {
   // de comunicacao com a tarefa (monitor_segundo_plano.dart)
   MonitorSegundoPlano.configurar();
 
+  // Banco local (historico, lembretes, notificados; docs/app.md,
+  // "Armazenamento"). Na primeira abertura depois da atualizacao, importa o
+  // que estava no shared_preferences (uma vez) e aplica a retencao (1 ano /
+  // 5.000 episodios). O servico em primeiro plano abre a sua conexao.
+  final banco = await abrirBancoDoApp();
+  try {
+    await importarDoSharedPreferences(banco, prefs);
+    await banco.aplicarRetencao(DateTime.now());
+  } catch (e) {
+    debugPrint('Falha ao preparar o banco local: $e');
+  }
+
   // Nome da crianca e lembretes: so neste celular (nao vao para o MQTT)
   final config = AppConfig.fromEnvironment();
   final preferencias = PreferenciasLocais(
     prefs: prefs,
+    banco: banco,
     nomePadrao: config.childId,
     aviso: AvisoDeLembreteLocal(),
   );
+  await preferencias.carregar();
 
   // Conexao MQTT das telas, viva enquanto o processo do app estiver vivo. A
   // ordem de reset (npm run resetar) tambem apaga os lembretes e, com
@@ -50,9 +66,12 @@ Future<void> main() async {
   final service = MqttService(
     config: config,
     prefs: prefs,
+    banco: banco,
     notificacoes: notificacoes,
     aoApagarDados: preferencias.apagarDados,
   );
+  // O que as telas mostram ja vem carregado do banco
+  await service.historicoLocal.recarregar();
 
   // Configuracao dos alertas com o app fechado (tela "Configurar alertas"):
   // a permissao de notificacao e pedida la, num passo explicado

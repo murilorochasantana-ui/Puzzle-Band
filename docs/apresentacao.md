@@ -41,7 +41,7 @@ Não é preciso mexer no celular. Usa as credenciais do `simulator/.env`.
 |---|---|---|
 | Pulseira (`simulator/`) | `data/historico_<id>.json` (e as cópias `.corrompido-*` e `.tmp`) | `logs/` (gabaritos) |
 | Broker | as mensagens retidas `estado`, `historico`, `status` e `app/status`. Depois, `historico` volta retido com a lista vazia e a ordem fica retida em `comando` | — |
-| App do cuidador | cópia do histórico, episódios já notificados, alertas recebidos, lembretes (e os avisos agendados deles) e gráficos | preferências: nome da criança, aparência e alertas sonoros voltam ao padrão |
+| App do cuidador | histórico, episódios já notificados e lembretes (banco local; e os avisos agendados dos lembretes), alertas recebidos e gráficos | preferências: nome da criança, aparência e alertas sonoros voltam ao padrão |
 | Site (painel) | o que está na tela | — |
 
 **Opções:**
@@ -174,9 +174,10 @@ ciclo é sempre o nominal), e encerra depois de uma pausa calma final:
    [Resetar para uma apresentação](#resetar-para-uma-apresentação)).
 4. Terminal 2: `cd simulator` e
    `npm run demo -- --ciclos 1 --limpar-historico`.
-   - O `--limpar-historico` começa o histórico vazio, para a plateia ver só os
-     episódios da demo. Depois do `npm run resetar` ele não é necessário (a
-     pulseira já começa vazia), mas não atrapalha.
+   - O `--limpar-historico` começa o histórico da pulseira vazio, para a
+     plateia ver só os episódios da demo. Ele **não** limpa o app (que guarda
+     o histórico no banco local): para isso serve o `npm run resetar` do
+     passo 3. Depois do reset ele não é necessário, mas não atrapalha.
    - A pausa final de 2 min garante que o último episódio feche antes de a
      pulseira parar. Sem `--ciclos 1`, a demo recomeça em loop, já com
      variação.

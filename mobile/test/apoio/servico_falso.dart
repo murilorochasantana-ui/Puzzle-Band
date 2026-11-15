@@ -1,9 +1,14 @@
 // MqttService sem rede para os testes de tela: os getters que as telas leem
-// sao sobrescritos e o estado e montado a mao em cada cenario.
+// sao sobrescritos e o estado e montado a mao em cada cenario. Os episodios
+// vao para um banco em memoria (o mesmo drift/SQLite do app): as telas leem
+// do banco, como no celular.
+import 'dart:async';
+
 import 'package:puzzleband/config/app_config.dart';
 import 'package:puzzleband/models/models.dart';
 import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/services/aviso_de_lembrete.dart';
+import 'package:puzzleband/services/banco.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/notification_service.dart';
 import 'package:puzzleband/utils/relogio.dart';
@@ -12,7 +17,8 @@ const configOk = AppConfig(host: 'g12cbd17.ala.us-east-1.emqxsl.com', port: 8883
 const configSemSenha = AppConfig(host: 'g12cbd17.ala.us-east-1.emqxsl.com', port: 8883, user: 'app', pass: '', childId: 'C01');
 
 class ServicoFalso extends MqttService {
-  ServicoFalso({required super.prefs, super.config = configOk}) : super(notificacoes: NotificationService());
+  ServicoFalso({required super.prefs, super.config = configOk, BancoPuzzleBand? banco})
+      : super(banco: banco ?? BancoPuzzleBand.emMemoria(), notificacoes: NotificationService());
 
   BrokerStatus broker = BrokerStatus.conectado;
   String? erro;
@@ -21,8 +27,17 @@ class ServicoFalso extends MqttService {
   DateTime? recebidoEm;
   bool aoVivo = true;
   List<AmostraSinais> sinais = const [];
-  List<Episodio> episodios = const [];
   DateTime? historicoEm;
+
+  /// Os episodios do cenario. Trocar a lista regrava o banco em memoria
+  /// (como uma lista nova da pulseira, depois de apagar o que havia).
+  List<Episodio> get episodios => _episodios;
+  List<Episodio> _episodios = const [];
+  set episodios(List<Episodio> lista) {
+    _episodios = lista;
+    unawaited(historicoLocal.substituirTudo(lista, relogio()));
+  }
+
   bool historicoVivo = true;
   bool sonoros = true;
 
@@ -48,8 +63,6 @@ class ServicoFalso extends MqttService {
   @override
   List<AmostraSinais> get sinaisRecentes => sinais;
   @override
-  List<Episodio> get historico => episodios;
-  @override
   DateTime? get historicoRecebidoEm => historicoEm;
   @override
   bool get historicoAoVivo => historicoVivo;
@@ -72,14 +85,15 @@ class ServicoFalso extends MqttService {
   }
 
   @override
-  bool enviarAvaliacao(Episodio episodio, Avaliacao avaliacao, String observacao) {
-    if (!envioFunciona || avaliacao == Avaliacao.pendente) return false;
+  ResultadoDaAvaliacao enviarAvaliacao(Episodio episodio, Avaliacao avaliacao, String observacao) {
+    if (!envioFunciona || avaliacao == Avaliacao.pendente) return ResultadoDaAvaliacao.naoEnviada;
     avaliacoes.add((episodio.id, avaliacao, observacao.trim()));
-    episodios = [
-      for (final e in episodios) e.id == episodio.id ? e.avaliadoPeloApp(avaliacao, observacao.trim(), relogio()) : e,
+    _episodios = [
+      for (final e in _episodios) e.id == episodio.id ? e.avaliadoPeloApp(avaliacao, observacao.trim(), relogio()) : e,
     ];
+    unawaited(historicoLocal.avaliar(episodio, avaliacao, observacao.trim(), relogio()));
     notifyListeners();
-    return true;
+    return episodio.naPulseira ? ResultadoDaAvaliacao.enviada : ResultadoDaAvaliacao.soNoCelular;
   }
 
   @override

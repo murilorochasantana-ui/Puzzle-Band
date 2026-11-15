@@ -28,10 +28,7 @@ class EpisodioScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final service = AppScope.of(context);
     final agora = relogio();
-    Episodio? ep;
-    for (final e in service.historico) {
-      if (e.id == episodioId) ep = e;
-    }
+    final ep = service.historicoLocal.porId(episodioId);
     return Scaffold(
       body: SafeArea(
         bottom: false,

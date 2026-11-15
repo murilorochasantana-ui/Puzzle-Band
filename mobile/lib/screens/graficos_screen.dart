@@ -678,10 +678,10 @@ class _SecaoSeteDias extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final texto = Theme.of(context).textTheme;
-    final dias = ultimos7Dias(service.historico, agora);
+    final dias = service.historicoLocal.seteDias(agora);
     final confirmadas = dias.fold<int>(0, (s, d) => s + d.contagem.confirmadas);
     final pendentes = dias.fold<int>(0, (s, d) => s + d.contagem.pendentes);
-    final noMes = contagemNoMes(contagemPorDia(service.historico), agora.year, agora.month);
+    final noMes = contagemNoMes(service.historicoLocal.contagensDoMes(agora), agora.year, agora.month);
     final mes = 'Em ${nomeDoMes(agora.month)}: ${contarConfirmadas(noMes.confirmadas)}.';
     final resumo =
         confirmadas + pendentes == 0

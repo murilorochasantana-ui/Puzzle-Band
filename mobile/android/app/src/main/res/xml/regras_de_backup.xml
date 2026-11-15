@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12 ou mais novo (android:dataExtractionRules). O app ja tem
+  android:allowBackup="false", mas no Android 12+ isso nao bloqueia a
+  transferencia direta entre aparelhos (cabo ou Wi-Fi ao trocar de celular).
+  Por isso o banco local (files/banco/: puzzleband.db, -wal e -shm) e o
+  shared_preferences ficam de fora do backup na nuvem E da transferencia.
+  Motivo: dados de saude de crianca (LGPD); ver docs/app.md, "Armazenamento".
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="file" path="banco/" />
+        <exclude domain="sharedpref" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="file" path="banco/" />
+        <exclude domain="sharedpref" path="." />
+    </device-transfer>
+</data-extraction-rules>

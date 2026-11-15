@@ -1,0 +1,578 @@
+{
+  "_meta": {
+    "description": "This file contains a serialized version of schema entities for drift.",
+    "version": "1.3.0"
+  },
+  "options": {
+    "store_date_time_values_as_text": false
+  },
+  "entities": [
+    {
+      "id": 0,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "episodios",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "id",
+            "getter_name": "id",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "crianca",
+            "getter_name": "crianca",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "fonte",
+            "getter_name": "fonte",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "inicio",
+            "getter_name": "inicio",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "fim",
+            "getter_name": "fim",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "duracao_s",
+            "getter_name": "duracaoS",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "encerramento",
+            "getter_name": "encerramento",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "nivel_maximo",
+            "getter_name": "nivelMaximo",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "nivelMaximo",
+                        "tag": "nivelMaximo"
+                      },
+                      ".isIn(",
+                      {
+                        "lexeme": "niveisValidos",
+                        "import_uri": "package:puzzleband/services/banco.dart"
+                      },
+                      ")"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "probabilidade_maxima",
+            "getter_name": "probabilidadeMaxima",
+            "moor_type": "double",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "gatilho_tipo",
+            "getter_name": "gatilhoTipo",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "gatilho_texto",
+            "getter_name": "gatilhoTexto",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avaliacao",
+            "getter_name": "avaliacao",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'pendente\\'')",
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "avaliacao",
+                        "tag": "avaliacao"
+                      },
+                      ".isIn(",
+                      {
+                        "lexeme": "avaliacoesValidas",
+                        "import_uri": "package:puzzleband/services/banco.dart"
+                      },
+                      ")"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "observacao",
+            "getter_name": "observacao",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('\\'\\'')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avaliacao_origem",
+            "getter_name": "avaliacaoOrigem",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avaliacao_em",
+            "getter_name": "avaliacaoEm",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "visto_em",
+            "getter_name": "vistoEm",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "recebido_em",
+            "getter_name": "recebidoEm",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "na_pulseira",
+            "getter_name": "naPulseira",
+            "moor_type": "bool",
+            "nullable": false,
+            "customConstraints": null,
+            "defaultConstraints": "CHECK (\"na_pulseira\" IN (0, 1))",
+            "dialectAwareDefaultConstraints": {
+              "sqlite": "CHECK (\"na_pulseira\" IN (0, 1))"
+            },
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avaliacao_local",
+            "getter_name": "avaliacaoLocal",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "avaliacaoLocal",
+                        "tag": "avaliacaoLocal"
+                      },
+                      ".isIn(",
+                      {
+                        "lexeme": "avaliacoesValidas",
+                        "import_uri": "package:puzzleband/services/banco.dart"
+                      },
+                      ")"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "observacao_local",
+            "getter_name": "observacaoLocal",
+            "moor_type": "string",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avaliacao_local_em",
+            "getter_name": "avaliacaoLocalEm",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "id"
+        ]
+      }
+    },
+    {
+      "id": 1,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "lembretes",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "chave",
+            "getter_name": "chave",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "texto",
+            "getter_name": "texto",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "ComparableExpr",
+                        "import_uri": "package:drift/src/runtime/query_builder/query_builder.dart"
+                      },
+                      "(",
+                      {
+                        "lexeme": "texto",
+                        "tag": "texto"
+                      },
+                      ".length).isSmallerOrEqualValue(120)"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "salvo_em",
+            "getter_name": "salvoEm",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "avisar_em",
+            "getter_name": "avisarEm",
+            "moor_type": "int",
+            "nullable": true,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "chave"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "references": [],
+      "type": "table",
+      "data": {
+        "name": "episodios_notificados",
+        "was_declared_in_moor": false,
+        "columns": [
+          {
+            "name": "episodio_id",
+            "getter_name": "episodioId",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "nivel",
+            "getter_name": "nivel",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "nivel",
+                        "tag": "nivel"
+                      },
+                      ".isIn(",
+                      {
+                        "lexeme": "niveisValidos",
+                        "import_uri": "package:puzzleband/services/banco.dart"
+                      },
+                      ")"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "par_de_canais",
+            "getter_name": "parDeCanais",
+            "moor_type": "string",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": [
+              {
+                "check": {
+                  "dart_expression": {
+                    "elements": [
+                      {
+                        "lexeme": "parDeCanais",
+                        "tag": "parDeCanais"
+                      },
+                      ".isIn(",
+                      {
+                        "lexeme": "paresDeCanais",
+                        "import_uri": "package:puzzleband/services/banco.dart"
+                      },
+                      ")"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "notificado_em",
+            "getter_name": "notificadoEm",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": null,
+            "default_client_dart": null,
+            "dsl_features": []
+          },
+          {
+            "name": "vezes",
+            "getter_name": "vezes",
+            "moor_type": "int",
+            "nullable": false,
+            "customConstraints": null,
+            "default_dart": "const CustomExpression('1')",
+            "default_client_dart": null,
+            "dsl_features": []
+          }
+        ],
+        "is_virtual": false,
+        "without_rowid": false,
+        "constraints": [],
+        "explicit_pk": [
+          "episodio_id"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "references": [
+        0
+      ],
+      "type": "index",
+      "data": {
+        "on": 0,
+        "name": "idx_episodios_inicio",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_episodios_inicio ON episodios (inicio)",
+        "unique": false,
+        "columns": []
+      }
+    },
+    {
+      "id": 4,
+      "references": [
+        1
+      ],
+      "type": "index",
+      "data": {
+        "on": 1,
+        "name": "idx_lembretes_salvo_em",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_lembretes_salvo_em ON lembretes (salvo_em)",
+        "unique": false,
+        "columns": []
+      }
+    },
+    {
+      "id": 5,
+      "references": [
+        2
+      ],
+      "type": "index",
+      "data": {
+        "on": 2,
+        "name": "idx_notificados_em",
+        "sql": "CREATE INDEX IF NOT EXISTS idx_notificados_em ON episodios_notificados (notificado_em)",
+        "unique": false,
+        "columns": []
+      }
+    }
+  ],
+  "fixed_sql": [
+    {
+      "name": "episodios",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"episodios\" (\"id\" TEXT NOT NULL, \"crianca\" TEXT NULL, \"fonte\" TEXT NULL, \"inicio\" INTEGER NOT NULL, \"fim\" INTEGER NULL, \"duracao_s\" REAL NULL, \"encerramento\" TEXT NULL, \"nivel_maximo\" TEXT NOT NULL CHECK(\"nivel_maximo\" IN ('baixo_risco', 'atencao', 'alto_risco')), \"probabilidade_maxima\" REAL NULL, \"gatilho_tipo\" TEXT NULL, \"gatilho_texto\" TEXT NULL, \"avaliacao\" TEXT NOT NULL DEFAULT 'pendente' CHECK(\"avaliacao\" IN ('pendente', 'confirmado', 'descartado')), \"observacao\" TEXT NOT NULL DEFAULT '', \"avaliacao_origem\" TEXT NULL, \"avaliacao_em\" INTEGER NULL, \"visto_em\" INTEGER NULL, \"recebido_em\" INTEGER NOT NULL, \"na_pulseira\" INTEGER NOT NULL DEFAULT 1 CHECK (\"na_pulseira\" IN (0, 1)), \"avaliacao_local\" TEXT NULL CHECK(\"avaliacao_local\" IN ('pendente', 'confirmado', 'descartado')), \"observacao_local\" TEXT NULL, \"avaliacao_local_em\" INTEGER NULL, PRIMARY KEY (\"id\"));"
+        }
+      ]
+    },
+    {
+      "name": "lembretes",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"lembretes\" (\"chave\" TEXT NOT NULL, \"texto\" TEXT NOT NULL CHECK(LENGTH(\"texto\") <= 120), \"salvo_em\" INTEGER NOT NULL, \"avisar_em\" INTEGER NULL, PRIMARY KEY (\"chave\"));"
+        }
+      ]
+    },
+    {
+      "name": "episodios_notificados",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE TABLE IF NOT EXISTS \"episodios_notificados\" (\"episodio_id\" TEXT NOT NULL, \"nivel\" TEXT NOT NULL CHECK(\"nivel\" IN ('baixo_risco', 'atencao', 'alto_risco')), \"par_de_canais\" TEXT NOT NULL CHECK(\"par_de_canais\" IN ('normal', 'ignora_nao_perturbe')), \"notificado_em\" INTEGER NOT NULL, \"vezes\" INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (\"episodio_id\"));"
+        }
+      ]
+    },
+    {
+      "name": "idx_episodios_inicio",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_episodios_inicio ON episodios (inicio)"
+        }
+      ]
+    },
+    {
+      "name": "idx_lembretes_salvo_em",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_lembretes_salvo_em ON lembretes (salvo_em)"
+        }
+      ]
+    },
+    {
+      "name": "idx_notificados_em",
+      "sql": [
+        {
+          "dialect": "sqlite",
+          "sql": "CREATE INDEX IF NOT EXISTS idx_notificados_em ON episodios_notificados (notificado_em)"
+        }
+      ]
+    }
+  ]
+}

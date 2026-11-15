@@ -8,8 +8,9 @@
 //   - publica ack ("Estou ciente") e avaliacao (confirmar/descartar gatilho);
 //   - guarda os ultimos 5 min de leituras do estado (todas as metricas) para
 //     o grafico ao vivo;
-//   - guarda a ultima copia do historico (shared_preferences) para mostrar
-//     sem conexao; so aceita historico com origem "pulseira";
+//   - grava os episodios do historico no banco local (HistoricoLocal ->
+//     banco.dart), acumulando alem dos 50 que a pulseira publica e mostrando
+//     tudo sem conexao; so aceita historico com origem "pulseira";
 //   - assina comando: a ordem "resetar" do terminal (npm run resetar) apaga
 //     os dados locais uma vez por id, confirma em comando/resposta e avisa a
 //     tela (avisos -> SnackBar). O mesmo apagarDadosLocais serve ao botao
@@ -23,7 +24,8 @@
 // telas entra sem Last Will e nao notifica. Sem o servico, as telas voltam
 // a fazer as duas coisas na hora (definirServicoRodando). O servico assina
 // so alertas, historico e status (sem o estado de 1 mensagem/s e sem o
-// comando de reset, que continua com o app aberto).
+// comando de reset, que continua com o app aberto). Cada conexao tem a sua
+// ligacao com o mesmo banco (WAL); quem grava o que esta em banco.dart.
 
 import 'dart:async';
 import 'dart:convert';
@@ -38,6 +40,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../config/app_config.dart';
 import '../models/models.dart';
 import '../models/sinais.dart';
+import 'banco.dart';
+import 'historico_local.dart';
+import 'importacao_antiga.dart' show chavesAntigas;
 import 'notification_service.dart';
 import 'regra_de_notificacao.dart';
 
@@ -52,18 +57,41 @@ enum Presenca { online, offline, desconhecido }
 /// PreferenciasLocais.apagarDados.
 typedef ApagarDadosLocais = Future<void> Function({required bool manterPreferencias});
 
+/// Resultado de "Confirmar gatilho" / "Descartar" (a mensagem na tela).
+enum ResultadoDaAvaliacao {
+  /// Publicada para a pulseira (e gravada no app, pendente de confirmacao).
+  enviada,
+
+  /// O episodio ja saiu da lista da pulseira: gravada so neste celular.
+  soNoCelular,
+
+  /// Sem conexao: nada mudou.
+  naoEnviada,
+}
+
 class MqttService extends ChangeNotifier {
   MqttService({
     required this.config,
     required this.prefs,
+    required this.banco,
     required this.notificacoes,
     this.aoApagarDados,
     this.papel = PapelDaConexao.app,
   })  : _topics = Topics(config),
-        _registro = RegistroDeNotificacoes(EstadoNasPreferencias(prefs));
+        _registro = RegistroDeNotificacoes(banco: banco, alertasSonoros: alertasSonorosDoDisco(prefs)),
+        historicoLocal = HistoricoLocal(banco, paraTelas: papel == PapelDaConexao.app) {
+    historicoLocal.addListener(_avisar);
+  }
 
   final AppConfig config;
   final SharedPreferences prefs;
+
+  /// Banco local (episodios, lembretes, notificados). Esta conexao e so deste
+  /// motor Dart; o outro (telas ou servico) abre a sua.
+  final BancoPuzzleBand banco;
+
+  /// Historico lido do banco para as telas (consultas por dia/mes).
+  final HistoricoLocal historicoLocal;
   final NotificationService notificacoes;
   final ApagarDadosLocais? aoApagarDados;
   final PapelDaConexao papel;
@@ -78,9 +106,7 @@ class MqttService extends ChangeNotifier {
   static const _maxAlertas = 50;
   static const _maxObservacao = 200;
 
-  static const _chaveHistorico = 'historico_v1';
   static const _chaveAlertasSonoros = RegistroDeNotificacoes.chaveAlertasSonoros;
-  static const _chaveNotificados = RegistroDeNotificacoes.chaveNotificados;
   static const _chaveClienteId = 'mqtt_cliente_sufixo';
   static const _chaveResetAplicado = 'reset_aplicado_id';
 
@@ -102,8 +128,6 @@ class MqttService extends ChangeNotifier {
   bool _aoVivoAnterior = false;
   final JanelaDeSinais _sinais = JanelaDeSinais(duracao: janelaSinais);
   final List<Alerta> _alertas = [];
-  List<Episodio> _historico = const [];
-  DateTime? _historicoRecebidoEm;
   bool _historicoNestaSessao = false;
   final Map<String, DateTime> _cienteLocal = {};
   bool _alertasSonoros = true;
@@ -134,10 +158,12 @@ class MqttService extends ChangeNotifier {
   /// probabilidade e o nivel), a mais antiga primeiro.
   List<AmostraSinais> get sinaisRecentes => _sinais.amostras;
   List<Alerta> get alertas => List.unmodifiable(_alertas);
-  List<Episodio> get historico => _historico;
-  DateTime? get historicoRecebidoEm => _historicoRecebidoEm;
 
-  /// Historico recebido nesta sessao e broker conectado (senao e a copia salva).
+  /// Ultima vez que chegou uma lista da pulseira (salva no banco).
+  DateTime? get historicoRecebidoEm => historicoLocal.recebidoEm;
+
+  /// Historico recebido nesta sessao e broker conectado (senao e o que esta
+  /// salvo no banco).
   bool get historicoAoVivo => _historicoNestaSessao && _brokerStatus == BrokerStatus.conectado;
 
   bool get alertasSonoros => _alertasSonoros;
@@ -209,11 +235,11 @@ class MqttService extends ChangeNotifier {
     await _conectar();
   }
 
-  /// App voltou para o primeiro plano: rele a copia do historico (o servico
-  /// pode ter gravado uma mais nova com o app fechado) e reconecta na hora se
+  /// App voltou para o primeiro plano: rele o historico do banco (o servico
+  /// pode ter gravado episodios com o app fechado) e reconecta na hora se
   /// estava sem conexao.
   void retomar() {
-    unawaited(_recarregarCopiaSalva());
+    unawaited(historicoLocal.recarregar());
     if (_parado || _conectando || !config.isValid) return;
     if (_brokerStatus == BrokerStatus.desconectado || _brokerStatus == BrokerStatus.erro) {
       _tentativas = 0;
@@ -249,6 +275,9 @@ class MqttService extends ChangeNotifier {
     _frescor?.cancel();
     _updatesSub?.cancel();
     _avisos.close();
+    historicoLocal
+      ..removeListener(_avisar)
+      ..dispose();
     try {
       _client?.disconnect();
     } catch (_) {}
@@ -515,16 +544,20 @@ class MqttService extends ChangeNotifier {
   Future<void> get notificacoesPendentes => _notificacaoPendente;
 
   bool _tratarHistorico(String texto) {
-    // So a pulseira publica o historico: outra origem nao substitui a copia
+    // So a pulseira publica o historico: outra origem nao entra no banco
     if (!historicoDaPulseira(texto)) return false;
     final lista = parseHistorico(texto);
     if (lista == null) return false;
-    _historico = lista;
-    _historicoRecebidoEm = DateTime.now();
     _historicoNestaSessao = true;
-    _salvarHistorico();
+    // Upsert pelo id; quem saiu da lista de 50 continua no banco, e uma lista
+    // vazia nao apaga nada (so o reset apaga)
+    unawaited(historicoLocal.receberDaPulseira(lista, DateTime.now()));
     return true;
   }
+
+  /// Para os testes esperarem as gravacoes no banco.
+  @visibleForTesting
+  Future<void> get gravacoesPendentes => historicoLocal.ocioso;
 
   // -------------------------------------------------------------------------
   // Ordem de reset (npm run resetar) e "Apagar dados deste aparelho"
@@ -558,14 +591,13 @@ class MqttService extends ChangeNotifier {
     }
   }
 
-  /// Apaga o que este celular guarda: a copia do historico, os episodios ja
-  /// notificados, os alertas recebidos, o "Estou ciente" local, o buffer dos
-  /// graficos e o estado, e (via [aoApagarDados]) os lembretes com os avisos
-  /// agendados. Com `manterPreferencias` false, tambem volta ao padrao os
-  /// alertas sonoros, o nome da crianca e a aparencia.
+  /// Apaga o que este celular guarda: os episodios e os episodios ja
+  /// notificados (tabelas do banco), os alertas recebidos, o "Estou ciente"
+  /// local, o buffer dos graficos e o estado, e (via [aoApagarDados]) os
+  /// lembretes com os avisos agendados. Com `manterPreferencias` false,
+  /// tambem volta ao padrao os alertas sonoros, o nome da crianca e a
+  /// aparencia.
   Future<void> apagarDadosLocais({required bool manterPreferencias}) async {
-    _historico = const [];
-    _historicoRecebidoEm = null;
     _historicoNestaSessao = false;
     _alertas.clear();
     _cienteLocal.clear();
@@ -575,8 +607,11 @@ class MqttService extends ChangeNotifier {
     _aoVivoAnterior = false;
     if (!manterPreferencias) _alertasSonoros = true;
     _avisar();
-    await prefs.remove(_chaveHistorico);
-    await prefs.remove(_chaveNotificados);
+    await historicoLocal.apagar();
+    // Chaves de antes do banco, se a importacao ainda nao tiver rodado
+    for (final chave in chavesAntigas) {
+      await prefs.remove(chave);
+    }
     if (!manterPreferencias) await prefs.remove(_chaveAlertasSonoros);
     await aoApagarDados?.call(manterPreferencias: manterPreferencias);
   }
@@ -630,13 +665,21 @@ class MqttService extends ChangeNotifier {
     return ok;
   }
 
-  /// Confirmar/descartar gatilho -> `puzzleband/<id>/avaliacao`. A copia local
-  /// ja mostra a avaliacao; a pulseira confirma ao republicar o historico.
-  bool enviarAvaliacao(Episodio episodio, Avaliacao avaliacao, String observacao) {
-    if (avaliacao == Avaliacao.pendente) return false;
+  /// Confirmar/descartar gatilho -> `puzzleband/<id>/avaliacao`, como antes.
+  /// O banco ja mostra a avaliacao (pendente de confirmacao, ate a pulseira
+  /// devolver o mesmo `avaliacao_em` ao republicar o historico). Um episodio
+  /// que ja saiu da lista da pulseira nao e publicado: a avaliacao fica so
+  /// neste celular (a pulseira nao o republica mais), sem erro e sem
+  /// precisar de conexao.
+  ResultadoDaAvaliacao enviarAvaliacao(Episodio episodio, Avaliacao avaliacao, String observacao) {
+    if (avaliacao == Avaliacao.pendente) return ResultadoDaAvaliacao.naoEnviada;
     var obs = observacao.trim();
     if (obs.length > _maxObservacao) obs = obs.substring(0, _maxObservacao);
     final agora = DateTime.now();
+    if (!episodio.naPulseira) {
+      unawaited(historicoLocal.avaliar(episodio, avaliacao, obs, agora));
+      return ResultadoDaAvaliacao.soNoCelular;
+    }
     final ok = publicarTexto(
       _topics.avaliacao,
       jsonEncode({
@@ -648,13 +691,9 @@ class MqttService extends ChangeNotifier {
       }),
       MqttQos.atLeastOnce,
     );
-    if (!ok) return false;
-    _historico = [
-      for (final e in _historico) e.id == episodio.id ? e.avaliadoPeloApp(avaliacao, obs, agora) : e,
-    ];
-    _salvarHistorico();
-    _avisar();
-    return true;
+    if (!ok) return ResultadoDaAvaliacao.naoEnviada;
+    unawaited(historicoLocal.avaliar(episodio, avaliacao, obs, agora));
+    return ResultadoDaAvaliacao.enviada;
   }
 
   Future<void> definirAlertasSonoros(bool ligado) async {
@@ -664,40 +703,10 @@ class MqttService extends ChangeNotifier {
   }
 
   // -------------------------------------------------------------------------
-  // Persistencia local (shared_preferences)
+  // Preferencias (shared_preferences)
   // -------------------------------------------------------------------------
 
   void _carregarPreferencias() {
     _alertasSonoros = prefs.getBool(_chaveAlertasSonoros) ?? true;
-
-    final historico = prefs.getString(_chaveHistorico);
-    if (historico != null) {
-      final lista = parseHistorico(historico);
-      if (lista != null) {
-        _historico = lista;
-        final recebido = decodeObject(historico)?['recebido_em'];
-        _historicoRecebidoEm = recebido is String ? DateTime.tryParse(recebido)?.toLocal() : null;
-      }
-    }
-  }
-
-  Future<void> _recarregarCopiaSalva() async {
-    try {
-      await prefs.reload();
-    } catch (_) {
-      return;
-    }
-    if (_descartado || historicoAoVivo) return;
-    final antes = _historicoRecebidoEm;
-    _carregarPreferencias();
-    if (_historicoRecebidoEm != antes) _avisar();
-  }
-
-  void _salvarHistorico() {
-    final dados = {
-      'recebido_em': _historicoRecebidoEm?.toUtc().toIso8601String(),
-      'episodios': [for (final e in _historico) e.toJson()],
-    };
-    prefs.setString(_chaveHistorico, jsonEncode(dados));
   }
 }

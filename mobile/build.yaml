@@ -1,0 +1,16 @@
+# Geracao de codigo do drift (banco local: lib/services/banco.dart).
+#   dart run build_runner build          -> lib/services/banco.g.dart
+#   dart run drift_dev make-migrations   -> drift_schemas/ e test/drift/ (a cada versao nova do esquema)
+targets:
+  $default:
+    builders:
+      drift_dev:
+        options:
+          databases:
+            banco: lib/services/banco.dart
+          schema_dir: drift_schemas/
+          test_dir: test/drift/
+          sql:
+            dialect: sqlite
+            options:
+              version: "3.45"

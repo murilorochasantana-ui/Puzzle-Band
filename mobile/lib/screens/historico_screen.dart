@@ -14,12 +14,14 @@ import '../widgets/cartao_episodio_resumido.dart';
 import '../widgets/estado_vazio.dart';
 import '../widgets/secao.dart';
 
-/// Episodios recebidos da pulseira (`puzzleband/<id>/historico`), separados por
+/// Episodios recebidos da pulseira (`puzzleband/<id>/historico`) e guardados
+/// no banco local (todos, nao so os 50 que a pulseira publica), separados por
 /// dia, com o calendario do mes no topo. O calendario conta pela avaliacao
-/// do cuidador (widgets/calendario_crises.dart); tocar num dia filtra a
-/// lista. Cada cartao e resumido e expande no lugar para confirmar ou
-/// descartar o gatilho (widgets/cartao_episodio_resumido.dart). A ultima
-/// copia fica salva para ver offline.
+/// do cuidador (widgets/calendario_crises.dart) e le o mes mostrado do
+/// banco; tocar num dia filtra a lista (consulta do dia). A lista carrega
+/// 50 episodios por vez, mais ao chegar ao fim. Cada cartao e resumido e
+/// expande no lugar para confirmar ou descartar o gatilho
+/// (widgets/cartao_episodio_resumido.dart). Tudo continua visivel offline.
 class HistoricoScreen extends StatefulWidget {
   const HistoricoScreen({super.key});
 
@@ -70,18 +72,16 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
   Widget build(BuildContext context) {
     final service = AppScope.of(context);
     final agora = relogio();
-    final episodios = service.historico;
-    final contagens = contagemPorDia(episodios);
+    final historico = service.historicoLocal;
+    final contagens = historico.contagensDoMes(_mes);
     var primeiroMes = DateTime(agora.year, agora.month);
-    for (final e in episodios) {
-      final mes = DateTime(e.inicio.year, e.inicio.month);
-      if (mes.isBefore(primeiroMes)) primeiroMes = mes;
+    final primeiro = historico.primeiroInicio;
+    if (primeiro != null && DateTime(primeiro.year, primeiro.month).isBefore(primeiroMes)) {
+      primeiroMes = DateTime(primeiro.year, primeiro.month);
     }
     final escolhido = _escolhido;
-    final grupos = [
-      for (final g in episodiosPorDia(episodios))
-        if (escolhido == null || mesmoDia(g.$1, escolhido)) g,
-    ];
+    final grupos = episodiosPorDia(escolhido == null ? historico.recentes : historico.doDia(escolhido));
+    final carregarMais = escolhido == null && historico.temMais;
 
     final topo = <Widget>[
       const TituloTela(
@@ -91,7 +91,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       const SizedBox(height: Espaco.m),
       _FonteDosDados(service: service),
       const SizedBox(height: Espaco.l),
-      if (episodios.isNotEmpty) ...[
+      if (!historico.vazio) ...[
         CalendarioCrises(
           mes: _mes,
           contagens: contagens,
@@ -109,7 +109,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
         _Filtro(dia: escolhido, onLimpar: () => setState(() => _escolhido = null)),
         const SizedBox(height: Espaco.s),
       ],
-      if (episodios.isEmpty)
+      if (historico.vazio)
         const Secao(
           child: EstadoVazio(
             icone: Icons.history_rounded,
@@ -170,6 +170,10 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
                                   ),
                                 ],
                               ),
+                            if (carregarMais)
+                              SliverToBoxAdapter(
+                                child: _MaisAntigos(key: ValueKey(historico.recentes.length), onVisivel: historico.carregarMais),
+                              ),
                           ],
                         ),
                       ),
@@ -221,6 +225,39 @@ class _CabecalhoDia extends StatelessWidget {
             Text(contarEpisodios(total), style: texto.bodySmall),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Fim da lista com episodios mais antigos no banco: ao aparecer na tela
+/// (rolou ate aqui), pede a proxima pagina.
+class _MaisAntigos extends StatefulWidget {
+  const _MaisAntigos({super.key, required this.onVisivel});
+
+  final VoidCallback onVisivel;
+
+  @override
+  State<_MaisAntigos> createState() => _MaisAntigosState();
+}
+
+class _MaisAntigosState extends State<_MaisAntigos> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) widget.onVisivel();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: Espaco.m),
+      child: Text(
+        'Carregando episódios mais antigos…',
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodySmall,
       ),
     );
   }

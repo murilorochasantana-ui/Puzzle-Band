@@ -229,9 +229,14 @@ Future<ServicoFalso> semEpisodiosHoje() async {
 }
 
 /// Preferencias locais (nome da crianca e lembretes) no mesmo
-/// shared_preferences do servico, com o aviso falso.
-PreferenciasLocais preferenciasDe(MqttService servico, {AvisoFalso? aviso}) =>
-    PreferenciasLocais(prefs: servico.prefs, nomePadrao: servico.config.childId, aviso: aviso ?? AvisoFalso());
+/// shared_preferences e no mesmo banco do servico, com o aviso falso. O banco
+/// do cenario comeca sem lembretes (para reabrir: carregar()).
+PreferenciasLocais preferenciasDe(MqttService servico, {AvisoFalso? aviso}) => PreferenciasLocais(
+      prefs: servico.prefs,
+      banco: servico.banco,
+      nomePadrao: servico.config.childId,
+      aviso: aviso ?? AvisoFalso(),
+    );
 
 /// Monta o app (tema real, fontes reais) e espera assentar. `aba`: 0 Inicio,
 /// 1 Graficos, 2 Historico, 3 Ajustes. `tela` substitui a navegacao (Login).
@@ -252,6 +257,8 @@ Future<void> mostrar(
   final configuracao = alertas ??
       await configuracaoDe(servico.prefs, SistemaFalso(notificacoes: true, bateria: true, servico: true),
           concluida: true);
+  // Os episodios do cenario ja gravados e lidos do banco em memoria
+  await servico.historicoLocal.ocioso;
   tester.view.physicalSize = Size(393 * 2, altura * 2);
   tester.view.devicePixelRatio = 2;
   addTearDown(tester.view.reset);

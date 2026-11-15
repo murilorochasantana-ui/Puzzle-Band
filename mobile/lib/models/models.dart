@@ -254,6 +254,7 @@ class Episodio {
     this.avaliacaoOrigem,
     this.avaliacaoEm,
     this.vistoEm,
+    this.naPulseira = true,
   });
 
   final String id;
@@ -271,6 +272,11 @@ class Episodio {
   final String? avaliacaoOrigem; // site | app
   final DateTime? avaliacaoEm;
   final DateTime? vistoEm;
+
+  /// O episodio estava na ultima lista que a pulseira publicou (os 50 mais
+  /// recentes). Fora dela, ele so existe no banco do app: avaliar grava so
+  /// no celular (MqttService.enviarAvaliacao). Nao vai nas mensagens.
+  final bool naPulseira;
 
   bool get emAndamento => encerramento == null;
 
@@ -335,6 +341,7 @@ class Episodio {
         avaliacaoOrigem: 'app',
         avaliacaoEm: quando,
         vistoEm: vistoEm,
+        naPulseira: naPulseira,
       );
 }
 

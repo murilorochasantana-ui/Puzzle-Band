@@ -397,7 +397,8 @@ medidas novas entraram no tema.
     do lembrete.
   - O serviço de notificação dos alertas não mudou.
 - **Decisão de privacidade.** Os lembretes e o nome da criança ficam só no
-  `shared_preferences` do celular.
+  celular (desde 11/2026, os lembretes no banco local e o nome no
+  `shared_preferences`; ver [app.md](app.md#armazenamento)).
   - Não são publicados no MQTT: não há tópico nem campo novo.
   - Não aparecem no site e não vão para outro aparelho.
   - Motivo: são anotações pessoais do cuidador sobre a criança, e o broker é
