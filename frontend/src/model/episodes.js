@@ -8,6 +8,7 @@
 // uma oscilacao curta nao partir um episodio em varios).
 
 import { analyzeTrigger, reviewTrigger, BASELINE_WINDOW_S, ANALYSIS_WINDOW_S, SAMPLE_PERIOD_S } from './trigger.js';
+import { buildMetrics, startMetrics, stepMetrics } from './metricas.js';
 
 export const EPISODE_END_CALM_S = 30;
 export const HISTORY_STORAGE_KEY = 'puzzleband_historico';
@@ -71,7 +72,11 @@ export function stepMonitor(monitor, { reading, tier, probability }) {
         observacao: '',
         ultima_leitura: reading.timestamp,
       };
-      open = { tStart: t, calmSince: null, episode };
+      // Metricas dos sinais (metricas.js): a janela "antes" sai da memoria
+      // de sinais agora; o "durante" e somado leitura a leitura
+      const metrics = startMetrics(history, t, reading);
+      episode.metricas = buildMetrics(metrics);
+      open = { tStart: t, calmSince: null, episode, metrics };
     }
   } else {
     const prev = open.episode;
@@ -80,6 +85,7 @@ export function stepMonitor(monitor, { reading, tier, probability }) {
     else if (!calmSince) calmSince = { t, timestamp: reading.timestamp };
 
     const endT = calmSince ? calmSince.t : t + SAMPLE_PERIOD_S;
+    const metrics = stepMetrics(open.metrics, reading, !isAlert);
     episode = {
       ...prev,
       gatilho: reviewTrigger(prev.gatilho, history),
@@ -87,6 +93,7 @@ export function stepMonitor(monitor, { reading, tier, probability }) {
       probabilidade_maxima: Math.max(prev.probabilidade_maxima, prob),
       duracao_s: endT - open.tStart,
       ultima_leitura: reading.timestamp,
+      metricas: buildMetrics(metrics),
     };
 
     if (calmSince && t - calmSince.t + SAMPLE_PERIOD_S >= EPISODE_END_CALM_S) {
@@ -95,7 +102,7 @@ export function stepMonitor(monitor, { reading, tier, probability }) {
       episode.encerramento = 'normalizou';
       open = null;
     } else {
-      open = { ...open, calmSince, episode };
+      open = { ...open, calmSince, episode, metrics };
     }
   }
 

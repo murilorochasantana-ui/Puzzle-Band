@@ -59,7 +59,8 @@ class Topics {
         ack = config.topic('ack'),
         appStatus = config.topic('app/status'),
         comando = config.topic('comando'),
-        comandoResposta = config.topic('comando/resposta');
+        comandoResposta = config.topic('comando/resposta'),
+        resumoMinuto = config.topic('resumo_minuto');
 
   final String estado;
   final String alertas;
@@ -74,4 +75,8 @@ class Topics {
 
   /// Confirmacao do app para o terminal: o app publica.
   final String comandoResposta;
+
+  /// Resumo de cada minuto (pulseira -> app, QoS 1, sem retain): o app e o
+  /// servico assinam; so quem notifica grava (relatorio em Excel).
+  final String resumoMinuto;
 }

@@ -1,6 +1,6 @@
 // Dados que o cuidador escreve e que ficam SO neste celular: o nome da
-// crianca e a aparencia (claro, escuro ou seguir o sistema) no
-// shared_preferences, e os lembretes (de um episodio ou do dia) na tabela
+// crianca, a aparencia (claro, escuro ou seguir o sistema) e por quanto tempo
+// guardar o historico no shared_preferences, e os lembretes (de um episodio ou do dia) na tabela
 // `lembretes` do banco local (banco.dart). Decisao de privacidade
 // (docs/app.md): nada disto vai para o MQTT, para o painel (site) nem para
 // outro aparelho. A ordem de reset do terminal (npm run resetar) e o botao
@@ -44,6 +44,7 @@ class PreferenciasLocais extends ChangeNotifier {
   PreferenciasLocais({required this.prefs, required this.banco, required this.nomePadrao, required this.aviso}) {
     _nome = prefs.getString(_chaveNome) ?? '';
     _aparencia = Aparencia.fromCodigo(prefs.getString(_chaveAparencia));
+    _guardarHistorico = GuardarHistorico.fromCodigo(prefs.getString(GuardarHistorico.chave));
   }
 
   final SharedPreferences prefs;
@@ -63,7 +64,28 @@ class PreferenciasLocais extends ChangeNotifier {
 
   String _nome = '';
   Aparencia _aparencia = Aparencia.sistema;
+  GuardarHistorico _guardarHistorico = GuardarHistorico.padrao;
   final Map<String, Lembrete> _lembretes = {};
+
+  // -------------------------------------------------------------------------
+  // Guardar historico por (retencao dos episodios)
+  // -------------------------------------------------------------------------
+
+  /// Padrao: 1 ano. O servico em primeiro plano le a mesma chave do disco.
+  GuardarHistorico get guardarHistorico => _guardarHistorico;
+
+  /// Salva a opcao. Quem chama aplica a retencao em seguida
+  /// (HistoricoLocal.aplicarRetencao): um periodo menor apaga na hora.
+  Future<void> definirGuardarHistorico(GuardarHistorico valor) async {
+    if (valor == _guardarHistorico) return;
+    _guardarHistorico = valor;
+    notifyListeners();
+    if (valor == GuardarHistorico.padrao) {
+      await prefs.remove(GuardarHistorico.chave);
+    } else {
+      await prefs.setString(GuardarHistorico.chave, valor.codigo);
+    }
+  }
 
   // -------------------------------------------------------------------------
   // Aparencia
@@ -186,6 +208,7 @@ class PreferenciasLocais extends ChangeNotifier {
     if (!manterPreferencias) {
       _nome = '';
       _aparencia = Aparencia.sistema;
+      _guardarHistorico = GuardarHistorico.padrao;
     }
     _geracao++;
     notifyListeners();
@@ -198,6 +221,7 @@ class PreferenciasLocais extends ChangeNotifier {
     if (!manterPreferencias) {
       await prefs.remove(_chaveNome);
       await prefs.remove(_chaveAparencia);
+      await prefs.remove(GuardarHistorico.chave);
     }
   }
 

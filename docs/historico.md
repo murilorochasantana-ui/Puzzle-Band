@@ -3,18 +3,20 @@
 Quem detecta os episódios e guarda o histórico é a **pulseira**
 (processamento na borda, ver [mqtt.md](mqtt.md#por-que-o-processamento-fica-na-pulseira)).
 
-- Código: `frontend/src/model/episodes.js` (lógica pura), `simulator/borda.js`
-  (a pulseira chamando a lógica a cada leitura) e `simulator/historico.js`
-  (arquivo).
+- Código: `frontend/src/model/episodes.js` (lógica pura),
+  `frontend/src/model/metricas.js` (métricas dos sinais por episódio),
+  `simulator/borda.js` (a pulseira chamando a lógica a cada leitura) e
+  `simulator/historico.js` (arquivo).
 - Telas: o app do cuidador e, se estiver aberto,
   `frontend/src/components/EpisodeHistory.jsx` (painel do site).
-- Testes: `frontend/src/model/episodes.test.js` e
-  `simulator/testes/historico.test.js`.
+- Testes: `frontend/src/model/episodes.test.js`,
+  `simulator/testes/historico.test.js` e `simulator/testes/metricas.test.js`.
 
 O histórico aparece no app do cuidador e no painel do site, logo abaixo do
 gráfico. A pulseira publica os 50 episódios mais recentes em
 `puzzleband/<id>/historico`. O painel mostra esses 50; o app guarda todos os
-que recebe num banco SQLite no celular (até 1 ano ou 5.000 episódios), então
+que recebe num banco SQLite no celular (por padrão até 1 ano ou 5.000
+episódios; o cuidador escolhe 1 ano, 2 anos ou "até eu apagar"), então
 o calendário e os gráficos do app continuam completos depois que um episódio
 sai da lista da pulseira ([app.md](app.md#armazenamento)).
 
@@ -40,6 +42,44 @@ parcial é mostrada. O painel atualiza essa duração com o estado ao vivo,
 porque o histórico só é republicado quando o episódio muda. O tempo é contado
 em leituras, 1 por segundo (mesma premissa do modelo).
 
+## Métricas por episódio
+
+Desde 11/2026, a pulseira calcula, para cada episódio, as médias dos sinais
+em três janelas e grava no campo opcional `metricas` (formato em
+[mqtt.md](mqtt.md#historico-pulseira--app-e-site)). É a base do relatório em
+Excel do app ([app.md](app.md#relatório-em-excel)).
+
+| Janela | O que entra | Valores |
+|---|---|---|
+| `antes` | As leituras dos **120 s antes** do início, tiradas da memória de sinais da pulseira no instante em que o episódio abre | média |
+| `durante` | Do início até o **começo dos 30 s calmos finais** | média, mínimo e máximo |
+| `recuperacao` | Os **30 s calmos** que encerram o episódio | média |
+
+- **Sinais:** BPM (`bpm`), VFC (`hrv_ms`), EDA (`eda_uS`), movimento do
+  giroscópio (`gyro_mag_dps`), luz (`luz_lux`) e ruído (`ruido_db`).
+- **Contagem:** cada janela registra quantas leituras entraram
+  (`n_leituras`) e, por sinal, quantas tinham valor válido (`n`). Um sinal
+  sem valor fica fora da média.
+- **Episódio longo:** o `durante` é calculado leitura a leitura (somas,
+  contagens, mínimo e máximo), sem depender do buffer de 300 leituras.
+  Assim, um episódio de mais de 5 minutos tem a média do episódio inteiro, e
+  o pico do começo continua contando.
+- **Poucas leituras antes:** se a pulseira acabou de ligar, o `antes` tem
+  menos de 120 leituras, e o `n_leituras` mostra quantas. Com nenhuma, os
+  sinais ficam `null`.
+- **Calma curta no meio:** um trecho calmo de menos de 30 s seguido de outra
+  subida continua sendo o mesmo episódio (histerese), e as leituras dele
+  voltam para o `durante`. Só o trecho calmo que fecha o episódio vira
+  `recuperacao`, e o número de leituras do `durante` é igual a `duracao_s`.
+- **Em andamento:** as métricas são atualizadas a cada leitura e vão no
+  histórico quando ele é republicado. A `recuperacao` é o trecho calmo em
+  curso, ou seja, parcial.
+- **Interrompido:** guarda o que havia. A `recuperacao` fica parcial (menos
+  de 30 leituras) ou vazia.
+- **Episódio antigo** (gravado antes de 11/2026, ou vindo de uma pulseira
+  antiga): sem `metricas` (`null`). Continua válido; no relatório, as
+  células dessas colunas ficam vazias.
+
 ## Campos guardados
 
 | Campo | Conteúdo |
@@ -58,6 +98,7 @@ em leituras, 1 por segundo (mesma premissa do modelo).
 | `avaliacao_origem` | Quem avaliou por último: `app` (app do cuidador) ou `site` (painel); os dois chegam pelo MQTT |
 | `avaliacao_em` | Quando avaliou (ISO 8601) |
 | `visto_pelo_cuidador_em` | Quando o cuidador tocou "Estou ciente" no app (ISO 8601) |
+| `metricas` | Opcional (11/2026): médias dos sinais antes, durante e na recuperação ([Métricas por episódio](#métricas-por-episódio)). `null` em episódio antigo |
 
 Os três últimos campos, assim como a avaliação e a observação, só mudam por
 ação do cuidador. Quando o rastreador atualiza um episódio em andamento, eles
@@ -138,8 +179,9 @@ do zero, há dois caminhos. Exporte o CSV antes se quiser guardar.
   dados deste aparelho**.
 - `npm run resetar` (com a pulseira desligada), para uma apresentação: apaga
   o arquivo, os retidos no broker e manda o app e o site apagarem os dados
-  locais pela ordem em `comando`. No app saem o histórico, os episódios
-  notificados e os lembretes (as três tabelas do banco local) e os gráficos
+  locais pela ordem em `comando`. No app saem o histórico (com as
+  métricas), o resumo de cada minuto, os episódios notificados e os
+  lembretes (as tabelas do banco local) e os gráficos
   (e, com `--tudo`, as preferências). Ver [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação) e
   [mqtt.md](mqtt.md#ordem-de-reset-npm-run-resetar).
 
@@ -166,12 +208,14 @@ de volta.
   `historico_<id>.corrompido-<data>.json` e a pulseira segue sem ele.
 - Limite de 200 episódios: ao passar disso, os mais antigos saem.
 - **No app do cuidador**: um banco SQLite local (`files/banco/puzzleband.db`,
-  pacote `drift`), tabela `episodios`. Cada lista recebida entra por upsert
+  pacote `drift`), tabela `episodios`, e as métricas de cada episódio na
+  tabela `episodio_metricas`. Cada lista recebida entra por upsert
   pelo id do episódio; os que saem da lista de 50 da pulseira continuam no
   banco, e uma lista vazia não apaga nada. A avaliação feita no app fica
   "pendente de confirmação" até a pulseira devolver o mesmo `avaliacao_em`
-  (a pulseira guarda o horário da mensagem sem mudança). Retenção: 1 ano ou
-  5.000 episódios. Detalhes: [app.md](app.md#armazenamento).
+  (a pulseira guarda o horário da mensagem sem mudança). Retenção: a opção
+  "Guardar histórico por" (1 ano / 5.000 episódios por padrão, 2 anos /
+  10.000 ou até o cuidador apagar). Detalhes: [app.md](app.md#armazenamento).
 
 ## Privacidade (LGPD)
 
@@ -182,9 +226,12 @@ de volta.
     gatilho reduzido a tipo + texto), são publicados no broker MQTT em
     `puzzleband/<id>/historico` com *retain*, para o app do cuidador e o
     painel. Ficam então também no broker (até a próxima publicação).
-  - No **celular do cuidador**, o app acumula os episódios recebidos num
-    banco SQLite local, por até **1 ano** (no máximo 5.000), além dos
-    lembretes e dos episódios já notificados. O banco fica fora do backup do
+  - No **celular do cuidador**, o app acumula os episódios recebidos (com
+    as métricas dos sinais) num banco SQLite local, por **1 ano** por padrão
+    (no máximo 5.000; o cuidador pode escolher 2 anos ou "até eu apagar", e
+    a tela explica que guardar menos protege a privacidade da criança),
+    além do resumo de cada minuto (90 dias), dos lembretes e dos episódios
+    já notificados. O banco fica fora do backup do
     Android e da transferência entre aparelhos (`allowBackup="false"` e
     regras de exclusão). Não é criptografado: SQLCipher fica como trabalho
     futuro ([app.md](app.md#limitações-do-armazenamento)).
@@ -197,8 +244,9 @@ de volta.
   brutas ainda são publicadas, mas só para o painel do desenvolvedor; numa
   pulseira real, elas poderiam ficar só no aparelho.
 - **Minimização**: o histórico guarda só o resumo de cada episódio
-  (horários, nível, probabilidade, gatilho e avaliação), não as leituras
-  brutas dos sensores. A criança é identificada por um código (`C01`), não
+  (horários, nível, probabilidade, gatilho, avaliação e as médias dos sinais
+  em três janelas), não as leituras brutas dos sensores. O app guarda também
+  a média de cada minuto (não cada leitura), por 90 dias. A criança é identificada por um código (`C01`), não
   pelo nome.
 - **Dados sensíveis e de crianças.** Informações de saúde são dados pessoais
   sensíveis (art. 5º, II) e o tratamento de dados de crianças exige
@@ -208,12 +256,16 @@ de volta.
   republica a lista vazia no broker; o histórico do app **não** é apagado por
   ela. `npm run resetar` apaga também as mensagens retidas no broker e, pela
   ordem em `comando`, os dados guardados no celular (as tabelas do banco,
-  com `secure_delete`). No app, **Ajustes → Apagar dados deste aparelho**
-  apaga só o celular. A retenção apaga sozinha o que tem mais de 1 ano.
+  com `secure_delete`, inclusive as métricas e o resumo de cada minuto). No
+  app, **Ajustes → Apagar dados deste aparelho** apaga só o celular. A
+  retenção apaga sozinha o que passou do período escolhido (1 ano por
+  padrão) e o resumo de cada minuto com mais de 90 dias.
 - **Cuidados**: o arquivo da pulseira não é criptografado. Qualquer pessoa
   com acesso ao computador onde a pulseira simulada roda consegue ler os
   dados. Numa pulseira real, a memória do ESP32 deveria ser criptografada
-  (*flash encryption*). O CSV exportado vira um arquivo comum e deve ser
-  guardado com o mesmo cuidado.
+  (*flash encryption*). O CSV exportado pelo painel e o relatório em Excel do
+  app viram arquivos comuns e devem ser guardados com o mesmo cuidado. Antes
+  de compartilhar o relatório, o app avisa: "Este arquivo contém dados de
+  saúde da criança. Compartilhe só com quem cuida dela."
 - **MQTT**: a conexão é sempre com TLS (`mqtts://` na pulseira e no app,
   `wss://` no painel). Detalhes e ACL: [mqtt.md](mqtt.md).

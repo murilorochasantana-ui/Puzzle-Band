@@ -995,7 +995,105 @@ fora da lista grava só no app.
   --dart-define-from-file=env.json` OK (62,6 MB, com `libsqlite3.so` para
   arm64-v8a, armeabi-v7a e x86_64). Não testado no emulador.
 
+## Relatório em Excel (branch `app-relatorio`, a partir de `2db981d`)
+
+Pedido (25/11/2026): métricas por episódio calculadas na pulseira (antes,
+durante, recuperação), banco do app v2 (`episodio_metricas`,
+`resumo_minuto`, retenção configurável) e "Exportar relatório" em .xlsx no
+app. Regras: sem commit; `.env` e `mobile/env.json` intactos; sem navegador;
+não recriar `mobile/ios`, `macos`, `linux`, `windows`, `web`; tópicos e
+campos MQTT existentes intactos (só campos novos opcionais e, por decisão do
+usuário, o tópico novo `resumo_minuto`); goldens só mudam Ajustes e
+Histórico (+ novos, mostrados antes).
+
+Situação: **implementado e testado, sem commit. Goldens novos e o arquivo de
+exemplo aguardando a revisão do usuário.**
+
+Decisões do usuário (25/11/2026): plano aprovado com ajustes: (1) o serviço
+NÃO assina `estado` (~34 MB/dia); a pulseira publica um resumo por minuto em
+`puzzleband/<id>/resumo_minuto` (QoS 1, sem retain) e o app/serviço gravam
+(quem notifica); conferir sessão persistente no EMQX Serverless, senão a
+pulseira reenvia as últimas 24 h quando o app volta online; (2) retenção
+5.000 / 10.000 / sem limite; (3) nome do arquivo de período
+`..._<inicio>_a_<fim>.xlsx`; (4) gravador .xlsx próprio, testado também com
+um leitor independente (pacote `excel`, só nos testes) e um exemplo em
+`docs/exemplos/`.
+
+### Feito
+
+- **Linha de base** (`linha-de-base/relatorio/`, antes de mudar): simulador
+  28/28; site 67/67, lint e build OK; `flutter test` 238/238.
+  **`verificar.js` já sai com código 1 na `main`** (padrão: `FALHOU:
+  barulho_sem_crise`; `--uma-vez --sementes 50`: `FALHOU: exercicio,
+  barulho_sem_crise`). É a referência: depois das mudanças, as duas saídas
+  ficaram **idênticas byte a byte** (`diff` vazio).
+- **EMQX Serverless:** sessão do MQTT 3.x expira em 2 h e a fila tem no
+  máximo 1.000 mensagens, sem ajuste
+  (docs.emqx.com/en/cloud/latest/create/restriction.html). Não cobre 24 h:
+  sessão persistente descartada; reenvio pela pulseira ao ver `app/status`
+  voltar para `online`.
+- **Parte A (pulseira):** `frontend/src/model/metricas.js` (janelas antes
+  120 s da memória de sinais do rastreador; durante incremental com somas,
+  contagens, mín. e máx.; calma curta volta para o durante; recuperação = 30
+  s calmos finais), chamado pelo `stepMonitor`; campo `metricas` no
+  `historyEntry` (no fim, `null` em episódio antigo) e conservado pelo
+  `parseHistory` (recuperação da retida). `frontend/src/model/resumoMinuto.js`
+  + `borda.js`: resumo de cada minuto fechado em `resumo_minuto`, memória de
+  24 h, reenvio em lotes de 360 minutos (~50 KB) desde o `offline` do app (−5
+  min) ou desde o primeiro minuto não publicado; a ordem de reset apaga.
+  Tráfego medido: ~385 B por minuto (~0,65 MB/dia com overhead).
+  Testes novos: `simulator/testes/metricas.test.js` (13: janelas, episódio
+  de 7 min, poucas leituras antes, sinal nulo, interrompido, ida e volta pelo
+  histórico, resumo por minuto, parcial ao desligar, reenvio após queda,
+  offline retido em lotes, sem conexão, reset, opção desligada). Ajustados:
+  `borda.test.js` (chave `metricas` acrescentada no fim; assinatura de
+  `app/status`).
+- **Parte B (banco v2):** `episodio_metricas` e `resumo_minuto` no
+  `banco.dart`; migração v1→v2 (`createTable` com IF NOT EXISTS numa
+  transação), esquema em `drift_schemas/banco/drift_schema_v2.json`;
+  `GuardarHistorico` (1 ano/5.000, 2 anos/10.000, até eu apagar) no
+  `shared_preferences` (`guardar_historico`), lido pelo serviço do disco;
+  retenção de 90 dias do resumo; reset limpa as tabelas novas.
+  `MqttService`: as duas conexões assinam `resumo_minuto`, só quem notifica
+  grava (`gravaResumos`). Testes: `test/banco_v2_test.dart` (14) e
+  `test/drift/banco/migracao_test.dart` (6, com dados na v1 e o caso das
+  tabelas já criadas pela outra conexão).
+- **Parte C (relatório):** `lib/services/planilha_xlsx.dart` (gravador
+  próprio sobre o `archive` 3.6.1, MIT; sharedStrings, nunca fórmula),
+  `lib/services/relatorio.dart` (três abas), `lib/screens/exportar_relatorio_screen.dart`
+  (um dia ou período até 31 dias, setas e atalhos em português, aviso de
+  dados de saúde antes do `share_plus` 13.3.1, BSD-3; cancelar apaga o
+  arquivo). Botão no Histórico; em Ajustes → Dados deste aparelho:
+  "Exportar relatório" e "Guardar histórico por" (com confirmação ao
+  diminuir). Dev: `excel` 4.0.6 e `xml` 6.6.1 (o `excel` exige `xml` < 7: o
+  `xml` do projeto desceu de 7.1.0 para 6.6.1; só o `dbus` e o
+  `flutter_local_notifications_windows` usam, nada no Android). Testes:
+  `test/relatorio_test.dart` (9: abre com o `excel`, confere XML, valores,
+  cobertura, período e hoje) e `test/exportar_relatorio_test.dart` (9: aviso
+  antes de compartilhar, cancelar, 31 dias, entradas, retenção nos Ajustes,
+  4 goldens). Acessibilidade e fonte 1,3× da tela nova em `telas_test.dart`.
+  Conferência extra: o openpyxl 3.1.5 (venv temporário, fora do projeto)
+  abre o exemplo sem avisos.
+- **Defeito achado pelo teste:** a cobertura de hoje contava minutos depois
+  de "agora" e o `clamp(0, 1)` devolvia `int`; corrigido (só minutos antes
+  de agora, `clamp(0.0, 1.0)`).
+- **Goldens:** novos `exportar_relatorio`, `escuro_exportar_relatorio_periodo`,
+  `exportar_relatorio_aviso`, `ajustes_dados_do_aparelho`. Mudaram só os de
+  Ajustes (`ajustes`, `escuro_ajustes`, `fonte_130_ajustes`) e Histórico
+  (`historico`, `escuro_historico`, `fonte_130_historico`,
+  `historico_filtro_dia`, `historico_sem_conexao`, `historico_vazio`).
+- **Docs:** `mqtt.md` (tópico novo, `metricas`, tráfego, EMQX, ACL nova),
+  `historico.md` (Métricas por episódio, campos, LGPD), `app.md`
+  (Armazenamento, Retenção, Relatório em Excel, estrutura). Exemplo:
+  `docs/exemplos/puzzleband_relatorio_C01_2026-11-25.xlsx`.
+- **ACL:** acrescentar no EMQX: `simulador` publish `resumo_minuto` e
+  subscribe `app/status`; `app` subscribe `resumo_minuto` (não feito: é no
+  console do broker).
+
 ## Próximo passo
+
+Relatório em Excel: implementado e testado, sem commit (revisão do usuário:
+goldens novos, exemplo .xlsx no Excel/Planilhas/LibreOffice, ACL no EMQX).
 
 Banco SQLite no app: implementado e testado, sem commit (revisão do
 usuário). App em segundo plano: implementado e testado, sem commit (revisão do

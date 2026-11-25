@@ -17,6 +17,8 @@ const HISTORY_KEYS = ['origem', 'timestamp', 'crianca', 'total', 'episodios'];
 const ENTRY_KEYS = [
   'id', 'crianca', 'fonte', 'inicio', 'fim', 'duracao_s', 'encerramento', 'nivel_maximo', 'probabilidade_maxima',
   'gatilho', 'avaliacao_cuidador', 'observacao', 'avaliacao_origem', 'avaliacao_em', 'visto_pelo_cuidador_em',
+  // campo novo (11/2026), opcional: so ACRESCENTADO no fim, os de cima nao mudam
+  'metricas',
 ];
 
 // crise_ruido nominal + 60 s calmos: um episodio, fechado, gatilho "ruido"
@@ -68,8 +70,9 @@ test('processador: crise_ruido abre e fecha um episodio, com gatilho e alerta no
 
 test('sem o site: a pulseira publica leituras, estado (1x por leitura, retain), alertas (QoS 1) e historico (retain)', () => {
   const { client: c, link } = connectedLink();
-  // assina so os comandos (fora do modo controle, nem o controle)
-  assert.deepEqual([...c.subscribed].sort(), [TOPIC('ack'), TOPIC('avaliacao')]);
+  // assina so os comandos (fora do modo controle, nem o controle) e a
+  // presenca do app (reenvio dos resumos de minuto)
+  assert.deepEqual([...c.subscribed].sort(), [TOPIC('ack'), TOPIC('app/status'), TOPIC('avaliacao')]);
   // historico publicado ja na conexao (retain: o app recebe ao abrir)
   assert.equal(c.sent(TOPIC('historico')).length, 1);
 

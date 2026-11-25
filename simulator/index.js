@@ -482,7 +482,7 @@ function main() {
     },
     log: (evento, texto) => {
       const marca = {
-        alerta: '▲', aviso: '!', recuperacao: '↺', controle: '⇢', ack: '✓', avaliacao: '✓', reset: '⌫',
+        alerta: '▲', aviso: '!', recuperacao: '↺', controle: '⇢', ack: '✓', avaliacao: '✓', reset: '⌫', resumo: '⧗',
       }[evento] ?? '·';
       console.log(`  ${marca} ${texto}`);
     },

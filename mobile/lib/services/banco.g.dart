@@ -1935,6 +1935,1392 @@ class EpisodiosNotificadosCompanion extends UpdateCompanion<LinhaNotificado> {
   }
 }
 
+class $EpisodioMetricasTable extends EpisodioMetricas
+    with TableInfo<$EpisodioMetricasTable, LinhaMetrica> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $EpisodioMetricasTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _episodioIdMeta = const VerificationMeta(
+    'episodioId',
+  );
+  @override
+  late final GeneratedColumn<String> episodioId = GeneratedColumn<String>(
+    'episodio_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _sinalMeta = const VerificationMeta('sinal');
+  @override
+  late final GeneratedColumn<String> sinal = GeneratedColumn<String>(
+    'sinal',
+    aliasedName,
+    false,
+    check: () => sinal.isIn(sinaisValidos),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _faseMeta = const VerificationMeta('fase');
+  @override
+  late final GeneratedColumn<String> fase = GeneratedColumn<String>(
+    'fase',
+    aliasedName,
+    false,
+    check: () => fase.isIn(fasesValidas),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaMeta = const VerificationMeta('media');
+  @override
+  late final GeneratedColumn<double> media = GeneratedColumn<double>(
+    'media',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _minimoMeta = const VerificationMeta('minimo');
+  @override
+  late final GeneratedColumn<double> minimo = GeneratedColumn<double>(
+    'minimo',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _maximoMeta = const VerificationMeta('maximo');
+  @override
+  late final GeneratedColumn<double> maximo = GeneratedColumn<double>(
+    'maximo',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nLeiturasMeta = const VerificationMeta(
+    'nLeituras',
+  );
+  @override
+  late final GeneratedColumn<int> nLeituras = GeneratedColumn<int>(
+    'n_leituras',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    episodioId,
+    sinal,
+    fase,
+    media,
+    minimo,
+    maximo,
+    nLeituras,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'episodio_metricas';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LinhaMetrica> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('episodio_id')) {
+      context.handle(
+        _episodioIdMeta,
+        episodioId.isAcceptableOrUnknown(data['episodio_id']!, _episodioIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_episodioIdMeta);
+    }
+    if (data.containsKey('sinal')) {
+      context.handle(
+        _sinalMeta,
+        sinal.isAcceptableOrUnknown(data['sinal']!, _sinalMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_sinalMeta);
+    }
+    if (data.containsKey('fase')) {
+      context.handle(
+        _faseMeta,
+        fase.isAcceptableOrUnknown(data['fase']!, _faseMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_faseMeta);
+    }
+    if (data.containsKey('media')) {
+      context.handle(
+        _mediaMeta,
+        media.isAcceptableOrUnknown(data['media']!, _mediaMeta),
+      );
+    }
+    if (data.containsKey('minimo')) {
+      context.handle(
+        _minimoMeta,
+        minimo.isAcceptableOrUnknown(data['minimo']!, _minimoMeta),
+      );
+    }
+    if (data.containsKey('maximo')) {
+      context.handle(
+        _maximoMeta,
+        maximo.isAcceptableOrUnknown(data['maximo']!, _maximoMeta),
+      );
+    }
+    if (data.containsKey('n_leituras')) {
+      context.handle(
+        _nLeiturasMeta,
+        nLeituras.isAcceptableOrUnknown(data['n_leituras']!, _nLeiturasMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nLeiturasMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {episodioId, sinal, fase};
+  @override
+  LinhaMetrica map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LinhaMetrica(
+      episodioId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}episodio_id'],
+          )!,
+      sinal:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}sinal'],
+          )!,
+      fase:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}fase'],
+          )!,
+      media: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media'],
+      ),
+      minimo: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}minimo'],
+      ),
+      maximo: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}maximo'],
+      ),
+      nLeituras:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_leituras'],
+          )!,
+    );
+  }
+
+  @override
+  $EpisodioMetricasTable createAlias(String alias) {
+    return $EpisodioMetricasTable(attachedDatabase, alias);
+  }
+}
+
+class LinhaMetrica extends DataClass implements Insertable<LinhaMetrica> {
+  final String episodioId;
+  final String sinal;
+  final String fase;
+  final double? media;
+  final double? minimo;
+  final double? maximo;
+  final int nLeituras;
+  const LinhaMetrica({
+    required this.episodioId,
+    required this.sinal,
+    required this.fase,
+    this.media,
+    this.minimo,
+    this.maximo,
+    required this.nLeituras,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['episodio_id'] = Variable<String>(episodioId);
+    map['sinal'] = Variable<String>(sinal);
+    map['fase'] = Variable<String>(fase);
+    if (!nullToAbsent || media != null) {
+      map['media'] = Variable<double>(media);
+    }
+    if (!nullToAbsent || minimo != null) {
+      map['minimo'] = Variable<double>(minimo);
+    }
+    if (!nullToAbsent || maximo != null) {
+      map['maximo'] = Variable<double>(maximo);
+    }
+    map['n_leituras'] = Variable<int>(nLeituras);
+    return map;
+  }
+
+  EpisodioMetricasCompanion toCompanion(bool nullToAbsent) {
+    return EpisodioMetricasCompanion(
+      episodioId: Value(episodioId),
+      sinal: Value(sinal),
+      fase: Value(fase),
+      media:
+          media == null && nullToAbsent ? const Value.absent() : Value(media),
+      minimo:
+          minimo == null && nullToAbsent ? const Value.absent() : Value(minimo),
+      maximo:
+          maximo == null && nullToAbsent ? const Value.absent() : Value(maximo),
+      nLeituras: Value(nLeituras),
+    );
+  }
+
+  factory LinhaMetrica.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LinhaMetrica(
+      episodioId: serializer.fromJson<String>(json['episodioId']),
+      sinal: serializer.fromJson<String>(json['sinal']),
+      fase: serializer.fromJson<String>(json['fase']),
+      media: serializer.fromJson<double?>(json['media']),
+      minimo: serializer.fromJson<double?>(json['minimo']),
+      maximo: serializer.fromJson<double?>(json['maximo']),
+      nLeituras: serializer.fromJson<int>(json['nLeituras']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'episodioId': serializer.toJson<String>(episodioId),
+      'sinal': serializer.toJson<String>(sinal),
+      'fase': serializer.toJson<String>(fase),
+      'media': serializer.toJson<double?>(media),
+      'minimo': serializer.toJson<double?>(minimo),
+      'maximo': serializer.toJson<double?>(maximo),
+      'nLeituras': serializer.toJson<int>(nLeituras),
+    };
+  }
+
+  LinhaMetrica copyWith({
+    String? episodioId,
+    String? sinal,
+    String? fase,
+    Value<double?> media = const Value.absent(),
+    Value<double?> minimo = const Value.absent(),
+    Value<double?> maximo = const Value.absent(),
+    int? nLeituras,
+  }) => LinhaMetrica(
+    episodioId: episodioId ?? this.episodioId,
+    sinal: sinal ?? this.sinal,
+    fase: fase ?? this.fase,
+    media: media.present ? media.value : this.media,
+    minimo: minimo.present ? minimo.value : this.minimo,
+    maximo: maximo.present ? maximo.value : this.maximo,
+    nLeituras: nLeituras ?? this.nLeituras,
+  );
+  LinhaMetrica copyWithCompanion(EpisodioMetricasCompanion data) {
+    return LinhaMetrica(
+      episodioId:
+          data.episodioId.present ? data.episodioId.value : this.episodioId,
+      sinal: data.sinal.present ? data.sinal.value : this.sinal,
+      fase: data.fase.present ? data.fase.value : this.fase,
+      media: data.media.present ? data.media.value : this.media,
+      minimo: data.minimo.present ? data.minimo.value : this.minimo,
+      maximo: data.maximo.present ? data.maximo.value : this.maximo,
+      nLeituras: data.nLeituras.present ? data.nLeituras.value : this.nLeituras,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LinhaMetrica(')
+          ..write('episodioId: $episodioId, ')
+          ..write('sinal: $sinal, ')
+          ..write('fase: $fase, ')
+          ..write('media: $media, ')
+          ..write('minimo: $minimo, ')
+          ..write('maximo: $maximo, ')
+          ..write('nLeituras: $nLeituras')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(episodioId, sinal, fase, media, minimo, maximo, nLeituras);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LinhaMetrica &&
+          other.episodioId == this.episodioId &&
+          other.sinal == this.sinal &&
+          other.fase == this.fase &&
+          other.media == this.media &&
+          other.minimo == this.minimo &&
+          other.maximo == this.maximo &&
+          other.nLeituras == this.nLeituras);
+}
+
+class EpisodioMetricasCompanion extends UpdateCompanion<LinhaMetrica> {
+  final Value<String> episodioId;
+  final Value<String> sinal;
+  final Value<String> fase;
+  final Value<double?> media;
+  final Value<double?> minimo;
+  final Value<double?> maximo;
+  final Value<int> nLeituras;
+  final Value<int> rowid;
+  const EpisodioMetricasCompanion({
+    this.episodioId = const Value.absent(),
+    this.sinal = const Value.absent(),
+    this.fase = const Value.absent(),
+    this.media = const Value.absent(),
+    this.minimo = const Value.absent(),
+    this.maximo = const Value.absent(),
+    this.nLeituras = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EpisodioMetricasCompanion.insert({
+    required String episodioId,
+    required String sinal,
+    required String fase,
+    this.media = const Value.absent(),
+    this.minimo = const Value.absent(),
+    this.maximo = const Value.absent(),
+    required int nLeituras,
+    this.rowid = const Value.absent(),
+  }) : episodioId = Value(episodioId),
+       sinal = Value(sinal),
+       fase = Value(fase),
+       nLeituras = Value(nLeituras);
+  static Insertable<LinhaMetrica> custom({
+    Expression<String>? episodioId,
+    Expression<String>? sinal,
+    Expression<String>? fase,
+    Expression<double>? media,
+    Expression<double>? minimo,
+    Expression<double>? maximo,
+    Expression<int>? nLeituras,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (episodioId != null) 'episodio_id': episodioId,
+      if (sinal != null) 'sinal': sinal,
+      if (fase != null) 'fase': fase,
+      if (media != null) 'media': media,
+      if (minimo != null) 'minimo': minimo,
+      if (maximo != null) 'maximo': maximo,
+      if (nLeituras != null) 'n_leituras': nLeituras,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EpisodioMetricasCompanion copyWith({
+    Value<String>? episodioId,
+    Value<String>? sinal,
+    Value<String>? fase,
+    Value<double?>? media,
+    Value<double?>? minimo,
+    Value<double?>? maximo,
+    Value<int>? nLeituras,
+    Value<int>? rowid,
+  }) {
+    return EpisodioMetricasCompanion(
+      episodioId: episodioId ?? this.episodioId,
+      sinal: sinal ?? this.sinal,
+      fase: fase ?? this.fase,
+      media: media ?? this.media,
+      minimo: minimo ?? this.minimo,
+      maximo: maximo ?? this.maximo,
+      nLeituras: nLeituras ?? this.nLeituras,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (episodioId.present) {
+      map['episodio_id'] = Variable<String>(episodioId.value);
+    }
+    if (sinal.present) {
+      map['sinal'] = Variable<String>(sinal.value);
+    }
+    if (fase.present) {
+      map['fase'] = Variable<String>(fase.value);
+    }
+    if (media.present) {
+      map['media'] = Variable<double>(media.value);
+    }
+    if (minimo.present) {
+      map['minimo'] = Variable<double>(minimo.value);
+    }
+    if (maximo.present) {
+      map['maximo'] = Variable<double>(maximo.value);
+    }
+    if (nLeituras.present) {
+      map['n_leituras'] = Variable<int>(nLeituras.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodioMetricasCompanion(')
+          ..write('episodioId: $episodioId, ')
+          ..write('sinal: $sinal, ')
+          ..write('fase: $fase, ')
+          ..write('media: $media, ')
+          ..write('minimo: $minimo, ')
+          ..write('maximo: $maximo, ')
+          ..write('nLeituras: $nLeituras, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $ResumoMinutoTable extends ResumoMinuto
+    with TableInfo<$ResumoMinutoTable, LinhaResumoMinuto> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $ResumoMinutoTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _minutoMeta = const VerificationMeta('minuto');
+  @override
+  late final GeneratedColumn<int> minuto = GeneratedColumn<int>(
+    'minuto',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nLeiturasMeta = const VerificationMeta(
+    'nLeituras',
+  );
+  @override
+  late final GeneratedColumn<int> nLeituras = GeneratedColumn<int>(
+    'n_leituras',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _nivelMaximoMeta = const VerificationMeta(
+    'nivelMaximo',
+  );
+  @override
+  late final GeneratedColumn<String> nivelMaximo = GeneratedColumn<String>(
+    'nivel_maximo',
+    aliasedName,
+    false,
+    check: () => nivelMaximo.isIn(niveisValidos),
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _mediaBpmMeta = const VerificationMeta(
+    'mediaBpm',
+  );
+  @override
+  late final GeneratedColumn<double> mediaBpm = GeneratedColumn<double>(
+    'media_bpm',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nBpmMeta = const VerificationMeta('nBpm');
+  @override
+  late final GeneratedColumn<int> nBpm = GeneratedColumn<int>(
+    'n_bpm',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaHrvMsMeta = const VerificationMeta(
+    'mediaHrvMs',
+  );
+  @override
+  late final GeneratedColumn<double> mediaHrvMs = GeneratedColumn<double>(
+    'media_hrv_ms',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nHrvMsMeta = const VerificationMeta('nHrvMs');
+  @override
+  late final GeneratedColumn<int> nHrvMs = GeneratedColumn<int>(
+    'n_hrv_ms',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaEdaUsMeta = const VerificationMeta(
+    'mediaEdaUs',
+  );
+  @override
+  late final GeneratedColumn<double> mediaEdaUs = GeneratedColumn<double>(
+    'media_eda_us',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nEdaUsMeta = const VerificationMeta('nEdaUs');
+  @override
+  late final GeneratedColumn<int> nEdaUs = GeneratedColumn<int>(
+    'n_eda_us',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaGyroMagDpsMeta = const VerificationMeta(
+    'mediaGyroMagDps',
+  );
+  @override
+  late final GeneratedColumn<double> mediaGyroMagDps = GeneratedColumn<double>(
+    'media_gyro_mag_dps',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nGyroMagDpsMeta = const VerificationMeta(
+    'nGyroMagDps',
+  );
+  @override
+  late final GeneratedColumn<int> nGyroMagDps = GeneratedColumn<int>(
+    'n_gyro_mag_dps',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaLuzLuxMeta = const VerificationMeta(
+    'mediaLuzLux',
+  );
+  @override
+  late final GeneratedColumn<double> mediaLuzLux = GeneratedColumn<double>(
+    'media_luz_lux',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nLuzLuxMeta = const VerificationMeta(
+    'nLuzLux',
+  );
+  @override
+  late final GeneratedColumn<int> nLuzLux = GeneratedColumn<int>(
+    'n_luz_lux',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _mediaRuidoDbMeta = const VerificationMeta(
+    'mediaRuidoDb',
+  );
+  @override
+  late final GeneratedColumn<double> mediaRuidoDb = GeneratedColumn<double>(
+    'media_ruido_db',
+    aliasedName,
+    true,
+    type: DriftSqlType.double,
+    requiredDuringInsert: false,
+  );
+  static const VerificationMeta _nRuidoDbMeta = const VerificationMeta(
+    'nRuidoDb',
+  );
+  @override
+  late final GeneratedColumn<int> nRuidoDb = GeneratedColumn<int>(
+    'n_ruido_db',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
+  static const VerificationMeta _recebidoEmMeta = const VerificationMeta(
+    'recebidoEm',
+  );
+  @override
+  late final GeneratedColumn<int> recebidoEm = GeneratedColumn<int>(
+    'recebido_em',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    minuto,
+    nLeituras,
+    nivelMaximo,
+    mediaBpm,
+    nBpm,
+    mediaHrvMs,
+    nHrvMs,
+    mediaEdaUs,
+    nEdaUs,
+    mediaGyroMagDps,
+    nGyroMagDps,
+    mediaLuzLux,
+    nLuzLux,
+    mediaRuidoDb,
+    nRuidoDb,
+    recebidoEm,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'resumo_minuto';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<LinhaResumoMinuto> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('minuto')) {
+      context.handle(
+        _minutoMeta,
+        minuto.isAcceptableOrUnknown(data['minuto']!, _minutoMeta),
+      );
+    }
+    if (data.containsKey('n_leituras')) {
+      context.handle(
+        _nLeiturasMeta,
+        nLeituras.isAcceptableOrUnknown(data['n_leituras']!, _nLeiturasMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_nLeiturasMeta);
+    }
+    if (data.containsKey('nivel_maximo')) {
+      context.handle(
+        _nivelMaximoMeta,
+        nivelMaximo.isAcceptableOrUnknown(
+          data['nivel_maximo']!,
+          _nivelMaximoMeta,
+        ),
+      );
+    } else if (isInserting) {
+      context.missing(_nivelMaximoMeta);
+    }
+    if (data.containsKey('media_bpm')) {
+      context.handle(
+        _mediaBpmMeta,
+        mediaBpm.isAcceptableOrUnknown(data['media_bpm']!, _mediaBpmMeta),
+      );
+    }
+    if (data.containsKey('n_bpm')) {
+      context.handle(
+        _nBpmMeta,
+        nBpm.isAcceptableOrUnknown(data['n_bpm']!, _nBpmMeta),
+      );
+    }
+    if (data.containsKey('media_hrv_ms')) {
+      context.handle(
+        _mediaHrvMsMeta,
+        mediaHrvMs.isAcceptableOrUnknown(
+          data['media_hrv_ms']!,
+          _mediaHrvMsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('n_hrv_ms')) {
+      context.handle(
+        _nHrvMsMeta,
+        nHrvMs.isAcceptableOrUnknown(data['n_hrv_ms']!, _nHrvMsMeta),
+      );
+    }
+    if (data.containsKey('media_eda_us')) {
+      context.handle(
+        _mediaEdaUsMeta,
+        mediaEdaUs.isAcceptableOrUnknown(
+          data['media_eda_us']!,
+          _mediaEdaUsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('n_eda_us')) {
+      context.handle(
+        _nEdaUsMeta,
+        nEdaUs.isAcceptableOrUnknown(data['n_eda_us']!, _nEdaUsMeta),
+      );
+    }
+    if (data.containsKey('media_gyro_mag_dps')) {
+      context.handle(
+        _mediaGyroMagDpsMeta,
+        mediaGyroMagDps.isAcceptableOrUnknown(
+          data['media_gyro_mag_dps']!,
+          _mediaGyroMagDpsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('n_gyro_mag_dps')) {
+      context.handle(
+        _nGyroMagDpsMeta,
+        nGyroMagDps.isAcceptableOrUnknown(
+          data['n_gyro_mag_dps']!,
+          _nGyroMagDpsMeta,
+        ),
+      );
+    }
+    if (data.containsKey('media_luz_lux')) {
+      context.handle(
+        _mediaLuzLuxMeta,
+        mediaLuzLux.isAcceptableOrUnknown(
+          data['media_luz_lux']!,
+          _mediaLuzLuxMeta,
+        ),
+      );
+    }
+    if (data.containsKey('n_luz_lux')) {
+      context.handle(
+        _nLuzLuxMeta,
+        nLuzLux.isAcceptableOrUnknown(data['n_luz_lux']!, _nLuzLuxMeta),
+      );
+    }
+    if (data.containsKey('media_ruido_db')) {
+      context.handle(
+        _mediaRuidoDbMeta,
+        mediaRuidoDb.isAcceptableOrUnknown(
+          data['media_ruido_db']!,
+          _mediaRuidoDbMeta,
+        ),
+      );
+    }
+    if (data.containsKey('n_ruido_db')) {
+      context.handle(
+        _nRuidoDbMeta,
+        nRuidoDb.isAcceptableOrUnknown(data['n_ruido_db']!, _nRuidoDbMeta),
+      );
+    }
+    if (data.containsKey('recebido_em')) {
+      context.handle(
+        _recebidoEmMeta,
+        recebidoEm.isAcceptableOrUnknown(data['recebido_em']!, _recebidoEmMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_recebidoEmMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {minuto};
+  @override
+  LinhaResumoMinuto map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LinhaResumoMinuto(
+      minuto:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}minuto'],
+          )!,
+      nLeituras:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_leituras'],
+          )!,
+      nivelMaximo:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}nivel_maximo'],
+          )!,
+      mediaBpm: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_bpm'],
+      ),
+      nBpm:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_bpm'],
+          )!,
+      mediaHrvMs: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_hrv_ms'],
+      ),
+      nHrvMs:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_hrv_ms'],
+          )!,
+      mediaEdaUs: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_eda_us'],
+      ),
+      nEdaUs:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_eda_us'],
+          )!,
+      mediaGyroMagDps: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_gyro_mag_dps'],
+      ),
+      nGyroMagDps:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_gyro_mag_dps'],
+          )!,
+      mediaLuzLux: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_luz_lux'],
+      ),
+      nLuzLux:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_luz_lux'],
+          )!,
+      mediaRuidoDb: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}media_ruido_db'],
+      ),
+      nRuidoDb:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}n_ruido_db'],
+          )!,
+      recebidoEm:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}recebido_em'],
+          )!,
+    );
+  }
+
+  @override
+  $ResumoMinutoTable createAlias(String alias) {
+    return $ResumoMinutoTable(attachedDatabase, alias);
+  }
+}
+
+class LinhaResumoMinuto extends DataClass
+    implements Insertable<LinhaResumoMinuto> {
+  final int minuto;
+  final int nLeituras;
+  final String nivelMaximo;
+  final double? mediaBpm;
+  final int nBpm;
+  final double? mediaHrvMs;
+  final int nHrvMs;
+  final double? mediaEdaUs;
+  final int nEdaUs;
+  final double? mediaGyroMagDps;
+  final int nGyroMagDps;
+  final double? mediaLuzLux;
+  final int nLuzLux;
+  final double? mediaRuidoDb;
+  final int nRuidoDb;
+
+  /// Quando chegou da pulseira.
+  final int recebidoEm;
+  const LinhaResumoMinuto({
+    required this.minuto,
+    required this.nLeituras,
+    required this.nivelMaximo,
+    this.mediaBpm,
+    required this.nBpm,
+    this.mediaHrvMs,
+    required this.nHrvMs,
+    this.mediaEdaUs,
+    required this.nEdaUs,
+    this.mediaGyroMagDps,
+    required this.nGyroMagDps,
+    this.mediaLuzLux,
+    required this.nLuzLux,
+    this.mediaRuidoDb,
+    required this.nRuidoDb,
+    required this.recebidoEm,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['minuto'] = Variable<int>(minuto);
+    map['n_leituras'] = Variable<int>(nLeituras);
+    map['nivel_maximo'] = Variable<String>(nivelMaximo);
+    if (!nullToAbsent || mediaBpm != null) {
+      map['media_bpm'] = Variable<double>(mediaBpm);
+    }
+    map['n_bpm'] = Variable<int>(nBpm);
+    if (!nullToAbsent || mediaHrvMs != null) {
+      map['media_hrv_ms'] = Variable<double>(mediaHrvMs);
+    }
+    map['n_hrv_ms'] = Variable<int>(nHrvMs);
+    if (!nullToAbsent || mediaEdaUs != null) {
+      map['media_eda_us'] = Variable<double>(mediaEdaUs);
+    }
+    map['n_eda_us'] = Variable<int>(nEdaUs);
+    if (!nullToAbsent || mediaGyroMagDps != null) {
+      map['media_gyro_mag_dps'] = Variable<double>(mediaGyroMagDps);
+    }
+    map['n_gyro_mag_dps'] = Variable<int>(nGyroMagDps);
+    if (!nullToAbsent || mediaLuzLux != null) {
+      map['media_luz_lux'] = Variable<double>(mediaLuzLux);
+    }
+    map['n_luz_lux'] = Variable<int>(nLuzLux);
+    if (!nullToAbsent || mediaRuidoDb != null) {
+      map['media_ruido_db'] = Variable<double>(mediaRuidoDb);
+    }
+    map['n_ruido_db'] = Variable<int>(nRuidoDb);
+    map['recebido_em'] = Variable<int>(recebidoEm);
+    return map;
+  }
+
+  ResumoMinutoCompanion toCompanion(bool nullToAbsent) {
+    return ResumoMinutoCompanion(
+      minuto: Value(minuto),
+      nLeituras: Value(nLeituras),
+      nivelMaximo: Value(nivelMaximo),
+      mediaBpm:
+          mediaBpm == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaBpm),
+      nBpm: Value(nBpm),
+      mediaHrvMs:
+          mediaHrvMs == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaHrvMs),
+      nHrvMs: Value(nHrvMs),
+      mediaEdaUs:
+          mediaEdaUs == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaEdaUs),
+      nEdaUs: Value(nEdaUs),
+      mediaGyroMagDps:
+          mediaGyroMagDps == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaGyroMagDps),
+      nGyroMagDps: Value(nGyroMagDps),
+      mediaLuzLux:
+          mediaLuzLux == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaLuzLux),
+      nLuzLux: Value(nLuzLux),
+      mediaRuidoDb:
+          mediaRuidoDb == null && nullToAbsent
+              ? const Value.absent()
+              : Value(mediaRuidoDb),
+      nRuidoDb: Value(nRuidoDb),
+      recebidoEm: Value(recebidoEm),
+    );
+  }
+
+  factory LinhaResumoMinuto.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LinhaResumoMinuto(
+      minuto: serializer.fromJson<int>(json['minuto']),
+      nLeituras: serializer.fromJson<int>(json['nLeituras']),
+      nivelMaximo: serializer.fromJson<String>(json['nivelMaximo']),
+      mediaBpm: serializer.fromJson<double?>(json['mediaBpm']),
+      nBpm: serializer.fromJson<int>(json['nBpm']),
+      mediaHrvMs: serializer.fromJson<double?>(json['mediaHrvMs']),
+      nHrvMs: serializer.fromJson<int>(json['nHrvMs']),
+      mediaEdaUs: serializer.fromJson<double?>(json['mediaEdaUs']),
+      nEdaUs: serializer.fromJson<int>(json['nEdaUs']),
+      mediaGyroMagDps: serializer.fromJson<double?>(json['mediaGyroMagDps']),
+      nGyroMagDps: serializer.fromJson<int>(json['nGyroMagDps']),
+      mediaLuzLux: serializer.fromJson<double?>(json['mediaLuzLux']),
+      nLuzLux: serializer.fromJson<int>(json['nLuzLux']),
+      mediaRuidoDb: serializer.fromJson<double?>(json['mediaRuidoDb']),
+      nRuidoDb: serializer.fromJson<int>(json['nRuidoDb']),
+      recebidoEm: serializer.fromJson<int>(json['recebidoEm']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'minuto': serializer.toJson<int>(minuto),
+      'nLeituras': serializer.toJson<int>(nLeituras),
+      'nivelMaximo': serializer.toJson<String>(nivelMaximo),
+      'mediaBpm': serializer.toJson<double?>(mediaBpm),
+      'nBpm': serializer.toJson<int>(nBpm),
+      'mediaHrvMs': serializer.toJson<double?>(mediaHrvMs),
+      'nHrvMs': serializer.toJson<int>(nHrvMs),
+      'mediaEdaUs': serializer.toJson<double?>(mediaEdaUs),
+      'nEdaUs': serializer.toJson<int>(nEdaUs),
+      'mediaGyroMagDps': serializer.toJson<double?>(mediaGyroMagDps),
+      'nGyroMagDps': serializer.toJson<int>(nGyroMagDps),
+      'mediaLuzLux': serializer.toJson<double?>(mediaLuzLux),
+      'nLuzLux': serializer.toJson<int>(nLuzLux),
+      'mediaRuidoDb': serializer.toJson<double?>(mediaRuidoDb),
+      'nRuidoDb': serializer.toJson<int>(nRuidoDb),
+      'recebidoEm': serializer.toJson<int>(recebidoEm),
+    };
+  }
+
+  LinhaResumoMinuto copyWith({
+    int? minuto,
+    int? nLeituras,
+    String? nivelMaximo,
+    Value<double?> mediaBpm = const Value.absent(),
+    int? nBpm,
+    Value<double?> mediaHrvMs = const Value.absent(),
+    int? nHrvMs,
+    Value<double?> mediaEdaUs = const Value.absent(),
+    int? nEdaUs,
+    Value<double?> mediaGyroMagDps = const Value.absent(),
+    int? nGyroMagDps,
+    Value<double?> mediaLuzLux = const Value.absent(),
+    int? nLuzLux,
+    Value<double?> mediaRuidoDb = const Value.absent(),
+    int? nRuidoDb,
+    int? recebidoEm,
+  }) => LinhaResumoMinuto(
+    minuto: minuto ?? this.minuto,
+    nLeituras: nLeituras ?? this.nLeituras,
+    nivelMaximo: nivelMaximo ?? this.nivelMaximo,
+    mediaBpm: mediaBpm.present ? mediaBpm.value : this.mediaBpm,
+    nBpm: nBpm ?? this.nBpm,
+    mediaHrvMs: mediaHrvMs.present ? mediaHrvMs.value : this.mediaHrvMs,
+    nHrvMs: nHrvMs ?? this.nHrvMs,
+    mediaEdaUs: mediaEdaUs.present ? mediaEdaUs.value : this.mediaEdaUs,
+    nEdaUs: nEdaUs ?? this.nEdaUs,
+    mediaGyroMagDps:
+        mediaGyroMagDps.present ? mediaGyroMagDps.value : this.mediaGyroMagDps,
+    nGyroMagDps: nGyroMagDps ?? this.nGyroMagDps,
+    mediaLuzLux: mediaLuzLux.present ? mediaLuzLux.value : this.mediaLuzLux,
+    nLuzLux: nLuzLux ?? this.nLuzLux,
+    mediaRuidoDb: mediaRuidoDb.present ? mediaRuidoDb.value : this.mediaRuidoDb,
+    nRuidoDb: nRuidoDb ?? this.nRuidoDb,
+    recebidoEm: recebidoEm ?? this.recebidoEm,
+  );
+  LinhaResumoMinuto copyWithCompanion(ResumoMinutoCompanion data) {
+    return LinhaResumoMinuto(
+      minuto: data.minuto.present ? data.minuto.value : this.minuto,
+      nLeituras: data.nLeituras.present ? data.nLeituras.value : this.nLeituras,
+      nivelMaximo:
+          data.nivelMaximo.present ? data.nivelMaximo.value : this.nivelMaximo,
+      mediaBpm: data.mediaBpm.present ? data.mediaBpm.value : this.mediaBpm,
+      nBpm: data.nBpm.present ? data.nBpm.value : this.nBpm,
+      mediaHrvMs:
+          data.mediaHrvMs.present ? data.mediaHrvMs.value : this.mediaHrvMs,
+      nHrvMs: data.nHrvMs.present ? data.nHrvMs.value : this.nHrvMs,
+      mediaEdaUs:
+          data.mediaEdaUs.present ? data.mediaEdaUs.value : this.mediaEdaUs,
+      nEdaUs: data.nEdaUs.present ? data.nEdaUs.value : this.nEdaUs,
+      mediaGyroMagDps:
+          data.mediaGyroMagDps.present
+              ? data.mediaGyroMagDps.value
+              : this.mediaGyroMagDps,
+      nGyroMagDps:
+          data.nGyroMagDps.present ? data.nGyroMagDps.value : this.nGyroMagDps,
+      mediaLuzLux:
+          data.mediaLuzLux.present ? data.mediaLuzLux.value : this.mediaLuzLux,
+      nLuzLux: data.nLuzLux.present ? data.nLuzLux.value : this.nLuzLux,
+      mediaRuidoDb:
+          data.mediaRuidoDb.present
+              ? data.mediaRuidoDb.value
+              : this.mediaRuidoDb,
+      nRuidoDb: data.nRuidoDb.present ? data.nRuidoDb.value : this.nRuidoDb,
+      recebidoEm:
+          data.recebidoEm.present ? data.recebidoEm.value : this.recebidoEm,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LinhaResumoMinuto(')
+          ..write('minuto: $minuto, ')
+          ..write('nLeituras: $nLeituras, ')
+          ..write('nivelMaximo: $nivelMaximo, ')
+          ..write('mediaBpm: $mediaBpm, ')
+          ..write('nBpm: $nBpm, ')
+          ..write('mediaHrvMs: $mediaHrvMs, ')
+          ..write('nHrvMs: $nHrvMs, ')
+          ..write('mediaEdaUs: $mediaEdaUs, ')
+          ..write('nEdaUs: $nEdaUs, ')
+          ..write('mediaGyroMagDps: $mediaGyroMagDps, ')
+          ..write('nGyroMagDps: $nGyroMagDps, ')
+          ..write('mediaLuzLux: $mediaLuzLux, ')
+          ..write('nLuzLux: $nLuzLux, ')
+          ..write('mediaRuidoDb: $mediaRuidoDb, ')
+          ..write('nRuidoDb: $nRuidoDb, ')
+          ..write('recebidoEm: $recebidoEm')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(
+    minuto,
+    nLeituras,
+    nivelMaximo,
+    mediaBpm,
+    nBpm,
+    mediaHrvMs,
+    nHrvMs,
+    mediaEdaUs,
+    nEdaUs,
+    mediaGyroMagDps,
+    nGyroMagDps,
+    mediaLuzLux,
+    nLuzLux,
+    mediaRuidoDb,
+    nRuidoDb,
+    recebidoEm,
+  );
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LinhaResumoMinuto &&
+          other.minuto == this.minuto &&
+          other.nLeituras == this.nLeituras &&
+          other.nivelMaximo == this.nivelMaximo &&
+          other.mediaBpm == this.mediaBpm &&
+          other.nBpm == this.nBpm &&
+          other.mediaHrvMs == this.mediaHrvMs &&
+          other.nHrvMs == this.nHrvMs &&
+          other.mediaEdaUs == this.mediaEdaUs &&
+          other.nEdaUs == this.nEdaUs &&
+          other.mediaGyroMagDps == this.mediaGyroMagDps &&
+          other.nGyroMagDps == this.nGyroMagDps &&
+          other.mediaLuzLux == this.mediaLuzLux &&
+          other.nLuzLux == this.nLuzLux &&
+          other.mediaRuidoDb == this.mediaRuidoDb &&
+          other.nRuidoDb == this.nRuidoDb &&
+          other.recebidoEm == this.recebidoEm);
+}
+
+class ResumoMinutoCompanion extends UpdateCompanion<LinhaResumoMinuto> {
+  final Value<int> minuto;
+  final Value<int> nLeituras;
+  final Value<String> nivelMaximo;
+  final Value<double?> mediaBpm;
+  final Value<int> nBpm;
+  final Value<double?> mediaHrvMs;
+  final Value<int> nHrvMs;
+  final Value<double?> mediaEdaUs;
+  final Value<int> nEdaUs;
+  final Value<double?> mediaGyroMagDps;
+  final Value<int> nGyroMagDps;
+  final Value<double?> mediaLuzLux;
+  final Value<int> nLuzLux;
+  final Value<double?> mediaRuidoDb;
+  final Value<int> nRuidoDb;
+  final Value<int> recebidoEm;
+  const ResumoMinutoCompanion({
+    this.minuto = const Value.absent(),
+    this.nLeituras = const Value.absent(),
+    this.nivelMaximo = const Value.absent(),
+    this.mediaBpm = const Value.absent(),
+    this.nBpm = const Value.absent(),
+    this.mediaHrvMs = const Value.absent(),
+    this.nHrvMs = const Value.absent(),
+    this.mediaEdaUs = const Value.absent(),
+    this.nEdaUs = const Value.absent(),
+    this.mediaGyroMagDps = const Value.absent(),
+    this.nGyroMagDps = const Value.absent(),
+    this.mediaLuzLux = const Value.absent(),
+    this.nLuzLux = const Value.absent(),
+    this.mediaRuidoDb = const Value.absent(),
+    this.nRuidoDb = const Value.absent(),
+    this.recebidoEm = const Value.absent(),
+  });
+  ResumoMinutoCompanion.insert({
+    this.minuto = const Value.absent(),
+    required int nLeituras,
+    required String nivelMaximo,
+    this.mediaBpm = const Value.absent(),
+    this.nBpm = const Value.absent(),
+    this.mediaHrvMs = const Value.absent(),
+    this.nHrvMs = const Value.absent(),
+    this.mediaEdaUs = const Value.absent(),
+    this.nEdaUs = const Value.absent(),
+    this.mediaGyroMagDps = const Value.absent(),
+    this.nGyroMagDps = const Value.absent(),
+    this.mediaLuzLux = const Value.absent(),
+    this.nLuzLux = const Value.absent(),
+    this.mediaRuidoDb = const Value.absent(),
+    this.nRuidoDb = const Value.absent(),
+    required int recebidoEm,
+  }) : nLeituras = Value(nLeituras),
+       nivelMaximo = Value(nivelMaximo),
+       recebidoEm = Value(recebidoEm);
+  static Insertable<LinhaResumoMinuto> custom({
+    Expression<int>? minuto,
+    Expression<int>? nLeituras,
+    Expression<String>? nivelMaximo,
+    Expression<double>? mediaBpm,
+    Expression<int>? nBpm,
+    Expression<double>? mediaHrvMs,
+    Expression<int>? nHrvMs,
+    Expression<double>? mediaEdaUs,
+    Expression<int>? nEdaUs,
+    Expression<double>? mediaGyroMagDps,
+    Expression<int>? nGyroMagDps,
+    Expression<double>? mediaLuzLux,
+    Expression<int>? nLuzLux,
+    Expression<double>? mediaRuidoDb,
+    Expression<int>? nRuidoDb,
+    Expression<int>? recebidoEm,
+  }) {
+    return RawValuesInsertable({
+      if (minuto != null) 'minuto': minuto,
+      if (nLeituras != null) 'n_leituras': nLeituras,
+      if (nivelMaximo != null) 'nivel_maximo': nivelMaximo,
+      if (mediaBpm != null) 'media_bpm': mediaBpm,
+      if (nBpm != null) 'n_bpm': nBpm,
+      if (mediaHrvMs != null) 'media_hrv_ms': mediaHrvMs,
+      if (nHrvMs != null) 'n_hrv_ms': nHrvMs,
+      if (mediaEdaUs != null) 'media_eda_us': mediaEdaUs,
+      if (nEdaUs != null) 'n_eda_us': nEdaUs,
+      if (mediaGyroMagDps != null) 'media_gyro_mag_dps': mediaGyroMagDps,
+      if (nGyroMagDps != null) 'n_gyro_mag_dps': nGyroMagDps,
+      if (mediaLuzLux != null) 'media_luz_lux': mediaLuzLux,
+      if (nLuzLux != null) 'n_luz_lux': nLuzLux,
+      if (mediaRuidoDb != null) 'media_ruido_db': mediaRuidoDb,
+      if (nRuidoDb != null) 'n_ruido_db': nRuidoDb,
+      if (recebidoEm != null) 'recebido_em': recebidoEm,
+    });
+  }
+
+  ResumoMinutoCompanion copyWith({
+    Value<int>? minuto,
+    Value<int>? nLeituras,
+    Value<String>? nivelMaximo,
+    Value<double?>? mediaBpm,
+    Value<int>? nBpm,
+    Value<double?>? mediaHrvMs,
+    Value<int>? nHrvMs,
+    Value<double?>? mediaEdaUs,
+    Value<int>? nEdaUs,
+    Value<double?>? mediaGyroMagDps,
+    Value<int>? nGyroMagDps,
+    Value<double?>? mediaLuzLux,
+    Value<int>? nLuzLux,
+    Value<double?>? mediaRuidoDb,
+    Value<int>? nRuidoDb,
+    Value<int>? recebidoEm,
+  }) {
+    return ResumoMinutoCompanion(
+      minuto: minuto ?? this.minuto,
+      nLeituras: nLeituras ?? this.nLeituras,
+      nivelMaximo: nivelMaximo ?? this.nivelMaximo,
+      mediaBpm: mediaBpm ?? this.mediaBpm,
+      nBpm: nBpm ?? this.nBpm,
+      mediaHrvMs: mediaHrvMs ?? this.mediaHrvMs,
+      nHrvMs: nHrvMs ?? this.nHrvMs,
+      mediaEdaUs: mediaEdaUs ?? this.mediaEdaUs,
+      nEdaUs: nEdaUs ?? this.nEdaUs,
+      mediaGyroMagDps: mediaGyroMagDps ?? this.mediaGyroMagDps,
+      nGyroMagDps: nGyroMagDps ?? this.nGyroMagDps,
+      mediaLuzLux: mediaLuzLux ?? this.mediaLuzLux,
+      nLuzLux: nLuzLux ?? this.nLuzLux,
+      mediaRuidoDb: mediaRuidoDb ?? this.mediaRuidoDb,
+      nRuidoDb: nRuidoDb ?? this.nRuidoDb,
+      recebidoEm: recebidoEm ?? this.recebidoEm,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (minuto.present) {
+      map['minuto'] = Variable<int>(minuto.value);
+    }
+    if (nLeituras.present) {
+      map['n_leituras'] = Variable<int>(nLeituras.value);
+    }
+    if (nivelMaximo.present) {
+      map['nivel_maximo'] = Variable<String>(nivelMaximo.value);
+    }
+    if (mediaBpm.present) {
+      map['media_bpm'] = Variable<double>(mediaBpm.value);
+    }
+    if (nBpm.present) {
+      map['n_bpm'] = Variable<int>(nBpm.value);
+    }
+    if (mediaHrvMs.present) {
+      map['media_hrv_ms'] = Variable<double>(mediaHrvMs.value);
+    }
+    if (nHrvMs.present) {
+      map['n_hrv_ms'] = Variable<int>(nHrvMs.value);
+    }
+    if (mediaEdaUs.present) {
+      map['media_eda_us'] = Variable<double>(mediaEdaUs.value);
+    }
+    if (nEdaUs.present) {
+      map['n_eda_us'] = Variable<int>(nEdaUs.value);
+    }
+    if (mediaGyroMagDps.present) {
+      map['media_gyro_mag_dps'] = Variable<double>(mediaGyroMagDps.value);
+    }
+    if (nGyroMagDps.present) {
+      map['n_gyro_mag_dps'] = Variable<int>(nGyroMagDps.value);
+    }
+    if (mediaLuzLux.present) {
+      map['media_luz_lux'] = Variable<double>(mediaLuzLux.value);
+    }
+    if (nLuzLux.present) {
+      map['n_luz_lux'] = Variable<int>(nLuzLux.value);
+    }
+    if (mediaRuidoDb.present) {
+      map['media_ruido_db'] = Variable<double>(mediaRuidoDb.value);
+    }
+    if (nRuidoDb.present) {
+      map['n_ruido_db'] = Variable<int>(nRuidoDb.value);
+    }
+    if (recebidoEm.present) {
+      map['recebido_em'] = Variable<int>(recebidoEm.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('ResumoMinutoCompanion(')
+          ..write('minuto: $minuto, ')
+          ..write('nLeituras: $nLeituras, ')
+          ..write('nivelMaximo: $nivelMaximo, ')
+          ..write('mediaBpm: $mediaBpm, ')
+          ..write('nBpm: $nBpm, ')
+          ..write('mediaHrvMs: $mediaHrvMs, ')
+          ..write('nHrvMs: $nHrvMs, ')
+          ..write('mediaEdaUs: $mediaEdaUs, ')
+          ..write('nEdaUs: $nEdaUs, ')
+          ..write('mediaGyroMagDps: $mediaGyroMagDps, ')
+          ..write('nGyroMagDps: $nGyroMagDps, ')
+          ..write('mediaLuzLux: $mediaLuzLux, ')
+          ..write('nLuzLux: $nLuzLux, ')
+          ..write('mediaRuidoDb: $mediaRuidoDb, ')
+          ..write('nRuidoDb: $nRuidoDb, ')
+          ..write('recebidoEm: $recebidoEm')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$BancoPuzzleBand extends GeneratedDatabase {
   _$BancoPuzzleBand(QueryExecutor e) : super(e);
   $BancoPuzzleBandManager get managers => $BancoPuzzleBandManager(this);
@@ -1942,6 +3328,10 @@ abstract class _$BancoPuzzleBand extends GeneratedDatabase {
   late final $LembretesTable lembretes = $LembretesTable(this);
   late final $EpisodiosNotificadosTable episodiosNotificados =
       $EpisodiosNotificadosTable(this);
+  late final $EpisodioMetricasTable episodioMetricas = $EpisodioMetricasTable(
+    this,
+  );
+  late final $ResumoMinutoTable resumoMinuto = $ResumoMinutoTable(this);
   late final Index idxEpisodiosInicio = Index(
     'idx_episodios_inicio',
     'CREATE INDEX IF NOT EXISTS idx_episodios_inicio ON episodios (inicio)',
@@ -1962,6 +3352,8 @@ abstract class _$BancoPuzzleBand extends GeneratedDatabase {
     episodios,
     lembretes,
     episodiosNotificados,
+    episodioMetricas,
+    resumoMinuto,
     idxEpisodiosInicio,
     idxLembretesSalvoEm,
     idxNotificadosEm,
@@ -2940,6 +4332,715 @@ typedef $$EpisodiosNotificadosTableProcessedTableManager =
       LinhaNotificado,
       PrefetchHooks Function()
     >;
+typedef $$EpisodioMetricasTableCreateCompanionBuilder =
+    EpisodioMetricasCompanion Function({
+      required String episodioId,
+      required String sinal,
+      required String fase,
+      Value<double?> media,
+      Value<double?> minimo,
+      Value<double?> maximo,
+      required int nLeituras,
+      Value<int> rowid,
+    });
+typedef $$EpisodioMetricasTableUpdateCompanionBuilder =
+    EpisodioMetricasCompanion Function({
+      Value<String> episodioId,
+      Value<String> sinal,
+      Value<String> fase,
+      Value<double?> media,
+      Value<double?> minimo,
+      Value<double?> maximo,
+      Value<int> nLeituras,
+      Value<int> rowid,
+    });
+
+class $$EpisodioMetricasTableFilterComposer
+    extends Composer<_$BancoPuzzleBand, $EpisodioMetricasTable> {
+  $$EpisodioMetricasTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get episodioId => $composableBuilder(
+    column: $table.episodioId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get sinal => $composableBuilder(
+    column: $table.sinal,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get fase => $composableBuilder(
+    column: $table.fase,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get media => $composableBuilder(
+    column: $table.media,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get minimo => $composableBuilder(
+    column: $table.minimo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get maximo => $composableBuilder(
+    column: $table.maximo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nLeituras => $composableBuilder(
+    column: $table.nLeituras,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$EpisodioMetricasTableOrderingComposer
+    extends Composer<_$BancoPuzzleBand, $EpisodioMetricasTable> {
+  $$EpisodioMetricasTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get episodioId => $composableBuilder(
+    column: $table.episodioId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get sinal => $composableBuilder(
+    column: $table.sinal,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get fase => $composableBuilder(
+    column: $table.fase,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get media => $composableBuilder(
+    column: $table.media,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get minimo => $composableBuilder(
+    column: $table.minimo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get maximo => $composableBuilder(
+    column: $table.maximo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nLeituras => $composableBuilder(
+    column: $table.nLeituras,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$EpisodioMetricasTableAnnotationComposer
+    extends Composer<_$BancoPuzzleBand, $EpisodioMetricasTable> {
+  $$EpisodioMetricasTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get episodioId => $composableBuilder(
+    column: $table.episodioId,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<String> get sinal =>
+      $composableBuilder(column: $table.sinal, builder: (column) => column);
+
+  GeneratedColumn<String> get fase =>
+      $composableBuilder(column: $table.fase, builder: (column) => column);
+
+  GeneratedColumn<double> get media =>
+      $composableBuilder(column: $table.media, builder: (column) => column);
+
+  GeneratedColumn<double> get minimo =>
+      $composableBuilder(column: $table.minimo, builder: (column) => column);
+
+  GeneratedColumn<double> get maximo =>
+      $composableBuilder(column: $table.maximo, builder: (column) => column);
+
+  GeneratedColumn<int> get nLeituras =>
+      $composableBuilder(column: $table.nLeituras, builder: (column) => column);
+}
+
+class $$EpisodioMetricasTableTableManager
+    extends
+        RootTableManager<
+          _$BancoPuzzleBand,
+          $EpisodioMetricasTable,
+          LinhaMetrica,
+          $$EpisodioMetricasTableFilterComposer,
+          $$EpisodioMetricasTableOrderingComposer,
+          $$EpisodioMetricasTableAnnotationComposer,
+          $$EpisodioMetricasTableCreateCompanionBuilder,
+          $$EpisodioMetricasTableUpdateCompanionBuilder,
+          (
+            LinhaMetrica,
+            BaseReferences<
+              _$BancoPuzzleBand,
+              $EpisodioMetricasTable,
+              LinhaMetrica
+            >,
+          ),
+          LinhaMetrica,
+          PrefetchHooks Function()
+        > {
+  $$EpisodioMetricasTableTableManager(
+    _$BancoPuzzleBand db,
+    $EpisodioMetricasTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () =>
+                  $$EpisodioMetricasTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$EpisodioMetricasTableOrderingComposer(
+                $db: db,
+                $table: table,
+              ),
+          createComputedFieldComposer:
+              () => $$EpisodioMetricasTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback:
+              ({
+                Value<String> episodioId = const Value.absent(),
+                Value<String> sinal = const Value.absent(),
+                Value<String> fase = const Value.absent(),
+                Value<double?> media = const Value.absent(),
+                Value<double?> minimo = const Value.absent(),
+                Value<double?> maximo = const Value.absent(),
+                Value<int> nLeituras = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => EpisodioMetricasCompanion(
+                episodioId: episodioId,
+                sinal: sinal,
+                fase: fase,
+                media: media,
+                minimo: minimo,
+                maximo: maximo,
+                nLeituras: nLeituras,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String episodioId,
+                required String sinal,
+                required String fase,
+                Value<double?> media = const Value.absent(),
+                Value<double?> minimo = const Value.absent(),
+                Value<double?> maximo = const Value.absent(),
+                required int nLeituras,
+                Value<int> rowid = const Value.absent(),
+              }) => EpisodioMetricasCompanion.insert(
+                episodioId: episodioId,
+                sinal: sinal,
+                fase: fase,
+                media: media,
+                minimo: minimo,
+                maximo: maximo,
+                nLeituras: nLeituras,
+                rowid: rowid,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable<$EpisodioMetricasTable, LinhaMetrica>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$BancoPuzzleBand,
+                            $EpisodioMetricasTable,
+                            LinhaMetrica
+                          >(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$EpisodioMetricasTableProcessedTableManager =
+    ProcessedTableManager<
+      _$BancoPuzzleBand,
+      $EpisodioMetricasTable,
+      LinhaMetrica,
+      $$EpisodioMetricasTableFilterComposer,
+      $$EpisodioMetricasTableOrderingComposer,
+      $$EpisodioMetricasTableAnnotationComposer,
+      $$EpisodioMetricasTableCreateCompanionBuilder,
+      $$EpisodioMetricasTableUpdateCompanionBuilder,
+      (
+        LinhaMetrica,
+        BaseReferences<_$BancoPuzzleBand, $EpisodioMetricasTable, LinhaMetrica>,
+      ),
+      LinhaMetrica,
+      PrefetchHooks Function()
+    >;
+typedef $$ResumoMinutoTableCreateCompanionBuilder =
+    ResumoMinutoCompanion Function({
+      Value<int> minuto,
+      required int nLeituras,
+      required String nivelMaximo,
+      Value<double?> mediaBpm,
+      Value<int> nBpm,
+      Value<double?> mediaHrvMs,
+      Value<int> nHrvMs,
+      Value<double?> mediaEdaUs,
+      Value<int> nEdaUs,
+      Value<double?> mediaGyroMagDps,
+      Value<int> nGyroMagDps,
+      Value<double?> mediaLuzLux,
+      Value<int> nLuzLux,
+      Value<double?> mediaRuidoDb,
+      Value<int> nRuidoDb,
+      required int recebidoEm,
+    });
+typedef $$ResumoMinutoTableUpdateCompanionBuilder =
+    ResumoMinutoCompanion Function({
+      Value<int> minuto,
+      Value<int> nLeituras,
+      Value<String> nivelMaximo,
+      Value<double?> mediaBpm,
+      Value<int> nBpm,
+      Value<double?> mediaHrvMs,
+      Value<int> nHrvMs,
+      Value<double?> mediaEdaUs,
+      Value<int> nEdaUs,
+      Value<double?> mediaGyroMagDps,
+      Value<int> nGyroMagDps,
+      Value<double?> mediaLuzLux,
+      Value<int> nLuzLux,
+      Value<double?> mediaRuidoDb,
+      Value<int> nRuidoDb,
+      Value<int> recebidoEm,
+    });
+
+class $$ResumoMinutoTableFilterComposer
+    extends Composer<_$BancoPuzzleBand, $ResumoMinutoTable> {
+  $$ResumoMinutoTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get minuto => $composableBuilder(
+    column: $table.minuto,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nLeituras => $composableBuilder(
+    column: $table.nLeituras,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get nivelMaximo => $composableBuilder(
+    column: $table.nivelMaximo,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaBpm => $composableBuilder(
+    column: $table.mediaBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nBpm => $composableBuilder(
+    column: $table.nBpm,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaHrvMs => $composableBuilder(
+    column: $table.mediaHrvMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nHrvMs => $composableBuilder(
+    column: $table.nHrvMs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaEdaUs => $composableBuilder(
+    column: $table.mediaEdaUs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nEdaUs => $composableBuilder(
+    column: $table.nEdaUs,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaGyroMagDps => $composableBuilder(
+    column: $table.mediaGyroMagDps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nGyroMagDps => $composableBuilder(
+    column: $table.nGyroMagDps,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaLuzLux => $composableBuilder(
+    column: $table.mediaLuzLux,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nLuzLux => $composableBuilder(
+    column: $table.nLuzLux,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<double> get mediaRuidoDb => $composableBuilder(
+    column: $table.mediaRuidoDb,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get nRuidoDb => $composableBuilder(
+    column: $table.nRuidoDb,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get recebidoEm => $composableBuilder(
+    column: $table.recebidoEm,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$ResumoMinutoTableOrderingComposer
+    extends Composer<_$BancoPuzzleBand, $ResumoMinutoTable> {
+  $$ResumoMinutoTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get minuto => $composableBuilder(
+    column: $table.minuto,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nLeituras => $composableBuilder(
+    column: $table.nLeituras,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get nivelMaximo => $composableBuilder(
+    column: $table.nivelMaximo,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaBpm => $composableBuilder(
+    column: $table.mediaBpm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nBpm => $composableBuilder(
+    column: $table.nBpm,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaHrvMs => $composableBuilder(
+    column: $table.mediaHrvMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nHrvMs => $composableBuilder(
+    column: $table.nHrvMs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaEdaUs => $composableBuilder(
+    column: $table.mediaEdaUs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nEdaUs => $composableBuilder(
+    column: $table.nEdaUs,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaGyroMagDps => $composableBuilder(
+    column: $table.mediaGyroMagDps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nGyroMagDps => $composableBuilder(
+    column: $table.nGyroMagDps,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaLuzLux => $composableBuilder(
+    column: $table.mediaLuzLux,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nLuzLux => $composableBuilder(
+    column: $table.nLuzLux,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<double> get mediaRuidoDb => $composableBuilder(
+    column: $table.mediaRuidoDb,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get nRuidoDb => $composableBuilder(
+    column: $table.nRuidoDb,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get recebidoEm => $composableBuilder(
+    column: $table.recebidoEm,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$ResumoMinutoTableAnnotationComposer
+    extends Composer<_$BancoPuzzleBand, $ResumoMinutoTable> {
+  $$ResumoMinutoTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get minuto =>
+      $composableBuilder(column: $table.minuto, builder: (column) => column);
+
+  GeneratedColumn<int> get nLeituras =>
+      $composableBuilder(column: $table.nLeituras, builder: (column) => column);
+
+  GeneratedColumn<String> get nivelMaximo => $composableBuilder(
+    column: $table.nivelMaximo,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get mediaBpm =>
+      $composableBuilder(column: $table.mediaBpm, builder: (column) => column);
+
+  GeneratedColumn<int> get nBpm =>
+      $composableBuilder(column: $table.nBpm, builder: (column) => column);
+
+  GeneratedColumn<double> get mediaHrvMs => $composableBuilder(
+    column: $table.mediaHrvMs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nHrvMs =>
+      $composableBuilder(column: $table.nHrvMs, builder: (column) => column);
+
+  GeneratedColumn<double> get mediaEdaUs => $composableBuilder(
+    column: $table.mediaEdaUs,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nEdaUs =>
+      $composableBuilder(column: $table.nEdaUs, builder: (column) => column);
+
+  GeneratedColumn<double> get mediaGyroMagDps => $composableBuilder(
+    column: $table.mediaGyroMagDps,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nGyroMagDps => $composableBuilder(
+    column: $table.nGyroMagDps,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<double> get mediaLuzLux => $composableBuilder(
+    column: $table.mediaLuzLux,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nLuzLux =>
+      $composableBuilder(column: $table.nLuzLux, builder: (column) => column);
+
+  GeneratedColumn<double> get mediaRuidoDb => $composableBuilder(
+    column: $table.mediaRuidoDb,
+    builder: (column) => column,
+  );
+
+  GeneratedColumn<int> get nRuidoDb =>
+      $composableBuilder(column: $table.nRuidoDb, builder: (column) => column);
+
+  GeneratedColumn<int> get recebidoEm => $composableBuilder(
+    column: $table.recebidoEm,
+    builder: (column) => column,
+  );
+}
+
+class $$ResumoMinutoTableTableManager
+    extends
+        RootTableManager<
+          _$BancoPuzzleBand,
+          $ResumoMinutoTable,
+          LinhaResumoMinuto,
+          $$ResumoMinutoTableFilterComposer,
+          $$ResumoMinutoTableOrderingComposer,
+          $$ResumoMinutoTableAnnotationComposer,
+          $$ResumoMinutoTableCreateCompanionBuilder,
+          $$ResumoMinutoTableUpdateCompanionBuilder,
+          (
+            LinhaResumoMinuto,
+            BaseReferences<
+              _$BancoPuzzleBand,
+              $ResumoMinutoTable,
+              LinhaResumoMinuto
+            >,
+          ),
+          LinhaResumoMinuto,
+          PrefetchHooks Function()
+        > {
+  $$ResumoMinutoTableTableManager(
+    _$BancoPuzzleBand db,
+    $ResumoMinutoTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer:
+              () => $$ResumoMinutoTableFilterComposer($db: db, $table: table),
+          createOrderingComposer:
+              () => $$ResumoMinutoTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer:
+              () =>
+                  $$ResumoMinutoTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> minuto = const Value.absent(),
+                Value<int> nLeituras = const Value.absent(),
+                Value<String> nivelMaximo = const Value.absent(),
+                Value<double?> mediaBpm = const Value.absent(),
+                Value<int> nBpm = const Value.absent(),
+                Value<double?> mediaHrvMs = const Value.absent(),
+                Value<int> nHrvMs = const Value.absent(),
+                Value<double?> mediaEdaUs = const Value.absent(),
+                Value<int> nEdaUs = const Value.absent(),
+                Value<double?> mediaGyroMagDps = const Value.absent(),
+                Value<int> nGyroMagDps = const Value.absent(),
+                Value<double?> mediaLuzLux = const Value.absent(),
+                Value<int> nLuzLux = const Value.absent(),
+                Value<double?> mediaRuidoDb = const Value.absent(),
+                Value<int> nRuidoDb = const Value.absent(),
+                Value<int> recebidoEm = const Value.absent(),
+              }) => ResumoMinutoCompanion(
+                minuto: minuto,
+                nLeituras: nLeituras,
+                nivelMaximo: nivelMaximo,
+                mediaBpm: mediaBpm,
+                nBpm: nBpm,
+                mediaHrvMs: mediaHrvMs,
+                nHrvMs: nHrvMs,
+                mediaEdaUs: mediaEdaUs,
+                nEdaUs: nEdaUs,
+                mediaGyroMagDps: mediaGyroMagDps,
+                nGyroMagDps: nGyroMagDps,
+                mediaLuzLux: mediaLuzLux,
+                nLuzLux: nLuzLux,
+                mediaRuidoDb: mediaRuidoDb,
+                nRuidoDb: nRuidoDb,
+                recebidoEm: recebidoEm,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> minuto = const Value.absent(),
+                required int nLeituras,
+                required String nivelMaximo,
+                Value<double?> mediaBpm = const Value.absent(),
+                Value<int> nBpm = const Value.absent(),
+                Value<double?> mediaHrvMs = const Value.absent(),
+                Value<int> nHrvMs = const Value.absent(),
+                Value<double?> mediaEdaUs = const Value.absent(),
+                Value<int> nEdaUs = const Value.absent(),
+                Value<double?> mediaGyroMagDps = const Value.absent(),
+                Value<int> nGyroMagDps = const Value.absent(),
+                Value<double?> mediaLuzLux = const Value.absent(),
+                Value<int> nLuzLux = const Value.absent(),
+                Value<double?> mediaRuidoDb = const Value.absent(),
+                Value<int> nRuidoDb = const Value.absent(),
+                required int recebidoEm,
+              }) => ResumoMinutoCompanion.insert(
+                minuto: minuto,
+                nLeituras: nLeituras,
+                nivelMaximo: nivelMaximo,
+                mediaBpm: mediaBpm,
+                nBpm: nBpm,
+                mediaHrvMs: mediaHrvMs,
+                nHrvMs: nHrvMs,
+                mediaEdaUs: mediaEdaUs,
+                nEdaUs: nEdaUs,
+                mediaGyroMagDps: mediaGyroMagDps,
+                nGyroMagDps: nGyroMagDps,
+                mediaLuzLux: mediaLuzLux,
+                nLuzLux: nLuzLux,
+                mediaRuidoDb: mediaRuidoDb,
+                nRuidoDb: nRuidoDb,
+                recebidoEm: recebidoEm,
+              ),
+          withReferenceMapper:
+              (p0) =>
+                  p0
+                      .map(
+                        (e) => (
+                          e.readTable<$ResumoMinutoTable, LinhaResumoMinuto>(
+                            table,
+                          ),
+                          BaseReferences<
+                            _$BancoPuzzleBand,
+                            $ResumoMinutoTable,
+                            LinhaResumoMinuto
+                          >(db, table, e),
+                        ),
+                      )
+                      .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$ResumoMinutoTableProcessedTableManager =
+    ProcessedTableManager<
+      _$BancoPuzzleBand,
+      $ResumoMinutoTable,
+      LinhaResumoMinuto,
+      $$ResumoMinutoTableFilterComposer,
+      $$ResumoMinutoTableOrderingComposer,
+      $$ResumoMinutoTableAnnotationComposer,
+      $$ResumoMinutoTableCreateCompanionBuilder,
+      $$ResumoMinutoTableUpdateCompanionBuilder,
+      (
+        LinhaResumoMinuto,
+        BaseReferences<
+          _$BancoPuzzleBand,
+          $ResumoMinutoTable,
+          LinhaResumoMinuto
+        >,
+      ),
+      LinhaResumoMinuto,
+      PrefetchHooks Function()
+    >;
 
 class $BancoPuzzleBandManager {
   final _$BancoPuzzleBand _db;
@@ -2950,4 +5051,8 @@ class $BancoPuzzleBandManager {
       $$LembretesTableTableManager(_db, _db.lembretes);
   $$EpisodiosNotificadosTableTableManager get episodiosNotificados =>
       $$EpisodiosNotificadosTableTableManager(_db, _db.episodiosNotificados);
+  $$EpisodioMetricasTableTableManager get episodioMetricas =>
+      $$EpisodioMetricasTableTableManager(_db, _db.episodioMetricas);
+  $$ResumoMinutoTableTableManager get resumoMinuto =>
+      $$ResumoMinutoTableTableManager(_db, _db.resumoMinuto);
 }

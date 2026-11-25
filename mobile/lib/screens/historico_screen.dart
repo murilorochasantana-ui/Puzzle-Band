@@ -13,6 +13,7 @@ import '../widgets/calendario_crises.dart';
 import '../widgets/cartao_episodio_resumido.dart';
 import '../widgets/estado_vazio.dart';
 import '../widgets/secao.dart';
+import 'exportar_relatorio_screen.dart';
 
 /// Episodios recebidos da pulseira (`puzzleband/<id>/historico`) e guardados
 /// no banco local (todos, nao so os 50 que a pulseira publica), separados por
@@ -90,6 +91,16 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       ),
       const SizedBox(height: Espaco.m),
       _FonteDosDados(service: service),
+      const SizedBox(height: Espaco.m),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          key: const ValueKey('historico-exportar-relatorio'),
+          onPressed: () => ExportarRelatorioScreen.abrir(context),
+          icon: const Icon(Icons.table_chart_outlined),
+          label: const Text('Exportar relatório'),
+        ),
+      ),
       const SizedBox(height: Espaco.l),
       if (!historico.vazio) ...[
         CalendarioCrises(

@@ -4,7 +4,7 @@
 //
 import 'package:drift/drift.dart';
 
-class Episodios extends Table with TableInfo {
+class Episodios extends Table with TableInfo<Episodios, EpisodiosData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -216,8 +216,101 @@ class Episodios extends Table with TableInfo {
   @override
   Set<GeneratedColumn> get $primaryKey => {id};
   @override
-  Never map(Map<String, dynamic> data, {String? tablePrefix}) {
-    throw UnsupportedError('TableInfo.map in schema verification code');
+  EpisodiosData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EpisodiosData(
+      id:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}id'],
+          )!,
+      crianca: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}crianca'],
+      ),
+      fonte: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}fonte'],
+      ),
+      inicio:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}inicio'],
+          )!,
+      fim: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}fim'],
+      ),
+      duracaoS: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}duracao_s'],
+      ),
+      encerramento: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}encerramento'],
+      ),
+      nivelMaximo:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}nivel_maximo'],
+          )!,
+      probabilidadeMaxima: attachedDatabase.typeMapping.read(
+        DriftSqlType.double,
+        data['${effectivePrefix}probabilidade_maxima'],
+      ),
+      gatilhoTipo: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}gatilho_tipo'],
+      ),
+      gatilhoTexto: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}gatilho_texto'],
+      ),
+      avaliacao:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}avaliacao'],
+          )!,
+      observacao:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}observacao'],
+          )!,
+      avaliacaoOrigem: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}avaliacao_origem'],
+      ),
+      avaliacaoEm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avaliacao_em'],
+      ),
+      vistoEm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}visto_em'],
+      ),
+      recebidoEm:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}recebido_em'],
+          )!,
+      naPulseira:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}na_pulseira'],
+          )!,
+      avaliacaoLocal: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}avaliacao_local'],
+      ),
+      observacaoLocal: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}observacao_local'],
+      ),
+      avaliacaoLocalEm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avaliacao_local_em'],
+      ),
+    );
   }
 
   @override
@@ -231,7 +324,692 @@ class Episodios extends Table with TableInfo {
   bool get dontWriteConstraints => true;
 }
 
-class Lembretes extends Table with TableInfo {
+class EpisodiosData extends DataClass implements Insertable<EpisodiosData> {
+  final String id;
+  final String? crianca;
+  final String? fonte;
+  final int inicio;
+  final int? fim;
+  final double? duracaoS;
+  final String? encerramento;
+  final String nivelMaximo;
+  final double? probabilidadeMaxima;
+  final String? gatilhoTipo;
+  final String? gatilhoTexto;
+  final String avaliacao;
+  final String observacao;
+  final String? avaliacaoOrigem;
+  final int? avaliacaoEm;
+  final int? vistoEm;
+  final int recebidoEm;
+  final int naPulseira;
+  final String? avaliacaoLocal;
+  final String? observacaoLocal;
+  final int? avaliacaoLocalEm;
+  const EpisodiosData({
+    required this.id,
+    this.crianca,
+    this.fonte,
+    required this.inicio,
+    this.fim,
+    this.duracaoS,
+    this.encerramento,
+    required this.nivelMaximo,
+    this.probabilidadeMaxima,
+    this.gatilhoTipo,
+    this.gatilhoTexto,
+    required this.avaliacao,
+    required this.observacao,
+    this.avaliacaoOrigem,
+    this.avaliacaoEm,
+    this.vistoEm,
+    required this.recebidoEm,
+    required this.naPulseira,
+    this.avaliacaoLocal,
+    this.observacaoLocal,
+    this.avaliacaoLocalEm,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    if (!nullToAbsent || crianca != null) {
+      map['crianca'] = Variable<String>(crianca);
+    }
+    if (!nullToAbsent || fonte != null) {
+      map['fonte'] = Variable<String>(fonte);
+    }
+    map['inicio'] = Variable<int>(inicio);
+    if (!nullToAbsent || fim != null) {
+      map['fim'] = Variable<int>(fim);
+    }
+    if (!nullToAbsent || duracaoS != null) {
+      map['duracao_s'] = Variable<double>(duracaoS);
+    }
+    if (!nullToAbsent || encerramento != null) {
+      map['encerramento'] = Variable<String>(encerramento);
+    }
+    map['nivel_maximo'] = Variable<String>(nivelMaximo);
+    if (!nullToAbsent || probabilidadeMaxima != null) {
+      map['probabilidade_maxima'] = Variable<double>(probabilidadeMaxima);
+    }
+    if (!nullToAbsent || gatilhoTipo != null) {
+      map['gatilho_tipo'] = Variable<String>(gatilhoTipo);
+    }
+    if (!nullToAbsent || gatilhoTexto != null) {
+      map['gatilho_texto'] = Variable<String>(gatilhoTexto);
+    }
+    map['avaliacao'] = Variable<String>(avaliacao);
+    map['observacao'] = Variable<String>(observacao);
+    if (!nullToAbsent || avaliacaoOrigem != null) {
+      map['avaliacao_origem'] = Variable<String>(avaliacaoOrigem);
+    }
+    if (!nullToAbsent || avaliacaoEm != null) {
+      map['avaliacao_em'] = Variable<int>(avaliacaoEm);
+    }
+    if (!nullToAbsent || vistoEm != null) {
+      map['visto_em'] = Variable<int>(vistoEm);
+    }
+    map['recebido_em'] = Variable<int>(recebidoEm);
+    map['na_pulseira'] = Variable<int>(naPulseira);
+    if (!nullToAbsent || avaliacaoLocal != null) {
+      map['avaliacao_local'] = Variable<String>(avaliacaoLocal);
+    }
+    if (!nullToAbsent || observacaoLocal != null) {
+      map['observacao_local'] = Variable<String>(observacaoLocal);
+    }
+    if (!nullToAbsent || avaliacaoLocalEm != null) {
+      map['avaliacao_local_em'] = Variable<int>(avaliacaoLocalEm);
+    }
+    return map;
+  }
+
+  EpisodiosCompanion toCompanion(bool nullToAbsent) {
+    return EpisodiosCompanion(
+      id: Value(id),
+      crianca:
+          crianca == null && nullToAbsent
+              ? const Value.absent()
+              : Value(crianca),
+      fonte:
+          fonte == null && nullToAbsent ? const Value.absent() : Value(fonte),
+      inicio: Value(inicio),
+      fim: fim == null && nullToAbsent ? const Value.absent() : Value(fim),
+      duracaoS:
+          duracaoS == null && nullToAbsent
+              ? const Value.absent()
+              : Value(duracaoS),
+      encerramento:
+          encerramento == null && nullToAbsent
+              ? const Value.absent()
+              : Value(encerramento),
+      nivelMaximo: Value(nivelMaximo),
+      probabilidadeMaxima:
+          probabilidadeMaxima == null && nullToAbsent
+              ? const Value.absent()
+              : Value(probabilidadeMaxima),
+      gatilhoTipo:
+          gatilhoTipo == null && nullToAbsent
+              ? const Value.absent()
+              : Value(gatilhoTipo),
+      gatilhoTexto:
+          gatilhoTexto == null && nullToAbsent
+              ? const Value.absent()
+              : Value(gatilhoTexto),
+      avaliacao: Value(avaliacao),
+      observacao: Value(observacao),
+      avaliacaoOrigem:
+          avaliacaoOrigem == null && nullToAbsent
+              ? const Value.absent()
+              : Value(avaliacaoOrigem),
+      avaliacaoEm:
+          avaliacaoEm == null && nullToAbsent
+              ? const Value.absent()
+              : Value(avaliacaoEm),
+      vistoEm:
+          vistoEm == null && nullToAbsent
+              ? const Value.absent()
+              : Value(vistoEm),
+      recebidoEm: Value(recebidoEm),
+      naPulseira: Value(naPulseira),
+      avaliacaoLocal:
+          avaliacaoLocal == null && nullToAbsent
+              ? const Value.absent()
+              : Value(avaliacaoLocal),
+      observacaoLocal:
+          observacaoLocal == null && nullToAbsent
+              ? const Value.absent()
+              : Value(observacaoLocal),
+      avaliacaoLocalEm:
+          avaliacaoLocalEm == null && nullToAbsent
+              ? const Value.absent()
+              : Value(avaliacaoLocalEm),
+    );
+  }
+
+  factory EpisodiosData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EpisodiosData(
+      id: serializer.fromJson<String>(json['id']),
+      crianca: serializer.fromJson<String?>(json['crianca']),
+      fonte: serializer.fromJson<String?>(json['fonte']),
+      inicio: serializer.fromJson<int>(json['inicio']),
+      fim: serializer.fromJson<int?>(json['fim']),
+      duracaoS: serializer.fromJson<double?>(json['duracaoS']),
+      encerramento: serializer.fromJson<String?>(json['encerramento']),
+      nivelMaximo: serializer.fromJson<String>(json['nivelMaximo']),
+      probabilidadeMaxima: serializer.fromJson<double?>(
+        json['probabilidadeMaxima'],
+      ),
+      gatilhoTipo: serializer.fromJson<String?>(json['gatilhoTipo']),
+      gatilhoTexto: serializer.fromJson<String?>(json['gatilhoTexto']),
+      avaliacao: serializer.fromJson<String>(json['avaliacao']),
+      observacao: serializer.fromJson<String>(json['observacao']),
+      avaliacaoOrigem: serializer.fromJson<String?>(json['avaliacaoOrigem']),
+      avaliacaoEm: serializer.fromJson<int?>(json['avaliacaoEm']),
+      vistoEm: serializer.fromJson<int?>(json['vistoEm']),
+      recebidoEm: serializer.fromJson<int>(json['recebidoEm']),
+      naPulseira: serializer.fromJson<int>(json['naPulseira']),
+      avaliacaoLocal: serializer.fromJson<String?>(json['avaliacaoLocal']),
+      observacaoLocal: serializer.fromJson<String?>(json['observacaoLocal']),
+      avaliacaoLocalEm: serializer.fromJson<int?>(json['avaliacaoLocalEm']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<String>(id),
+      'crianca': serializer.toJson<String?>(crianca),
+      'fonte': serializer.toJson<String?>(fonte),
+      'inicio': serializer.toJson<int>(inicio),
+      'fim': serializer.toJson<int?>(fim),
+      'duracaoS': serializer.toJson<double?>(duracaoS),
+      'encerramento': serializer.toJson<String?>(encerramento),
+      'nivelMaximo': serializer.toJson<String>(nivelMaximo),
+      'probabilidadeMaxima': serializer.toJson<double?>(probabilidadeMaxima),
+      'gatilhoTipo': serializer.toJson<String?>(gatilhoTipo),
+      'gatilhoTexto': serializer.toJson<String?>(gatilhoTexto),
+      'avaliacao': serializer.toJson<String>(avaliacao),
+      'observacao': serializer.toJson<String>(observacao),
+      'avaliacaoOrigem': serializer.toJson<String?>(avaliacaoOrigem),
+      'avaliacaoEm': serializer.toJson<int?>(avaliacaoEm),
+      'vistoEm': serializer.toJson<int?>(vistoEm),
+      'recebidoEm': serializer.toJson<int>(recebidoEm),
+      'naPulseira': serializer.toJson<int>(naPulseira),
+      'avaliacaoLocal': serializer.toJson<String?>(avaliacaoLocal),
+      'observacaoLocal': serializer.toJson<String?>(observacaoLocal),
+      'avaliacaoLocalEm': serializer.toJson<int?>(avaliacaoLocalEm),
+    };
+  }
+
+  EpisodiosData copyWith({
+    String? id,
+    Value<String?> crianca = const Value.absent(),
+    Value<String?> fonte = const Value.absent(),
+    int? inicio,
+    Value<int?> fim = const Value.absent(),
+    Value<double?> duracaoS = const Value.absent(),
+    Value<String?> encerramento = const Value.absent(),
+    String? nivelMaximo,
+    Value<double?> probabilidadeMaxima = const Value.absent(),
+    Value<String?> gatilhoTipo = const Value.absent(),
+    Value<String?> gatilhoTexto = const Value.absent(),
+    String? avaliacao,
+    String? observacao,
+    Value<String?> avaliacaoOrigem = const Value.absent(),
+    Value<int?> avaliacaoEm = const Value.absent(),
+    Value<int?> vistoEm = const Value.absent(),
+    int? recebidoEm,
+    int? naPulseira,
+    Value<String?> avaliacaoLocal = const Value.absent(),
+    Value<String?> observacaoLocal = const Value.absent(),
+    Value<int?> avaliacaoLocalEm = const Value.absent(),
+  }) => EpisodiosData(
+    id: id ?? this.id,
+    crianca: crianca.present ? crianca.value : this.crianca,
+    fonte: fonte.present ? fonte.value : this.fonte,
+    inicio: inicio ?? this.inicio,
+    fim: fim.present ? fim.value : this.fim,
+    duracaoS: duracaoS.present ? duracaoS.value : this.duracaoS,
+    encerramento: encerramento.present ? encerramento.value : this.encerramento,
+    nivelMaximo: nivelMaximo ?? this.nivelMaximo,
+    probabilidadeMaxima:
+        probabilidadeMaxima.present
+            ? probabilidadeMaxima.value
+            : this.probabilidadeMaxima,
+    gatilhoTipo: gatilhoTipo.present ? gatilhoTipo.value : this.gatilhoTipo,
+    gatilhoTexto: gatilhoTexto.present ? gatilhoTexto.value : this.gatilhoTexto,
+    avaliacao: avaliacao ?? this.avaliacao,
+    observacao: observacao ?? this.observacao,
+    avaliacaoOrigem:
+        avaliacaoOrigem.present ? avaliacaoOrigem.value : this.avaliacaoOrigem,
+    avaliacaoEm: avaliacaoEm.present ? avaliacaoEm.value : this.avaliacaoEm,
+    vistoEm: vistoEm.present ? vistoEm.value : this.vistoEm,
+    recebidoEm: recebidoEm ?? this.recebidoEm,
+    naPulseira: naPulseira ?? this.naPulseira,
+    avaliacaoLocal:
+        avaliacaoLocal.present ? avaliacaoLocal.value : this.avaliacaoLocal,
+    observacaoLocal:
+        observacaoLocal.present ? observacaoLocal.value : this.observacaoLocal,
+    avaliacaoLocalEm:
+        avaliacaoLocalEm.present
+            ? avaliacaoLocalEm.value
+            : this.avaliacaoLocalEm,
+  );
+  EpisodiosData copyWithCompanion(EpisodiosCompanion data) {
+    return EpisodiosData(
+      id: data.id.present ? data.id.value : this.id,
+      crianca: data.crianca.present ? data.crianca.value : this.crianca,
+      fonte: data.fonte.present ? data.fonte.value : this.fonte,
+      inicio: data.inicio.present ? data.inicio.value : this.inicio,
+      fim: data.fim.present ? data.fim.value : this.fim,
+      duracaoS: data.duracaoS.present ? data.duracaoS.value : this.duracaoS,
+      encerramento:
+          data.encerramento.present
+              ? data.encerramento.value
+              : this.encerramento,
+      nivelMaximo:
+          data.nivelMaximo.present ? data.nivelMaximo.value : this.nivelMaximo,
+      probabilidadeMaxima:
+          data.probabilidadeMaxima.present
+              ? data.probabilidadeMaxima.value
+              : this.probabilidadeMaxima,
+      gatilhoTipo:
+          data.gatilhoTipo.present ? data.gatilhoTipo.value : this.gatilhoTipo,
+      gatilhoTexto:
+          data.gatilhoTexto.present
+              ? data.gatilhoTexto.value
+              : this.gatilhoTexto,
+      avaliacao: data.avaliacao.present ? data.avaliacao.value : this.avaliacao,
+      observacao:
+          data.observacao.present ? data.observacao.value : this.observacao,
+      avaliacaoOrigem:
+          data.avaliacaoOrigem.present
+              ? data.avaliacaoOrigem.value
+              : this.avaliacaoOrigem,
+      avaliacaoEm:
+          data.avaliacaoEm.present ? data.avaliacaoEm.value : this.avaliacaoEm,
+      vistoEm: data.vistoEm.present ? data.vistoEm.value : this.vistoEm,
+      recebidoEm:
+          data.recebidoEm.present ? data.recebidoEm.value : this.recebidoEm,
+      naPulseira:
+          data.naPulseira.present ? data.naPulseira.value : this.naPulseira,
+      avaliacaoLocal:
+          data.avaliacaoLocal.present
+              ? data.avaliacaoLocal.value
+              : this.avaliacaoLocal,
+      observacaoLocal:
+          data.observacaoLocal.present
+              ? data.observacaoLocal.value
+              : this.observacaoLocal,
+      avaliacaoLocalEm:
+          data.avaliacaoLocalEm.present
+              ? data.avaliacaoLocalEm.value
+              : this.avaliacaoLocalEm,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodiosData(')
+          ..write('id: $id, ')
+          ..write('crianca: $crianca, ')
+          ..write('fonte: $fonte, ')
+          ..write('inicio: $inicio, ')
+          ..write('fim: $fim, ')
+          ..write('duracaoS: $duracaoS, ')
+          ..write('encerramento: $encerramento, ')
+          ..write('nivelMaximo: $nivelMaximo, ')
+          ..write('probabilidadeMaxima: $probabilidadeMaxima, ')
+          ..write('gatilhoTipo: $gatilhoTipo, ')
+          ..write('gatilhoTexto: $gatilhoTexto, ')
+          ..write('avaliacao: $avaliacao, ')
+          ..write('observacao: $observacao, ')
+          ..write('avaliacaoOrigem: $avaliacaoOrigem, ')
+          ..write('avaliacaoEm: $avaliacaoEm, ')
+          ..write('vistoEm: $vistoEm, ')
+          ..write('recebidoEm: $recebidoEm, ')
+          ..write('naPulseira: $naPulseira, ')
+          ..write('avaliacaoLocal: $avaliacaoLocal, ')
+          ..write('observacaoLocal: $observacaoLocal, ')
+          ..write('avaliacaoLocalEm: $avaliacaoLocalEm')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hashAll([
+    id,
+    crianca,
+    fonte,
+    inicio,
+    fim,
+    duracaoS,
+    encerramento,
+    nivelMaximo,
+    probabilidadeMaxima,
+    gatilhoTipo,
+    gatilhoTexto,
+    avaliacao,
+    observacao,
+    avaliacaoOrigem,
+    avaliacaoEm,
+    vistoEm,
+    recebidoEm,
+    naPulseira,
+    avaliacaoLocal,
+    observacaoLocal,
+    avaliacaoLocalEm,
+  ]);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EpisodiosData &&
+          other.id == this.id &&
+          other.crianca == this.crianca &&
+          other.fonte == this.fonte &&
+          other.inicio == this.inicio &&
+          other.fim == this.fim &&
+          other.duracaoS == this.duracaoS &&
+          other.encerramento == this.encerramento &&
+          other.nivelMaximo == this.nivelMaximo &&
+          other.probabilidadeMaxima == this.probabilidadeMaxima &&
+          other.gatilhoTipo == this.gatilhoTipo &&
+          other.gatilhoTexto == this.gatilhoTexto &&
+          other.avaliacao == this.avaliacao &&
+          other.observacao == this.observacao &&
+          other.avaliacaoOrigem == this.avaliacaoOrigem &&
+          other.avaliacaoEm == this.avaliacaoEm &&
+          other.vistoEm == this.vistoEm &&
+          other.recebidoEm == this.recebidoEm &&
+          other.naPulseira == this.naPulseira &&
+          other.avaliacaoLocal == this.avaliacaoLocal &&
+          other.observacaoLocal == this.observacaoLocal &&
+          other.avaliacaoLocalEm == this.avaliacaoLocalEm);
+}
+
+class EpisodiosCompanion extends UpdateCompanion<EpisodiosData> {
+  final Value<String> id;
+  final Value<String?> crianca;
+  final Value<String?> fonte;
+  final Value<int> inicio;
+  final Value<int?> fim;
+  final Value<double?> duracaoS;
+  final Value<String?> encerramento;
+  final Value<String> nivelMaximo;
+  final Value<double?> probabilidadeMaxima;
+  final Value<String?> gatilhoTipo;
+  final Value<String?> gatilhoTexto;
+  final Value<String> avaliacao;
+  final Value<String> observacao;
+  final Value<String?> avaliacaoOrigem;
+  final Value<int?> avaliacaoEm;
+  final Value<int?> vistoEm;
+  final Value<int> recebidoEm;
+  final Value<int> naPulseira;
+  final Value<String?> avaliacaoLocal;
+  final Value<String?> observacaoLocal;
+  final Value<int?> avaliacaoLocalEm;
+  final Value<int> rowid;
+  const EpisodiosCompanion({
+    this.id = const Value.absent(),
+    this.crianca = const Value.absent(),
+    this.fonte = const Value.absent(),
+    this.inicio = const Value.absent(),
+    this.fim = const Value.absent(),
+    this.duracaoS = const Value.absent(),
+    this.encerramento = const Value.absent(),
+    this.nivelMaximo = const Value.absent(),
+    this.probabilidadeMaxima = const Value.absent(),
+    this.gatilhoTipo = const Value.absent(),
+    this.gatilhoTexto = const Value.absent(),
+    this.avaliacao = const Value.absent(),
+    this.observacao = const Value.absent(),
+    this.avaliacaoOrigem = const Value.absent(),
+    this.avaliacaoEm = const Value.absent(),
+    this.vistoEm = const Value.absent(),
+    this.recebidoEm = const Value.absent(),
+    this.naPulseira = const Value.absent(),
+    this.avaliacaoLocal = const Value.absent(),
+    this.observacaoLocal = const Value.absent(),
+    this.avaliacaoLocalEm = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EpisodiosCompanion.insert({
+    required String id,
+    this.crianca = const Value.absent(),
+    this.fonte = const Value.absent(),
+    required int inicio,
+    this.fim = const Value.absent(),
+    this.duracaoS = const Value.absent(),
+    this.encerramento = const Value.absent(),
+    required String nivelMaximo,
+    this.probabilidadeMaxima = const Value.absent(),
+    this.gatilhoTipo = const Value.absent(),
+    this.gatilhoTexto = const Value.absent(),
+    this.avaliacao = const Value.absent(),
+    this.observacao = const Value.absent(),
+    this.avaliacaoOrigem = const Value.absent(),
+    this.avaliacaoEm = const Value.absent(),
+    this.vistoEm = const Value.absent(),
+    required int recebidoEm,
+    this.naPulseira = const Value.absent(),
+    this.avaliacaoLocal = const Value.absent(),
+    this.observacaoLocal = const Value.absent(),
+    this.avaliacaoLocalEm = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : id = Value(id),
+       inicio = Value(inicio),
+       nivelMaximo = Value(nivelMaximo),
+       recebidoEm = Value(recebidoEm);
+  static Insertable<EpisodiosData> custom({
+    Expression<String>? id,
+    Expression<String>? crianca,
+    Expression<String>? fonte,
+    Expression<int>? inicio,
+    Expression<int>? fim,
+    Expression<double>? duracaoS,
+    Expression<String>? encerramento,
+    Expression<String>? nivelMaximo,
+    Expression<double>? probabilidadeMaxima,
+    Expression<String>? gatilhoTipo,
+    Expression<String>? gatilhoTexto,
+    Expression<String>? avaliacao,
+    Expression<String>? observacao,
+    Expression<String>? avaliacaoOrigem,
+    Expression<int>? avaliacaoEm,
+    Expression<int>? vistoEm,
+    Expression<int>? recebidoEm,
+    Expression<int>? naPulseira,
+    Expression<String>? avaliacaoLocal,
+    Expression<String>? observacaoLocal,
+    Expression<int>? avaliacaoLocalEm,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (crianca != null) 'crianca': crianca,
+      if (fonte != null) 'fonte': fonte,
+      if (inicio != null) 'inicio': inicio,
+      if (fim != null) 'fim': fim,
+      if (duracaoS != null) 'duracao_s': duracaoS,
+      if (encerramento != null) 'encerramento': encerramento,
+      if (nivelMaximo != null) 'nivel_maximo': nivelMaximo,
+      if (probabilidadeMaxima != null)
+        'probabilidade_maxima': probabilidadeMaxima,
+      if (gatilhoTipo != null) 'gatilho_tipo': gatilhoTipo,
+      if (gatilhoTexto != null) 'gatilho_texto': gatilhoTexto,
+      if (avaliacao != null) 'avaliacao': avaliacao,
+      if (observacao != null) 'observacao': observacao,
+      if (avaliacaoOrigem != null) 'avaliacao_origem': avaliacaoOrigem,
+      if (avaliacaoEm != null) 'avaliacao_em': avaliacaoEm,
+      if (vistoEm != null) 'visto_em': vistoEm,
+      if (recebidoEm != null) 'recebido_em': recebidoEm,
+      if (naPulseira != null) 'na_pulseira': naPulseira,
+      if (avaliacaoLocal != null) 'avaliacao_local': avaliacaoLocal,
+      if (observacaoLocal != null) 'observacao_local': observacaoLocal,
+      if (avaliacaoLocalEm != null) 'avaliacao_local_em': avaliacaoLocalEm,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EpisodiosCompanion copyWith({
+    Value<String>? id,
+    Value<String?>? crianca,
+    Value<String?>? fonte,
+    Value<int>? inicio,
+    Value<int?>? fim,
+    Value<double?>? duracaoS,
+    Value<String?>? encerramento,
+    Value<String>? nivelMaximo,
+    Value<double?>? probabilidadeMaxima,
+    Value<String?>? gatilhoTipo,
+    Value<String?>? gatilhoTexto,
+    Value<String>? avaliacao,
+    Value<String>? observacao,
+    Value<String?>? avaliacaoOrigem,
+    Value<int?>? avaliacaoEm,
+    Value<int?>? vistoEm,
+    Value<int>? recebidoEm,
+    Value<int>? naPulseira,
+    Value<String?>? avaliacaoLocal,
+    Value<String?>? observacaoLocal,
+    Value<int?>? avaliacaoLocalEm,
+    Value<int>? rowid,
+  }) {
+    return EpisodiosCompanion(
+      id: id ?? this.id,
+      crianca: crianca ?? this.crianca,
+      fonte: fonte ?? this.fonte,
+      inicio: inicio ?? this.inicio,
+      fim: fim ?? this.fim,
+      duracaoS: duracaoS ?? this.duracaoS,
+      encerramento: encerramento ?? this.encerramento,
+      nivelMaximo: nivelMaximo ?? this.nivelMaximo,
+      probabilidadeMaxima: probabilidadeMaxima ?? this.probabilidadeMaxima,
+      gatilhoTipo: gatilhoTipo ?? this.gatilhoTipo,
+      gatilhoTexto: gatilhoTexto ?? this.gatilhoTexto,
+      avaliacao: avaliacao ?? this.avaliacao,
+      observacao: observacao ?? this.observacao,
+      avaliacaoOrigem: avaliacaoOrigem ?? this.avaliacaoOrigem,
+      avaliacaoEm: avaliacaoEm ?? this.avaliacaoEm,
+      vistoEm: vistoEm ?? this.vistoEm,
+      recebidoEm: recebidoEm ?? this.recebidoEm,
+      naPulseira: naPulseira ?? this.naPulseira,
+      avaliacaoLocal: avaliacaoLocal ?? this.avaliacaoLocal,
+      observacaoLocal: observacaoLocal ?? this.observacaoLocal,
+      avaliacaoLocalEm: avaliacaoLocalEm ?? this.avaliacaoLocalEm,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (crianca.present) {
+      map['crianca'] = Variable<String>(crianca.value);
+    }
+    if (fonte.present) {
+      map['fonte'] = Variable<String>(fonte.value);
+    }
+    if (inicio.present) {
+      map['inicio'] = Variable<int>(inicio.value);
+    }
+    if (fim.present) {
+      map['fim'] = Variable<int>(fim.value);
+    }
+    if (duracaoS.present) {
+      map['duracao_s'] = Variable<double>(duracaoS.value);
+    }
+    if (encerramento.present) {
+      map['encerramento'] = Variable<String>(encerramento.value);
+    }
+    if (nivelMaximo.present) {
+      map['nivel_maximo'] = Variable<String>(nivelMaximo.value);
+    }
+    if (probabilidadeMaxima.present) {
+      map['probabilidade_maxima'] = Variable<double>(probabilidadeMaxima.value);
+    }
+    if (gatilhoTipo.present) {
+      map['gatilho_tipo'] = Variable<String>(gatilhoTipo.value);
+    }
+    if (gatilhoTexto.present) {
+      map['gatilho_texto'] = Variable<String>(gatilhoTexto.value);
+    }
+    if (avaliacao.present) {
+      map['avaliacao'] = Variable<String>(avaliacao.value);
+    }
+    if (observacao.present) {
+      map['observacao'] = Variable<String>(observacao.value);
+    }
+    if (avaliacaoOrigem.present) {
+      map['avaliacao_origem'] = Variable<String>(avaliacaoOrigem.value);
+    }
+    if (avaliacaoEm.present) {
+      map['avaliacao_em'] = Variable<int>(avaliacaoEm.value);
+    }
+    if (vistoEm.present) {
+      map['visto_em'] = Variable<int>(vistoEm.value);
+    }
+    if (recebidoEm.present) {
+      map['recebido_em'] = Variable<int>(recebidoEm.value);
+    }
+    if (naPulseira.present) {
+      map['na_pulseira'] = Variable<int>(naPulseira.value);
+    }
+    if (avaliacaoLocal.present) {
+      map['avaliacao_local'] = Variable<String>(avaliacaoLocal.value);
+    }
+    if (observacaoLocal.present) {
+      map['observacao_local'] = Variable<String>(observacaoLocal.value);
+    }
+    if (avaliacaoLocalEm.present) {
+      map['avaliacao_local_em'] = Variable<int>(avaliacaoLocalEm.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodiosCompanion(')
+          ..write('id: $id, ')
+          ..write('crianca: $crianca, ')
+          ..write('fonte: $fonte, ')
+          ..write('inicio: $inicio, ')
+          ..write('fim: $fim, ')
+          ..write('duracaoS: $duracaoS, ')
+          ..write('encerramento: $encerramento, ')
+          ..write('nivelMaximo: $nivelMaximo, ')
+          ..write('probabilidadeMaxima: $probabilidadeMaxima, ')
+          ..write('gatilhoTipo: $gatilhoTipo, ')
+          ..write('gatilhoTexto: $gatilhoTexto, ')
+          ..write('avaliacao: $avaliacao, ')
+          ..write('observacao: $observacao, ')
+          ..write('avaliacaoOrigem: $avaliacaoOrigem, ')
+          ..write('avaliacaoEm: $avaliacaoEm, ')
+          ..write('vistoEm: $vistoEm, ')
+          ..write('recebidoEm: $recebidoEm, ')
+          ..write('naPulseira: $naPulseira, ')
+          ..write('avaliacaoLocal: $avaliacaoLocal, ')
+          ..write('observacaoLocal: $observacaoLocal, ')
+          ..write('avaliacaoLocalEm: $avaliacaoLocalEm, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class Lembretes extends Table with TableInfo<Lembretes, LembretesData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -278,8 +1056,29 @@ class Lembretes extends Table with TableInfo {
   @override
   Set<GeneratedColumn> get $primaryKey => {chave};
   @override
-  Never map(Map<String, dynamic> data, {String? tablePrefix}) {
-    throw UnsupportedError('TableInfo.map in schema verification code');
+  LembretesData map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return LembretesData(
+      chave:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}chave'],
+          )!,
+      texto:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}texto'],
+          )!,
+      salvoEm:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}salvo_em'],
+          )!,
+      avisarEm: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}avisar_em'],
+      ),
+    );
   }
 
   @override
@@ -293,7 +1092,197 @@ class Lembretes extends Table with TableInfo {
   bool get dontWriteConstraints => true;
 }
 
-class EpisodiosNotificados extends Table with TableInfo {
+class LembretesData extends DataClass implements Insertable<LembretesData> {
+  final String chave;
+  final String texto;
+  final int salvoEm;
+  final int? avisarEm;
+  const LembretesData({
+    required this.chave,
+    required this.texto,
+    required this.salvoEm,
+    this.avisarEm,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['chave'] = Variable<String>(chave);
+    map['texto'] = Variable<String>(texto);
+    map['salvo_em'] = Variable<int>(salvoEm);
+    if (!nullToAbsent || avisarEm != null) {
+      map['avisar_em'] = Variable<int>(avisarEm);
+    }
+    return map;
+  }
+
+  LembretesCompanion toCompanion(bool nullToAbsent) {
+    return LembretesCompanion(
+      chave: Value(chave),
+      texto: Value(texto),
+      salvoEm: Value(salvoEm),
+      avisarEm:
+          avisarEm == null && nullToAbsent
+              ? const Value.absent()
+              : Value(avisarEm),
+    );
+  }
+
+  factory LembretesData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return LembretesData(
+      chave: serializer.fromJson<String>(json['chave']),
+      texto: serializer.fromJson<String>(json['texto']),
+      salvoEm: serializer.fromJson<int>(json['salvoEm']),
+      avisarEm: serializer.fromJson<int?>(json['avisarEm']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'chave': serializer.toJson<String>(chave),
+      'texto': serializer.toJson<String>(texto),
+      'salvoEm': serializer.toJson<int>(salvoEm),
+      'avisarEm': serializer.toJson<int?>(avisarEm),
+    };
+  }
+
+  LembretesData copyWith({
+    String? chave,
+    String? texto,
+    int? salvoEm,
+    Value<int?> avisarEm = const Value.absent(),
+  }) => LembretesData(
+    chave: chave ?? this.chave,
+    texto: texto ?? this.texto,
+    salvoEm: salvoEm ?? this.salvoEm,
+    avisarEm: avisarEm.present ? avisarEm.value : this.avisarEm,
+  );
+  LembretesData copyWithCompanion(LembretesCompanion data) {
+    return LembretesData(
+      chave: data.chave.present ? data.chave.value : this.chave,
+      texto: data.texto.present ? data.texto.value : this.texto,
+      salvoEm: data.salvoEm.present ? data.salvoEm.value : this.salvoEm,
+      avisarEm: data.avisarEm.present ? data.avisarEm.value : this.avisarEm,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LembretesData(')
+          ..write('chave: $chave, ')
+          ..write('texto: $texto, ')
+          ..write('salvoEm: $salvoEm, ')
+          ..write('avisarEm: $avisarEm')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(chave, texto, salvoEm, avisarEm);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is LembretesData &&
+          other.chave == this.chave &&
+          other.texto == this.texto &&
+          other.salvoEm == this.salvoEm &&
+          other.avisarEm == this.avisarEm);
+}
+
+class LembretesCompanion extends UpdateCompanion<LembretesData> {
+  final Value<String> chave;
+  final Value<String> texto;
+  final Value<int> salvoEm;
+  final Value<int?> avisarEm;
+  final Value<int> rowid;
+  const LembretesCompanion({
+    this.chave = const Value.absent(),
+    this.texto = const Value.absent(),
+    this.salvoEm = const Value.absent(),
+    this.avisarEm = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  LembretesCompanion.insert({
+    required String chave,
+    required String texto,
+    required int salvoEm,
+    this.avisarEm = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : chave = Value(chave),
+       texto = Value(texto),
+       salvoEm = Value(salvoEm);
+  static Insertable<LembretesData> custom({
+    Expression<String>? chave,
+    Expression<String>? texto,
+    Expression<int>? salvoEm,
+    Expression<int>? avisarEm,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (chave != null) 'chave': chave,
+      if (texto != null) 'texto': texto,
+      if (salvoEm != null) 'salvo_em': salvoEm,
+      if (avisarEm != null) 'avisar_em': avisarEm,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  LembretesCompanion copyWith({
+    Value<String>? chave,
+    Value<String>? texto,
+    Value<int>? salvoEm,
+    Value<int?>? avisarEm,
+    Value<int>? rowid,
+  }) {
+    return LembretesCompanion(
+      chave: chave ?? this.chave,
+      texto: texto ?? this.texto,
+      salvoEm: salvoEm ?? this.salvoEm,
+      avisarEm: avisarEm ?? this.avisarEm,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (chave.present) {
+      map['chave'] = Variable<String>(chave.value);
+    }
+    if (texto.present) {
+      map['texto'] = Variable<String>(texto.value);
+    }
+    if (salvoEm.present) {
+      map['salvo_em'] = Variable<int>(salvoEm.value);
+    }
+    if (avisarEm.present) {
+      map['avisar_em'] = Variable<int>(avisarEm.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('LembretesCompanion(')
+          ..write('chave: $chave, ')
+          ..write('texto: $texto, ')
+          ..write('salvoEm: $salvoEm, ')
+          ..write('avisarEm: $avisarEm, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class EpisodiosNotificados extends Table
+    with TableInfo<EpisodiosNotificados, EpisodiosNotificadosData> {
   @override
   final GeneratedDatabase attachedDatabase;
   final String? _alias;
@@ -357,8 +1346,38 @@ class EpisodiosNotificados extends Table with TableInfo {
   @override
   Set<GeneratedColumn> get $primaryKey => {episodioId};
   @override
-  Never map(Map<String, dynamic> data, {String? tablePrefix}) {
-    throw UnsupportedError('TableInfo.map in schema verification code');
+  EpisodiosNotificadosData map(
+    Map<String, dynamic> data, {
+    String? tablePrefix,
+  }) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return EpisodiosNotificadosData(
+      episodioId:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}episodio_id'],
+          )!,
+      nivel:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}nivel'],
+          )!,
+      parDeCanais:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.string,
+            data['${effectivePrefix}par_de_canais'],
+          )!,
+      notificadoEm:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}notificado_em'],
+          )!,
+      vezes:
+          attachedDatabase.typeMapping.read(
+            DriftSqlType.int,
+            data['${effectivePrefix}vezes'],
+          )!,
+    );
   }
 
   @override
@@ -370,6 +1389,223 @@ class EpisodiosNotificados extends Table with TableInfo {
   List<String> get customConstraints => const ['PRIMARY KEY(episodio_id)'];
   @override
   bool get dontWriteConstraints => true;
+}
+
+class EpisodiosNotificadosData extends DataClass
+    implements Insertable<EpisodiosNotificadosData> {
+  final String episodioId;
+  final String nivel;
+  final String parDeCanais;
+  final int notificadoEm;
+  final int vezes;
+  const EpisodiosNotificadosData({
+    required this.episodioId,
+    required this.nivel,
+    required this.parDeCanais,
+    required this.notificadoEm,
+    required this.vezes,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['episodio_id'] = Variable<String>(episodioId);
+    map['nivel'] = Variable<String>(nivel);
+    map['par_de_canais'] = Variable<String>(parDeCanais);
+    map['notificado_em'] = Variable<int>(notificadoEm);
+    map['vezes'] = Variable<int>(vezes);
+    return map;
+  }
+
+  EpisodiosNotificadosCompanion toCompanion(bool nullToAbsent) {
+    return EpisodiosNotificadosCompanion(
+      episodioId: Value(episodioId),
+      nivel: Value(nivel),
+      parDeCanais: Value(parDeCanais),
+      notificadoEm: Value(notificadoEm),
+      vezes: Value(vezes),
+    );
+  }
+
+  factory EpisodiosNotificadosData.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return EpisodiosNotificadosData(
+      episodioId: serializer.fromJson<String>(json['episodioId']),
+      nivel: serializer.fromJson<String>(json['nivel']),
+      parDeCanais: serializer.fromJson<String>(json['parDeCanais']),
+      notificadoEm: serializer.fromJson<int>(json['notificadoEm']),
+      vezes: serializer.fromJson<int>(json['vezes']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'episodioId': serializer.toJson<String>(episodioId),
+      'nivel': serializer.toJson<String>(nivel),
+      'parDeCanais': serializer.toJson<String>(parDeCanais),
+      'notificadoEm': serializer.toJson<int>(notificadoEm),
+      'vezes': serializer.toJson<int>(vezes),
+    };
+  }
+
+  EpisodiosNotificadosData copyWith({
+    String? episodioId,
+    String? nivel,
+    String? parDeCanais,
+    int? notificadoEm,
+    int? vezes,
+  }) => EpisodiosNotificadosData(
+    episodioId: episodioId ?? this.episodioId,
+    nivel: nivel ?? this.nivel,
+    parDeCanais: parDeCanais ?? this.parDeCanais,
+    notificadoEm: notificadoEm ?? this.notificadoEm,
+    vezes: vezes ?? this.vezes,
+  );
+  EpisodiosNotificadosData copyWithCompanion(
+    EpisodiosNotificadosCompanion data,
+  ) {
+    return EpisodiosNotificadosData(
+      episodioId:
+          data.episodioId.present ? data.episodioId.value : this.episodioId,
+      nivel: data.nivel.present ? data.nivel.value : this.nivel,
+      parDeCanais:
+          data.parDeCanais.present ? data.parDeCanais.value : this.parDeCanais,
+      notificadoEm:
+          data.notificadoEm.present
+              ? data.notificadoEm.value
+              : this.notificadoEm,
+      vezes: data.vezes.present ? data.vezes.value : this.vezes,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodiosNotificadosData(')
+          ..write('episodioId: $episodioId, ')
+          ..write('nivel: $nivel, ')
+          ..write('parDeCanais: $parDeCanais, ')
+          ..write('notificadoEm: $notificadoEm, ')
+          ..write('vezes: $vezes')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(episodioId, nivel, parDeCanais, notificadoEm, vezes);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is EpisodiosNotificadosData &&
+          other.episodioId == this.episodioId &&
+          other.nivel == this.nivel &&
+          other.parDeCanais == this.parDeCanais &&
+          other.notificadoEm == this.notificadoEm &&
+          other.vezes == this.vezes);
+}
+
+class EpisodiosNotificadosCompanion
+    extends UpdateCompanion<EpisodiosNotificadosData> {
+  final Value<String> episodioId;
+  final Value<String> nivel;
+  final Value<String> parDeCanais;
+  final Value<int> notificadoEm;
+  final Value<int> vezes;
+  final Value<int> rowid;
+  const EpisodiosNotificadosCompanion({
+    this.episodioId = const Value.absent(),
+    this.nivel = const Value.absent(),
+    this.parDeCanais = const Value.absent(),
+    this.notificadoEm = const Value.absent(),
+    this.vezes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  EpisodiosNotificadosCompanion.insert({
+    required String episodioId,
+    required String nivel,
+    required String parDeCanais,
+    required int notificadoEm,
+    this.vezes = const Value.absent(),
+    this.rowid = const Value.absent(),
+  }) : episodioId = Value(episodioId),
+       nivel = Value(nivel),
+       parDeCanais = Value(parDeCanais),
+       notificadoEm = Value(notificadoEm);
+  static Insertable<EpisodiosNotificadosData> custom({
+    Expression<String>? episodioId,
+    Expression<String>? nivel,
+    Expression<String>? parDeCanais,
+    Expression<int>? notificadoEm,
+    Expression<int>? vezes,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (episodioId != null) 'episodio_id': episodioId,
+      if (nivel != null) 'nivel': nivel,
+      if (parDeCanais != null) 'par_de_canais': parDeCanais,
+      if (notificadoEm != null) 'notificado_em': notificadoEm,
+      if (vezes != null) 'vezes': vezes,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  EpisodiosNotificadosCompanion copyWith({
+    Value<String>? episodioId,
+    Value<String>? nivel,
+    Value<String>? parDeCanais,
+    Value<int>? notificadoEm,
+    Value<int>? vezes,
+    Value<int>? rowid,
+  }) {
+    return EpisodiosNotificadosCompanion(
+      episodioId: episodioId ?? this.episodioId,
+      nivel: nivel ?? this.nivel,
+      parDeCanais: parDeCanais ?? this.parDeCanais,
+      notificadoEm: notificadoEm ?? this.notificadoEm,
+      vezes: vezes ?? this.vezes,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (episodioId.present) {
+      map['episodio_id'] = Variable<String>(episodioId.value);
+    }
+    if (nivel.present) {
+      map['nivel'] = Variable<String>(nivel.value);
+    }
+    if (parDeCanais.present) {
+      map['par_de_canais'] = Variable<String>(parDeCanais.value);
+    }
+    if (notificadoEm.present) {
+      map['notificado_em'] = Variable<int>(notificadoEm.value);
+    }
+    if (vezes.present) {
+      map['vezes'] = Variable<int>(vezes.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('EpisodiosNotificadosCompanion(')
+          ..write('episodioId: $episodioId, ')
+          ..write('nivel: $nivel, ')
+          ..write('parDeCanais: $parDeCanais, ')
+          ..write('notificadoEm: $notificadoEm, ')
+          ..write('vezes: $vezes, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
 }
 
 class DatabaseAtV1 extends GeneratedDatabase {

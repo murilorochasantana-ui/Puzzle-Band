@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../services/app_scope.dart';
+import '../services/banco.dart' show GuardarHistorico;
 import '../services/configuracao_de_alertas.dart';
 import '../services/mqtt_service.dart';
 import '../services/preferencias_locais.dart';
@@ -8,12 +9,15 @@ import '../theme/app_theme.dart';
 import '../widgets/cabecalho.dart';
 import '../widgets/connection_bar.dart';
 import '../widgets/secao.dart';
+import '../utils/relogio.dart';
 import 'configurar_alertas_screen.dart';
+import 'exportar_relatorio_screen.dart';
 
 /// Ajustes: crianca monitorada (nome mostrado no Inicio, so neste celular),
 /// conexoes (com o erro, se houver), alertas (sonoros, "Monitorar com o app
-/// fechado" e "Configurar alertas"), aparencia (tema), "Apagar dados deste
-/// aparelho" e "sobre".
+/// fechado" e "Configurar alertas"), aparencia (tema), dados deste aparelho
+/// ("Exportar relatorio", "Guardar historico por" e "Apagar dados deste
+/// aparelho") e "sobre".
 class ConfiguracoesScreen extends StatelessWidget {
   const ConfiguracoesScreen({super.key});
 
@@ -81,7 +85,10 @@ class ConfiguracoesScreen extends StatelessWidget {
         const SizedBox(height: Espaco.l),
         const _Grupo(titulo: 'Aparência', itens: [_EscolhaDeAparencia()]),
         const SizedBox(height: Espaco.l),
-        const _Grupo(titulo: 'Dados deste aparelho', itens: [_ApagarDados()]),
+        const _Grupo(
+          titulo: 'Dados deste aparelho',
+          itens: [_ExportarRelatorio(), _GuardarHistorico(), _ApagarDados()],
+        ),
         const SizedBox(height: Espaco.l),
         _Grupo(
           titulo: 'Sobre',
@@ -253,6 +260,91 @@ class _EscolhaDeAparencia extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// "Exportar relatorio": planilha do Excel de um dia ou periodo
+/// (exportar_relatorio_screen.dart). O mesmo do botao no Historico.
+class _ExportarRelatorio extends StatelessWidget {
+  const _ExportarRelatorio();
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      key: const ValueKey('ajustes-exportar-relatorio'),
+      leading: const Icon(Icons.table_chart_outlined),
+      title: const Text('Exportar relatório'),
+      subtitle: const Text('Planilha do Excel com as crises e as médias dos sinais de um dia ou período.'),
+      trailing: const Icon(Icons.chevron_right_rounded),
+      onTap: () => ExportarRelatorioScreen.abrir(context),
+    );
+  }
+}
+
+/// "Guardar historico por": 1 ano (padrao), 2 anos ou ate o cuidador apagar.
+/// Um periodo menor apaga na hora o que ficou de fora (pede confirmacao).
+class _GuardarHistorico extends StatelessWidget {
+  const _GuardarHistorico();
+
+  static String _rotulo(GuardarHistorico g) => g == GuardarHistorico.padrao ? '${g.rotulo} (padrão)' : g.rotulo;
+
+  /// Quanto tempo a opcao guarda (null = sem limite), para saber se diminuiu.
+  static int _dias(GuardarHistorico g) => g.duracao?.inDays ?? 1 << 30;
+
+  Future<void> _escolher(BuildContext context, GuardarHistorico novo) async {
+    final preferencias = PreferenciasScope.read(context);
+    final service = AppScope.read(context);
+    final atual = preferencias.guardarHistorico;
+    if (novo == atual) return;
+    if (_dias(novo) < _dias(atual)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Guardar só ${novo.rotulo}?'),
+          content: Text('Os episódios com mais de ${novo.rotulo} serão apagados deste celular agora.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Apagar e guardar')),
+          ],
+        ),
+      );
+      if (ok != true) return;
+    }
+    await preferencias.definirGuardarHistorico(novo);
+    await service.historicoLocal.aplicarRetencao(novo, relogio());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final preferencias = PreferenciasScope.of(context);
+    return Column(
+      children: [
+        const ListTile(
+          leading: Icon(Icons.history_rounded),
+          title: Text('Guardar histórico por'),
+          subtitle: Text('Guardar menos tempo protege a privacidade da criança.'),
+        ),
+        RadioGroup<GuardarHistorico>(
+          groupValue: preferencias.guardarHistorico,
+          onChanged: (g) {
+            if (g != null) _escolher(context, g);
+          },
+          child: Column(
+            children: [
+              for (final g in GuardarHistorico.values)
+                RadioListTile<GuardarHistorico>(
+                  key: ValueKey('guardar-${g.codigo}'),
+                  value: g,
+                  title: Text(_rotulo(g)),
+                  contentPadding: const EdgeInsets.only(left: 56, right: Espaco.l),
+                  controlAffinity: ListTileControlAffinity.trailing,
+                  dense: true,
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

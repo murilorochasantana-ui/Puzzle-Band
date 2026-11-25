@@ -2,7 +2,9 @@
 // do SQLite no celular e no `flutter test`). Ver docs/app.md, "Armazenamento".
 //
 // O que fica aqui: o historico de episodios (acumulado alem dos 50 que a
-// pulseira publica), os lembretes e os episodios ja notificados. As
+// pulseira publica) com as metricas dos sinais de cada um, o resumo de cada
+// minuto (para o relatorio em Excel), os lembretes e os episodios ja
+// notificados. As
 // configuracoes simples (tema, alertas sonoros, monitorar com o app fechado,
 // passos da configuracao, nome da crianca) continuam no shared_preferences.
 //
@@ -10,8 +12,12 @@
 // plano (outro motor Dart, monitor_segundo_plano.dart). Modo WAL e
 // busy_timeout: as leituras nao bloqueiam a escrita e duas escritas esperam
 // a vez. Quem grava o que:
-//   - episodios vindos da pulseira: as duas conexoes (upsert pelo id,
-//     idempotente: gravar duas vezes a mesma lista nao duplica nada);
+//   - episodios vindos da pulseira (e as metricas deles): as duas conexoes
+//     (upsert pelo id, idempotente: gravar duas vezes a mesma lista nao
+//     duplica nada);
+//   - resumo de cada minuto (topico resumo_minuto): so quem notifica
+//     (quemNotifica), upsert pelo minuto (o valor da pulseira substitui o
+//     anterior; repetir nao duplica);
 //   - avaliacao local, lembretes, reset e retencao: so as telas;
 //   - episodios notificados: so quem notifica (quemNotifica), num unico
 //     comando atomico (registrarNotificacao).
@@ -31,6 +37,7 @@ import 'package:drift/native.dart';
 import 'package:sqlite3/sqlite3.dart' show Database, SqliteException;
 
 import '../models/lembrete.dart';
+import '../models/metricas.dart';
 import '../models/models.dart';
 
 part 'banco.g.dart';
@@ -39,6 +46,44 @@ part 'banco.g.dart';
 const niveisValidos = ['baixo_risco', 'atencao', 'alto_risco'];
 const avaliacoesValidas = ['pendente', 'confirmado', 'descartado'];
 const paresDeCanais = ['normal', 'ignora_nao_perturbe'];
+final sinaisValidos = [for (final s in Sinal.values) s.codigo];
+final fasesValidas = [for (final f in Fase.values) f.codigo];
+
+/// Por quanto tempo o historico de episodios fica no celular (Ajustes,
+/// "Guardar historico por"; docs/app.md, "Retencao"). Guardar menos protege
+/// a privacidade da crianca (LGPD, art. 6o, III).
+enum GuardarHistorico {
+  umAno('1_ano', '1 ano', Duration(days: 365), 5000),
+  doisAnos('2_anos', '2 anos', Duration(days: 730), 10000),
+  ateEuApagar('ate_eu_apagar', 'Até eu apagar', null, null);
+
+  const GuardarHistorico(this.codigo, this.rotulo, this.duracao, this.maxEpisodios);
+
+  /// Valor gravado no shared_preferences.
+  final String codigo;
+  final String rotulo;
+
+  /// null = sem limite de tempo.
+  final Duration? duracao;
+
+  /// null = sem limite de quantidade.
+  final int? maxEpisodios;
+
+  static const padrao = GuardarHistorico.umAno;
+
+  /// Chave no shared_preferences.
+  static const chave = 'guardar_historico';
+
+  static GuardarHistorico fromCodigo(Object? v) {
+    for (final g in GuardarHistorico.values) {
+      if (g.codigo == v) return g;
+    }
+    return padrao;
+  }
+
+  /// Episodios com inicio antes disto saem (null = nenhum sai por tempo).
+  DateTime? limite(DateTime agora) => duracao == null ? null : agora.subtract(duracao!);
+}
 
 // ---------------------------------------------------------------------------
 // Tabelas
@@ -116,6 +161,56 @@ class EpisodiosNotificados extends Table {
   Set<Column> get primaryKey => {episodioId};
 }
 
+/// Metricas dos sinais de cada episodio, calculadas na pulseira (campo
+/// `metricas` do historico): uma linha por episodio, sinal e fase (antes,
+/// durante, recuperacao). `n_leituras` = leituras validas daquele sinal na
+/// janela; sinal sem leitura = media nula e 0. Saem junto com o episodio
+/// (retencao e reset).
+@DataClassName('LinhaMetrica')
+class EpisodioMetricas extends Table {
+  TextColumn get episodioId => text()();
+  TextColumn get sinal => text().check(sinal.isIn(sinaisValidos))();
+  TextColumn get fase => text().check(fase.isIn(fasesValidas))();
+  RealColumn get media => real().nullable()();
+  RealColumn get minimo => real().nullable()();
+  RealColumn get maximo => real().nullable()();
+  IntColumn get nLeituras => integer()();
+
+  @override
+  Set<Column> get primaryKey => {episodioId, sinal, fase};
+}
+
+/// Resumo de cada minuto (topico resumo_minuto, calculado na pulseira): media
+/// e quantas leituras validas de cada sinal, nivel maximo e total de leituras.
+/// `minuto` = inicio do minuto (UTC, microssegundos). Retencao de 90 dias.
+@DataClassName('LinhaResumoMinuto')
+class ResumoMinuto extends Table {
+  IntColumn get minuto => integer()();
+  IntColumn get nLeituras => integer()();
+  TextColumn get nivelMaximo => text().check(nivelMaximo.isIn(niveisValidos))();
+  RealColumn get mediaBpm => real().nullable()();
+  IntColumn get nBpm => integer().withDefault(const Constant(0))();
+  RealColumn get mediaHrvMs => real().nullable()();
+  IntColumn get nHrvMs => integer().withDefault(const Constant(0))();
+  RealColumn get mediaEdaUs => real().nullable()();
+  IntColumn get nEdaUs => integer().withDefault(const Constant(0))();
+  RealColumn get mediaGyroMagDps => real().nullable()();
+  IntColumn get nGyroMagDps => integer().withDefault(const Constant(0))();
+  RealColumn get mediaLuzLux => real().nullable()();
+  IntColumn get nLuzLux => integer().withDefault(const Constant(0))();
+  RealColumn get mediaRuidoDb => real().nullable()();
+  IntColumn get nRuidoDb => integer().withDefault(const Constant(0))();
+
+  /// Quando chegou da pulseira.
+  IntColumn get recebidoEm => integer()();
+
+  @override
+  Set<Column> get primaryKey => {minuto};
+}
+
+/// Nome do sinal nas colunas de resumo_minuto (`media_<x>`, `n_<x>`).
+String _colunaDoSinal(Sinal s) => s.codigo.toLowerCase();
+
 // ---------------------------------------------------------------------------
 // Conexao
 // ---------------------------------------------------------------------------
@@ -159,7 +254,7 @@ String _rank(String coluna) => "(CASE $coluna WHEN 'alto_risco' THEN 2 WHEN 'ate
 /// O que o registro devolve quando e para notificar.
 typedef Notificacao = ({bool subida, bool ignoraNaoPerturbe});
 
-@DriftDatabase(tables: [Episodios, Lembretes, EpisodiosNotificados])
+@DriftDatabase(tables: [Episodios, Lembretes, EpisodiosNotificados, EpisodioMetricas, ResumoMinuto])
 class BancoPuzzleBand extends _$BancoPuzzleBand {
   BancoPuzzleBand(super.e);
 
@@ -178,50 +273,72 @@ class BancoPuzzleBand extends _$BancoPuzzleBand {
 
   /// Versao do esquema. Cada mudanca sobe 1 e ganha um passo em onUpgrade,
   /// com o esquema salvo em drift_schemas/ e teste em test/drift/.
+  ///   v1 (11/2026): episodios, lembretes, episodios_notificados;
+  ///   v2 (11/2026): + episodio_metricas e resumo_minuto (relatorio).
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
         // CREATE ... IF NOT EXISTS: se app e servico abrirem o arquivo novo ao
         // mesmo tempo, a segunda criacao nao falha.
         onCreate: (m) => m.createAll(),
-        onUpgrade: (m, de, para) async {
-          // v1 e a primeira versao. Proximas: um passo por versao, dentro de
-          // uma transacao, conferindo o que ja existe (a outra conexao pode ter
-          // migrado antes).
-        },
+        // Um passo por versao, numa transacao. As tabelas novas sao criadas
+        // com IF NOT EXISTS: se a outra conexao (telas ou servico) migrou
+        // antes, o passo nao falha. Nenhum dado da v1 e tocado.
+        onUpgrade: (m, de, para) => transaction(() async {
+          if (de < 2) {
+            await m.createTable(episodioMetricas);
+            await m.createTable(resumoMinuto);
+          }
+        }),
       );
 
   // -------------------------------------------------------------------------
   // Retencao
   // -------------------------------------------------------------------------
 
-  /// Episodios com mais de 1 ano saem (docs/app.md, "Retencao").
-  static const retencao = Duration(days: 365);
-
-  /// E no maximo estes episodios (os mais recentes ficam).
-  static const maxEpisodios = 5000;
+  // Episodios: o tempo e a quantidade dependem da opcao "Guardar historico
+  // por" (GuardarHistorico: 1 ano / 5.000, 2 anos / 10.000 ou ate apagar).
 
   /// Notificados guardados (os mais recentes).
   static const maxNotificados = 100;
 
-  static DateTime limiteDaRetencao(DateTime agora) => agora.subtract(retencao);
+  /// Resumo de cada minuto: 90 dias.
+  static const retencaoDoResumo = Duration(days: 90);
 
-  /// Apaga os episodios fora da retencao e os lembretes deles. Devolve
-  /// quantos episodios sairam. Roda ao abrir o app.
-  Future<int> aplicarRetencao(DateTime agora) => transaction(() async {
-        final linhas = await customSelect(
-          'SELECT id FROM episodios WHERE inicio < ? OR id NOT IN '
-          '(SELECT id FROM episodios ORDER BY inicio DESC, id DESC LIMIT ?)',
-          variables: [Variable.withInt(_us(limiteDaRetencao(agora))), Variable.withInt(maxEpisodios)],
-        ).get();
-        final ids = [for (final l in linhas) l.read<String>('id')];
+  /// Apaga os episodios fora da retencao (com as metricas e os lembretes
+  /// deles) e os resumos de minuto com mais de 90 dias. Devolve quantos
+  /// episodios sairam. Roda ao abrir o app e ao mudar a opcao.
+  Future<int> aplicarRetencao(DateTime agora, {GuardarHistorico guardar = GuardarHistorico.padrao}) =>
+      transaction(() async {
+        final condicoes = <String>[];
+        final variaveis = <Variable<Object>>[];
+        if (guardar.limite(agora) case final limite?) {
+          condicoes.add('inicio < ?');
+          variaveis.add(Variable.withInt(_us(limite)));
+        }
+        if (guardar.maxEpisodios case final max?) {
+          condicoes.add('id NOT IN (SELECT id FROM episodios ORDER BY inicio DESC, id DESC LIMIT ?)');
+          variaveis.add(Variable.withInt(max));
+        }
+        final ids = <String>[];
+        if (condicoes.isNotEmpty) {
+          final linhas = await customSelect(
+            'SELECT id FROM episodios WHERE ${condicoes.join(' OR ')}',
+            variables: variaveis,
+          ).get();
+          ids.addAll([for (final l in linhas) l.read<String>('id')]);
+        }
         for (var i = 0; i < ids.length; i += 500) {
           final parte = ids.sublist(i, i + 500 > ids.length ? ids.length : i + 500);
           await (delete(lembretes)..where((t) => t.chave.isIn([for (final id in parte) 'episodio:$id']))).go();
+          await (delete(episodioMetricas)..where((t) => t.episodioId.isIn(parte))).go();
           await (delete(episodios)..where((t) => t.id.isIn(parte))).go();
         }
+        // metricas sem episodio (nao deveria haver; por garantia)
+        await customStatement('DELETE FROM episodio_metricas WHERE episodio_id NOT IN (SELECT id FROM episodios)');
+        await (delete(resumoMinuto)..where((t) => t.minuto.isSmallerThanValue(_us(agora.subtract(retencaoDoResumo))))).go();
         return ids.length;
       });
 
@@ -277,13 +394,22 @@ class BancoPuzzleBand extends _$BancoPuzzleBand {
   /// episodio pelo id, numa transacao. Quem nao veio na lista CONTINUA no
   /// banco, so deixa de estar "na pulseira". Uma lista vazia nao apaga nada
   /// (para limpar: npm run resetar ou "Apagar os dados"). Episodios fora da
-  /// retencao nao entram.
-  Future<void> gravarDaPulseira(List<Episodio> lista, DateTime recebidoEm) => transaction(() async {
-        final limite = limiteDaRetencao(recebidoEm);
+  /// retencao ([guardar]) nao entram. Episodio com `metricas`: as linhas dele
+  /// em episodio_metricas sao trocadas pelas novas (um episodio em andamento
+  /// chega varias vezes); sem o campo (pulseira antiga), as que ja existem
+  /// ficam.
+  Future<void> gravarDaPulseira(
+    List<Episodio> lista,
+    DateTime recebidoEm, {
+    GuardarHistorico guardar = GuardarHistorico.padrao,
+  }) =>
+      transaction(() async {
+        final limite = guardar.limite(recebidoEm);
         final ids = <String>[];
         for (final e in lista) {
-          if (e.inicio.isBefore(limite)) continue;
+          if (limite != null && e.inicio.isBefore(limite)) continue;
           await customStatement(_upsertDaPulseira, _valores(e, recebidoEm));
+          if (e.metricas case final m?) await _gravarMetricas(e.id, m);
           ids.add(e.id);
         }
         if (ids.isEmpty) {
@@ -292,8 +418,112 @@ class BancoPuzzleBand extends _$BancoPuzzleBand {
           final marcas = List.filled(ids.length, '?').join(', ');
           await customStatement('UPDATE episodios SET na_pulseira = 0 WHERE na_pulseira = 1 AND id NOT IN ($marcas)', ids);
         }
-        notifyUpdates({const TableUpdate('episodios')});
+        notifyUpdates({const TableUpdate('episodios'), const TableUpdate('episodio_metricas')});
       });
+
+  Future<void> _gravarMetricas(String id, MetricasDoEpisodio metricas) async {
+    await customStatement('DELETE FROM episodio_metricas WHERE episodio_id = ?', [id]);
+    for (final MapEntry(key: fase, value: janela) in metricas.fases.entries) {
+      for (final sinal in Sinal.values) {
+        final v = janela.sinais[sinal];
+        await customStatement(
+          'INSERT INTO episodio_metricas (episodio_id, sinal, fase, media, minimo, maximo, n_leituras) '
+          'VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [id, sinal.codigo, fase.codigo, v?.media, v?.minimo, v?.maximo, v?.nLeituras ?? 0],
+        );
+      }
+    }
+  }
+
+  /// Metricas dos episodios [ids] (episodio sem metricas fica de fora).
+  Future<Map<String, MetricasDoEpisodio>> metricasDe(Iterable<String> ids) async {
+    final lista = ids.toList();
+    final porEpisodio = <String, Map<Fase, Map<Sinal, ValorDoSinal>>>{};
+    final nPorJanela = <String, Map<Fase, int>>{};
+    for (var i = 0; i < lista.length; i += 500) {
+      final parte = lista.sublist(i, i + 500 > lista.length ? lista.length : i + 500);
+      final linhas = await (select(episodioMetricas)..where((t) => t.episodioId.isIn(parte))).get();
+      for (final l in linhas) {
+        final fase = Fase.fromCodigo(l.fase);
+        final sinal = Sinal.fromCodigo(l.sinal);
+        if (fase == null || sinal == null) continue;
+        final janela = porEpisodio.putIfAbsent(l.episodioId, () => {}).putIfAbsent(fase, () => {});
+        final n = nPorJanela.putIfAbsent(l.episodioId, () => {});
+        n[fase] = (n[fase] ?? 0) > l.nLeituras ? n[fase]! : l.nLeituras;
+        if (l.media case final media?) {
+          janela[sinal] = ValorDoSinal(media: media, minimo: l.minimo, maximo: l.maximo, nLeituras: l.nLeituras);
+        }
+      }
+    }
+    return {
+      for (final MapEntry(key: id, value: fases) in porEpisodio.entries)
+        id: MetricasDoEpisodio({
+          for (final MapEntry(key: fase, value: sinais) in fases.entries)
+            fase: JanelaDeMetricas(nLeituras: nPorJanela[id]?[fase] ?? 0, sinais: sinais),
+        }),
+    };
+  }
+
+  // -------------------------------------------------------------------------
+  // Resumo de cada minuto
+  // -------------------------------------------------------------------------
+
+  static final _upsertDoResumo = () {
+    final sinais = [for (final s in Sinal.values) _colunaDoSinal(s)];
+    final colunas = [
+      'minuto', 'n_leituras', 'nivel_maximo',
+      for (final s in sinais) ...['media_$s', 'n_$s'],
+      'recebido_em',
+    ];
+    return 'INSERT INTO resumo_minuto (${colunas.join(', ')}) VALUES (${List.filled(colunas.length, '?').join(', ')}) '
+        'ON CONFLICT (minuto) DO UPDATE SET '
+        '${[for (final c in colunas.skip(1)) '$c = excluded.$c'].join(', ')}';
+  }();
+
+  /// Minutos recebidos da pulseira (resumo_minuto), numa transacao: upsert
+  /// pelo minuto, o valor da pulseira substitui o anterior (um minuto
+  /// reenviado ou repetido nao conta duas vezes). Minuto com mais de 90 dias
+  /// nao entra. Quem grava: so quem notifica (MqttService.gravaResumos).
+  Future<void> gravarResumos(List<ResumoDoMinuto> minutos, DateTime recebidoEm) => transaction(() async {
+        final limite = recebidoEm.subtract(retencaoDoResumo);
+        for (final m in minutos) {
+          if (m.minuto.isBefore(limite)) continue;
+          await customStatement(_upsertDoResumo, [
+            _us(m.minuto),
+            m.nLeituras,
+            m.nivelMaximo.codigo,
+            for (final s in Sinal.values) ...[m.sinais[s]?.media, m.sinais[s]?.n ?? 0],
+            _us(recebidoEm),
+          ]);
+        }
+        notifyUpdates({const TableUpdate('resumo_minuto')});
+      });
+
+  /// Minutos com inicio em [de, ate), do mais antigo para o mais novo.
+  Future<List<ResumoDoMinuto>> resumosEntre(DateTime de, DateTime ate) async {
+    final q = select(resumoMinuto)
+      ..where((t) => t.minuto.isBiggerOrEqualValue(_us(de)) & t.minuto.isSmallerThanValue(_us(ate)))
+      ..orderBy([(t) => OrderingTerm.asc(t.minuto)]);
+    return [
+      for (final l in await q.get())
+        ResumoDoMinuto(
+          minuto: DateTime.fromMicrosecondsSinceEpoch(l.minuto, isUtc: true),
+          nivelMaximo: NivelRisco.fromCodigo(l.nivelMaximo) ?? NivelRisco.baixoRisco,
+          nLeituras: l.nLeituras,
+          sinais: {
+            for (final (s, media, n) in [
+              (Sinal.bpm, l.mediaBpm, l.nBpm),
+              (Sinal.vfc, l.mediaHrvMs, l.nHrvMs),
+              (Sinal.eda, l.mediaEdaUs, l.nEdaUs),
+              (Sinal.movimento, l.mediaGyroMagDps, l.nGyroMagDps),
+              (Sinal.luz, l.mediaLuzLux, l.nLuzLux),
+              (Sinal.ruido, l.mediaRuidoDb, l.nRuidoDb),
+            ])
+              if (media != null) s: (media: media, n: n),
+          },
+        ),
+    ];
+  }
 
   /// Importacao da copia antiga (shared_preferences): so preenche o que
   /// falta, nunca sobrescreve um episodio que ja esta no banco (que e tao novo
@@ -391,12 +621,15 @@ class BancoPuzzleBand extends _$BancoPuzzleBand {
     );
   }
 
-  /// Reset: apaga os episodios e os notificados (os lembretes saem por
-  /// apagarLembretes, chamado por PreferenciasLocais).
+  /// Reset: apaga os episodios (com as metricas), os notificados e o resumo
+  /// de cada minuto (os lembretes saem por apagarLembretes, chamado por
+  /// PreferenciasLocais).
   Future<void> apagarHistorico() async {
     await transaction(() async {
+      await delete(episodioMetricas).go();
       await delete(episodios).go();
       await delete(episodiosNotificados).go();
+      await delete(resumoMinuto).go();
     });
     await _limparWal();
   }

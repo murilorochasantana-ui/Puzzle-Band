@@ -6,15 +6,19 @@
 //
 //   leitura -> buffer de 300 -> classifyAt (predict.js + forest.json)
 //           -> ingestReadings / upsertEpisode (episodes.js) -> gatilho (trigger.js)
-//           -> buildStateMessage / buildAlertMessage / buildHistoryMessage (buildMessages.js)
+//              e metricas por episodio (metricas.js)
+//           -> resumo de cada minuto (resumoMinuto.js)
+//           -> buildStateMessage / buildAlertMessage / buildHistoryMessage /
+//              buildMinuteSummaryMessage (buildMessages.js)
 //
 // Duas partes:
 //   createEdgeProcessor  processamento puro, sem rede (usado tambem pelo
 //                        verificar.js, que roda os cenarios offline);
-//   createEdgeLink       ligacao com o broker: publica estado, alertas e
-//                        historico; aplica ack, avaliacao, controle e a
-//                        ordem de reset; recupera o historico da mensagem
-//                        retida.
+//   createEdgeLink       ligacao com o broker: publica estado, alertas,
+//                        historico e o resumo de cada minuto; aplica ack,
+//                        avaliacao, controle e a ordem de reset; recupera o
+//                        historico da mensagem retida; reenvia os resumos
+//                        que o app perdeu quando ele volta a ficar online.
 // Topicos e formatos: docs/mqtt.md.
 
 import { classifyAt } from '../frontend/src/model/classify.js';
@@ -29,20 +33,26 @@ import {
   updateEpisode,
   upsertEpisode,
 } from '../frontend/src/model/episodes.js';
+import { createMinuteSummarizer, MINUTE_MS } from '../frontend/src/model/resumoMinuto.js';
 import {
   buildAlertMessage,
   buildHistoryMessage,
+  buildMinuteSummaryMessage,
+  buildMinuteSummaryMessages,
   buildStateMessage,
   historyEntryToEpisode,
   historySignature,
   topicsFor,
 } from '../frontend/src/hooks/buildMessages.js';
 import {
-  BAND_ORIGIN, parseAck, parseControl, parseEvaluation, parseHistory, parseResetCommand,
+  BAND_ORIGIN, parseAck, parseAppStatus, parseControl, parseEvaluation, parseHistory, parseResetCommand,
 } from '../frontend/src/hooks/parseMessages.js';
 
 export const MAX_BUFFER = 300; // 5 min de sinal a 1 Hz (o gatilho usa ate 6 min de memoria propria)
 export const RECOVERY_TIMEOUT_MS = 5000; // espera pelas mensagens retidas (historico, comando) ao iniciar
+// O "offline" do app (Last Will) chega ate ~90 s depois da queda (1,5 x
+// keepalive de 60 s): o reenvio comeca 5 min antes, para cobrir esse atraso.
+export const RESEND_MARGIN_MS = 5 * MINUTE_MS;
 
 // ---------------------------------------------------------------------------
 // Processamento (sem rede)
@@ -53,6 +63,7 @@ export const RECOVERY_TIMEOUT_MS = 5000; // espera pelas mensagens retidas (hist
 // (so em memoria).
 export function createEdgeProcessor({ childId, source = 'pulseira', storage = null, classify = classifyAt, maxBuffer = MAX_BUFFER }) {
   const store = createEpisodeStore(storage);
+  const minutes = createMinuteSummarizer();
   let monitor = createMonitor({ childId, source });
   let buffer = [];
   let lastReading = null;
@@ -85,8 +96,19 @@ export function createEdgeProcessor({ childId, source = 'pulseira', storage = nu
         { timestamp: reading.timestamp, ...alert },
         { source, childId },
       ));
-      return { tier: last.tier, probability: last.probability, alerts, changed: result.changed };
+      // resumo do minuto que fechou com esta leitura (ou null)
+      const minuteSummary = minutes.add(reading, last.tier);
+      return {
+        tier: last.tier, probability: last.probability, alerts, changed: result.changed, minuteSummary,
+      };
     },
+
+    // Resumos de minuto guardados (ultimas 24 h) com minuto >= sinceMs.
+    minutesSince: (sinceMs) => minutes.since(sinceMs),
+    // Pulseira desligando: fecha o minuto parcial (ou null).
+    flushMinute: () => minutes.flush(),
+    minuteMessage: (list, motivo = 'minuto', timestamp = now()) => buildMinuteSummaryMessage(list, { childId, timestamp, motivo }),
+    resendMessages: (list, timestamp = now()) => buildMinuteSummaryMessages(list, { childId, timestamp }),
 
     tier: () => last.tier,
     probability: () => last.probability,
@@ -164,6 +186,7 @@ export function createEdgeProcessor({ childId, source = 'pulseira', storage = nu
     reset() {
       monitor = { ...monitor, open: null };
       store.update(() => []);
+      minutes.clear();
     },
   };
 }
@@ -183,6 +206,9 @@ export function createEdgeProcessor({ childId, source = 'pulseira', storage = nu
 // pulseira espera a ordem retida (ate `recoveryTimeoutMs`) antes de publicar
 // o historico; com id novo, comeca vazia. Uma ordem que chega com a pulseira
 // rodando (resetar --forcar) tambem vale. null = nao assina comando.
+// `minuteSummaries`: publica o resumo de cada minuto em resumo_minuto e
+// assina app/status para reenviar o que o app perdeu (docs/mqtt.md).
+// `clock()`: agora em ms (testes).
 // `log(evento, texto)` vai para o terminal.
 export function createEdgeLink({
   client,
@@ -191,6 +217,8 @@ export function createEdgeLink({
   recoverFromRetained = false,
   recoveryTimeoutMs = RECOVERY_TIMEOUT_MS,
   reset = null,
+  minuteSummaries = true,
+  clock = () => Date.now(),
   log = () => {},
 }) {
   const topics = topicsFor(processor.childId);
@@ -200,6 +228,15 @@ export function createEdgeLink({
   let resetTimer = null;
   let lastResetId = reset?.lastAppliedId ?? null;
   let publishedSignature = null;
+  // Reenvio dos resumos de minuto: o app pode ter perdido os minutos desde
+  // `pendingSince` (ms; -Infinity = tudo o que ha na memoria; null = nada).
+  // Marca quando o app cai (app/status "offline") ou quando a pulseira nao
+  // conseguiu publicar um minuto (sem conexao); reenvia no "online" seguinte.
+  let appOnline = null; // null = ainda nao sabe (acabou de conectar)
+  let pendingSince = null;
+  const markPending = (ms) => {
+    pendingSince = pendingSince === null ? ms : Math.min(pendingSince, ms);
+  };
 
   // So publica com o broker conectado: estado ou alerta velho entregue
   // depois da reconexao seria enganoso. O historico e republicado a cada
@@ -250,6 +287,7 @@ export function createEdgeLink({
   function applyReset(order) {
     lastResetId = order.id;
     processor.reset();
+    pendingSince = null;
     reset.onApply?.(order);
     log('reset', `ordem de reset ${order.id} aplicada: histórico de episódios apagado`
       + `${checkingReset ? ' (começando vazia)' : ' (com a pulseira rodando)'}`);
@@ -257,8 +295,40 @@ export function createEdgeLink({
     if (recovering) stopRecovery();
   }
 
+  function publishMinute(summary, motivo = 'minuto') {
+    if (!summary) return;
+    if (!publishJson(topics.resumoMinuto, processor.minuteMessage([summary], motivo), { qos: 1 })) {
+      markPending(Date.parse(summary.minuto));
+    }
+  }
+
+  function resendMinutes() {
+    if (pendingSince === null) return;
+    const list = processor.minutesSince(pendingSince);
+    pendingSince = null;
+    if (!list.length) return;
+    const messages = processor.resendMessages(list);
+    for (const message of messages) publishJson(topics.resumoMinuto, message, { qos: 1 });
+    log('resumo', `app online de novo: ${list.length} resumo(s) de minuto reenviado(s) em ${messages.length} mensagem(ns)`);
+  }
+
+  function onAppStatus(text) {
+    const status = parseAppStatus(text);
+    if (!status) return; // payload vazio (reset apagando o retido)
+    if (status === 'offline') {
+      // visto ao vivo: desde a queda (com margem); retido: nao se sabe desde quando
+      if (appOnline !== false) markPending(appOnline === true ? clock() - RESEND_MARGIN_MS : -Infinity);
+      appOnline = false;
+    } else {
+      appOnline = true;
+      resendMinutes();
+    }
+  }
+
   function onConnect() {
+    appOnline = null;
     const subscriptions = { [topics.ack]: { qos: 1 }, [topics.avaliacao]: { qos: 1 } };
+    if (minuteSummaries) subscriptions[topics.appStatus] = { qos: 1 };
     if (control) subscriptions[topics.controle] = { qos: 1 };
     if (reset) subscriptions[topics.comando] = { qos: 1 };
     if (recovering) subscriptions[topics.historico] = { qos: 1 };
@@ -294,6 +364,8 @@ export function createEdgeLink({
         log('reset', `ordem de reset ${order.id} retida: já aplicada antes, nada a apagar`);
       }
       finishResetCheck(); // a retida (se houver) chega logo apos a assinatura
+    } else if (topic === topics.appStatus && minuteSummaries) {
+      onAppStatus(text);
     } else if (topic === topics.ack) {
       const ack = parseAck(text);
       if (!ack) {
@@ -348,6 +420,7 @@ export function createEdgeLink({
           + `${sent ? '' : ' (não enviado: sem conexão)'}`);
       }
       publishJson(topics.estado, processor.state(reading.timestamp), { qos: 0, retain: true });
+      if (minuteSummaries) publishMinute(result.minuteSummary);
       if (processor.signature() !== publishedSignature) publishHistory('episódio abriu, fechou ou mudou');
       return { ...result, sent: client.connected };
     },
@@ -361,6 +434,8 @@ export function createEdgeLink({
       resetTimer = null;
       const closed = processor.close();
       if (closed) log('historico', `episódio ${closed.id} encerrado como "interrompido" (pulseira desligando)`);
+      const partial = processor.flushMinute();
+      if (minuteSummaries) publishMinute(partial);
       if (recovering || checkingReset || !client.connected) return closed;
       const message = processor.history();
       await client.publishAsync(topics.historico, JSON.stringify(message), { qos: 1, retain: true });

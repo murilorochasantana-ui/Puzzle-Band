@@ -10,6 +10,9 @@ import { BAND_ORIGIN, RESET_ACTION, SITE_ORIGIN } from './parseMessages.js';
 import { CONTROL_LIMITS } from '../model/simulate.js';
 
 export const HISTORY_TOPIC_LIMIT = 50; // historico: os 50 episodios mais recentes
+// resumo_minuto: no reenvio, ate 360 minutos (6 h, ~100 KB) por mensagem; o
+// EMQX Serverless aceita ate 1 MB por mensagem e 10 publicacoes/s por cliente
+export const MINUTE_SUMMARY_CHUNK = 360;
 
 // Leituras atuais que vao no estado (accel_mag_g e idade ficam de fora: o
 // app nao mostra e o modelo roda na pulseira).
@@ -29,6 +32,7 @@ export function topicsFor(childId) {
     appStatus: `${base}/app/status`,
     comando: `${base}/comando`,
     comandoResposta: `${base}/comando/resposta`,
+    resumoMinuto: `${base}/resumo_minuto`,
   };
 }
 
@@ -123,6 +127,9 @@ export function historyEntry(ep) {
     avaliacao_origem: ep.avaliacao_origem ?? null,
     avaliacao_em: ep.avaliacao_em ?? null,
     visto_pelo_cuidador_em: ep.visto_pelo_cuidador_em ?? null,
+    // Campo novo (11/2026), opcional: medias dos sinais antes, durante e na
+    // recuperacao (model/metricas.js). null em episodio antigo.
+    metricas: ep.metricas ?? null,
   };
 }
 
@@ -147,6 +154,29 @@ export function buildHistoryMessage(episodes, { childId, timestamp }) {
     total: episodes.length,
     episodios: episodes.slice(0, HISTORY_TOPIC_LIMIT).map(historyEntry),
   };
+}
+
+// puzzleband/<id>/resumo_minuto (QoS 1, sem retain): resumos de minutos
+// fechados (model/resumoMinuto.js), mais antigo primeiro. `motivo`: "minuto"
+// (o minuto que acabou de fechar) ou "reenvio" (o app voltou a ficar online e
+// pode ter perdido minutos). Para o reenvio, ver buildMinuteSummaryMessages.
+export function buildMinuteSummaryMessage(minutes, { childId, timestamp, motivo = 'minuto' }) {
+  return {
+    origem: BAND_ORIGIN,
+    timestamp,
+    crianca: childId ?? null,
+    motivo,
+    minutos: minutes,
+  };
+}
+
+// Reenvio: os minutos em mensagens de ate MINUTE_SUMMARY_CHUNK.
+export function buildMinuteSummaryMessages(minutes, { childId, timestamp, motivo = 'reenvio' }) {
+  const messages = [];
+  for (let i = 0; i < minutes.length; i += MINUTE_SUMMARY_CHUNK) {
+    messages.push(buildMinuteSummaryMessage(minutes.slice(i, i + MINUTE_SUMMARY_CHUNK), { childId, timestamp, motivo }));
+  }
+  return messages;
 }
 
 // Muda quando um episodio abre, fecha, muda de nivel maximo/gatilho ou e

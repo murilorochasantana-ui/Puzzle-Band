@@ -49,12 +49,17 @@ escuro: [design-app.md](design-app.md).
   últimos 7 dias pela avaliação do cuidador.
 - **Histórico** dos episódios, separado por dia, com um **calendário** do
   mês no topo. A pulseira publica os 50 mais recentes; o app guarda **todos**
-  num banco SQLite no celular (até 1 ano, ver
+  num banco SQLite no celular (1 ano por padrão, ver
   [Armazenamento](#armazenamento)), então os meses antigos continuam
   completos. Cada episódio é um cartão resumido que abre no lugar, com
   **Confirmar gatilho** / **Descartar** e uma observação curta. A avaliação
   volta para a pulseira, que aplica e republica o histórico (o painel do site
   mostra "avaliado pelo app"). Tudo continua visível sem conexão.
+- **Relatório em Excel**: o botão **Exportar relatório** (no Histórico e em
+  Ajustes) gera um `.xlsx` de um dia ou de um período de até 31 dias, com as
+  crises e as médias dos sinais antes, durante e depois de cada uma, e abre
+  o menu de compartilhar do Android (ver
+  [Relatório em Excel](#relatório-em-excel)).
 - **Indicadores de conexão** (Ajustes): servidor, pulseira (online/offline)
   e "Análise (pulseira)" (ao vivo ou sem dados), que indica se o **estado
   publicado pela pulseira** está chegando ao vivo. O modelo roda na pulseira;
@@ -312,11 +317,13 @@ Há três jeitos de apagar o que o app guarda, do mais completo ao mais local:
 - **Pelo terminal, sem mexer no celular:** `npm run resetar` em
   `simulator/`, com a pulseira desligada (passo a passo em [apresentacao.md](apresentacao.md#resetar-para-uma-apresentação)). O app assina `puzzleband/<id>/comando`. Ao receber
   a ordem `resetar` com um `id` que ainda não aplicou:
-  - apaga o histórico, os episódios já notificados e os lembretes (as três
-    tabelas do banco local), cancela os avisos agendados dos lembretes e
-    apaga os alertas recebidos e o buffer dos gráficos;
+  - apaga o histórico (com as métricas dos episódios), o resumo de cada
+    minuto, os episódios já notificados e os lembretes (as tabelas do banco
+    local), cancela os avisos agendados dos lembretes e apaga os alertas
+    recebidos e o buffer dos gráficos;
   - com `manter_preferencias: false` (`npm run resetar -- --tudo`), também
-    volta ao padrão o nome da criança, a aparência e os alertas sonoros;
+    volta ao padrão o nome da criança, a aparência, os alertas sonoros e o
+    "Guardar histórico por";
   - mostra o SnackBar "Dados apagados para uma nova
     apresentação." e confirma em `comando/resposta`, e o terminal mostra
     "App limpo".
@@ -426,8 +433,9 @@ consultas), `lib/services/historico_local.dart` (o que as telas leem),
 
 | Onde | O quê |
 |---|---|
-| **Banco SQLite do app** (`files/banco/puzzleband.db`) | Histórico de episódios (todos, até 1 ano), lembretes e episódios já notificados (com o par de canais usado) |
-| **`shared_preferences`** | Configurações simples: nome da criança, aparência, alertas sonoros, monitorar com o app fechado, passos da "Configurar alertas", `reset_aplicado_id` e o sufixo do id MQTT |
+| **Banco SQLite do app** (`files/banco/puzzleband.db`) | Histórico de episódios (todos, 1 ano por padrão) com as métricas dos sinais de cada um, o resumo de cada minuto (90 dias), lembretes e episódios já notificados (com o par de canais usado) |
+| **`shared_preferences`** | Configurações simples: nome da criança, aparência, alertas sonoros, monitorar com o app fechado, "Guardar histórico por" (`guardar_historico`), passos da "Configurar alertas", `reset_aplicado_id` e o sufixo do id MQTT |
+| **Cache do app** (`cache/relatorios/`) | O último relatório em Excel gerado (o próximo apaga o anterior; um relatório que o cuidador desistiu de compartilhar é apagado na hora) |
 | **Pulseira** (`simulator/data/historico_<id>.json`) | O histórico completo dela (até 200 episódios, com o gatilho detalhado); publica os 50 mais recentes em `historico` ([historico.md](historico.md)) |
 | Só na memória | Estado ao vivo, leituras dos gráficos (5 min) e alertas recebidos |
 
@@ -451,6 +459,20 @@ consultas), `lib/services/historico_local.dart` (o que as telas leem),
     salvo em e aviso.
   - `episodios_notificados`: episódio, nível notificado, par de canais
     (`normal` ou `ignora_nao_perturbe`), quando e quantas vezes (a subida).
+  - `episodio_metricas` (v2, 11/2026): as métricas que a pulseira manda no
+    campo `metricas` de cada episódio ([historico.md](historico.md#métricas-por-episódio)).
+    Uma linha por episódio, sinal (`bpm`, `hrv_ms`, `eda_uS`,
+    `gyro_mag_dps`, `luz_lux`, `ruido_db`) e fase (`antes`, `durante`,
+    `recuperacao`), com `media`, `minimo`, `maximo` (só no durante) e
+    `n_leituras`. Chave: (episódio, sinal, fase). Cada episódio que chega com
+    `metricas` troca as linhas dele (um episódio em andamento chega várias
+    vezes); sem o campo (pulseira antiga), as que existem ficam.
+  - `resumo_minuto` (v2, 11/2026): o tópico `resumo_minuto` da pulseira.
+    Uma linha por minuto (início do minuto em UTC, chave), com
+    `n_leituras`, `nivel_maximo` e, por sinal, `media_<sinal>` e
+    `n_<sinal>`. Upsert pelo minuto: o valor da pulseira substitui o
+    anterior, então um minuto reenviado não conta duas vezes. Alimenta as
+    médias do dia, a aba "Por hora" e a cobertura do relatório.
 - **Sincronização:** cada `historico` da pulseira (o retido e as
   atualizações) entra por **upsert pelo id**, numa transação. Os episódios
   que saem da lista de 50 **continuam no banco**. A avaliação continua indo
@@ -460,15 +482,24 @@ consultas), `lib/services/historico_local.dart` (o que as telas leem),
 
   | Dado | Quem grava |
   |---|---|
-  | Episódios vindos da pulseira | As duas conexões (as duas assinam `historico`); o upsert é idempotente e não duplica |
+  | Episódios vindos da pulseira (e as métricas deles) | As duas conexões (as duas assinam `historico`); o upsert é idempotente e não duplica |
+  | Resumo de cada minuto | Só quem notifica (a regra de `quemNotifica`: o serviço quando está rodando, senão as telas). As duas assinam `resumo_minuto`; a outra recebe e descarta |
   | Avaliação local, lembretes, reset e retenção | Só as telas |
   | Episódios notificados | Só quem notifica, num comando atômico (`INSERT ... ON CONFLICT DO UPDATE ... WHERE ... RETURNING`) |
 
   As telas releem o banco depois de cada gravação e ao voltar para a frente.
-- **Migrações:** `schemaVersion` (hoje 1) no `banco.dart`; o esquema de cada
-  versão fica em `mobile/drift_schemas/` e o teste em
-  `mobile/test/drift/banco/`. Uma versão nova: subir o número, escrever o
-  passo em `onUpgrade` e rodar `dart run drift_dev make-migrations`.
+- **Migrações:** `schemaVersion` (hoje **2**) no `banco.dart`; o esquema de
+  cada versão fica em `mobile/drift_schemas/` e o teste em
+  `mobile/test/drift/banco/migracao_test.dart`. A v1 → v2 só cria
+  `episodio_metricas` e `resumo_minuto` (com `IF NOT EXISTS`, porque a outra
+  conexão pode ter migrado antes), numa transação, sem tocar nos dados da v1.
+  O teste grava episódios (com avaliação local pendente), lembretes e
+  notificados na v1, migra, confere que tudo continua igual e que o esquema
+  bate com o de um banco novo, e cobre o caso de as tabelas já terem sido
+  criadas pela outra conexão. Uma versão nova: subir o número, escrever o
+  passo em `onUpgrade`, rodar `dart run drift_dev make-migrations` (apague o
+  `migration_test.dart` e o `banco.steps.dart` que ele gera: o teste fica no
+  `migracao_test.dart`) e acrescentar o teste da versão.
 - **Código gerado:** `lib/services/banco.g.dart` vai no Git. Depois de mudar
   as tabelas: `dart run build_runner build` (em `mobile/`).
 - **Importação (uma vez):** na primeira abertura depois da atualização, quem
@@ -482,11 +513,25 @@ consultas), `lib/services/historico_local.dart` (o que as telas leem),
 
 ### Retenção
 
-- **Episódios: 1 ano ou 5.000, o que vier primeiro** (os mais antigos saem).
-  Um episódio ocupa cerca de 300 bytes: 5.000 dão menos de 2 MB. Um ano cobre
-  o calendário e os padrões de uso, e o limite segue o princípio da
-  necessidade da LGPD (art. 6º, III). A limpeza roda ao abrir o app; um
-  episódio mais velho que 1 ano que ainda venha da pulseira não entra.
+- **Episódios: opção "Guardar histórico por"** (Ajustes → Dados deste
+  aparelho), gravada em `guardar_historico`:
+
+  | Opção | Tempo | Quantidade (os mais antigos saem) |
+  |---|---|---|
+  | 1 ano (padrão) | 1 ano | 5.000 |
+  | 2 anos | 2 anos | 10.000 |
+  | Até eu apagar | sem limite | sem limite |
+
+  A tela explica em uma linha: "Guardar menos tempo protege a privacidade da
+  criança." (princípio da necessidade, LGPD art. 6º, III). Um episódio ocupa
+  cerca de 300 bytes, mais ~1 KB de métricas: 5.000 dão uns 6 MB. A limpeza
+  roda ao abrir o app e **na hora** em que o cuidador escolhe um período
+  menor (com uma confirmação: "Os episódios com mais de 1 ano serão apagados
+  deste celular agora."). As métricas e o lembrete de um episódio saem junto
+  com ele. Um episódio fora do período que ainda venha da pulseira não
+  entra (o serviço relê a opção do disco a cada lista).
+- **Resumo de cada minuto: 90 dias.** No máximo ~130 mil linhas (~15 MB).
+  Cobre o relatório de até 31 dias com folga; não é configurável.
 - **Lembretes:** os do dia valem 30 dias; no máximo 200; o lembrete de um
   episódio sai junto com o episódio.
 - **Notificados:** os 100 mais recentes.
@@ -521,6 +566,65 @@ pela pulseira.
   pulseira, até o cuidador avaliar de novo.
 - Desinstalar o app ou "Limpar dados" no Android apaga o banco. Outro
   cuidador, em outro celular, só vê os 50 que a pulseira publica.
+
+## Relatório em Excel
+
+O cuidador exporta um relatório para levar à consulta ou à escola.
+Código: `lib/services/relatorio.dart` (o que vai em cada aba),
+`lib/services/planilha_xlsx.dart` (o gravador `.xlsx`) e
+`lib/screens/exportar_relatorio_screen.dart` (a tela).
+
+- **Onde fica:** o botão **Exportar relatório** no topo do Histórico e o
+  item **Exportar relatório** em Ajustes → Dados deste aparelho.
+- **Período:** **um dia** (padrão: hoje) ou **um período de até 31 dias**,
+  com setas para o dia anterior e o seguinte (sem passar de hoje) e os
+  atalhos Hoje, Ontem, Últimos 7 dias e Últimos 31 dias. Sem o seletor de
+  data do sistema: ele viria em inglês, porque o app não carrega as
+  traduções do Flutter.
+- **Arquivo:** `puzzleband_relatorio_<CHILD_ID>_<AAAA-MM-DD>.xlsx` (um dia)
+  ou `puzzleband_relatorio_<CHILD_ID>_<início>_a_<fim>.xlsx` (período), com
+  os horários no **fuso do celular**. Um episódio que passa da meia-noite
+  conta no dia em que começou.
+- **Compartilhar:** depois de gerar, aparece o aviso "Este arquivo contém
+  dados de saúde da criança. Compartilhe só com quem cuida dela." Só com
+  **Compartilhar** abre o menu do Android (WhatsApp, e-mail, Drive), pelo
+  `share_plus`. **Cancelar** apaga o arquivo. O arquivo fica no cache do app
+  e o relatório seguinte apaga o anterior.
+
+Três abas, com os cabeçalhos em português e as unidades, a **primeira linha
+congelada** e larguras de coluna legíveis. Datas e durações vão como valores
+de verdade (o Excel ordena e soma), e os números com casas fixas (BPM e luz
+sem casas, VFC, movimento e ruído com 1, EDA com 2):
+
+| Aba | Linhas | Colunas |
+|---|---|---|
+| **Resumo do dia** | Uma por dia (e "Período inteiro", num período) | Data; episódios de atenção e de possível crise; crises confirmadas, descartadas e pendentes de avaliação (todas as avaliações dos episódios do dia); tempo total em episódio (h:mm:ss); gatilho mais frequente (com "2 de 4"; empate mostra os dois); média do dia de cada sinal (do resumo de cada minuto, ponderada pelas leituras); cobertura do monitoramento (%) e minutos com dados |
+| **Episódios** | Uma por episódio, do mais antigo para o mais novo | Início, fim, duração, situação, nível máximo, probabilidade máxima (%), provável gatilho, avaliação, observação e lembrete; para cada sinal (BPM, VFC, EDA, Movimento, Luz e Ruído, com a unidade: bpm, ms, µS, dps, lux, dB): média antes, média durante, pico durante e média na recuperação; leituras antes, durante e na recuperação. **Célula vazia** quando o episódio não tem métricas (pulseira antiga) |
+| **Por hora** | 24 por dia (hoje: até a hora atual) | Data, hora ("14:00–14:59"), episódios iniciados, nível máximo, média de cada sinal e minutos com dados |
+
+- **Cobertura do monitoramento:** minutos do dia com dados (com o resumo de
+  cada minuto) ÷ minutos do dia. Para hoje, conta só até a hora da
+  exportação. Mostra quanto do dia a pulseira e o app de fato cobriram: uma
+  média do dia com 40% de cobertura vale menos que uma com 95%.
+- **De onde vêm os dados:** só do banco do celular (episódios, métricas,
+  resumo de cada minuto e lembretes). Nada é baixado nem enviado para gerar
+  o arquivo. Episódio sem métricas e minuto sem resumo (app sem internet e
+  pulseira reiniciada, ou antes da versão 11/2026) ficam vazios, não zero.
+- **Pacote:** um gravador `.xlsx` próprio (~250 linhas, Office Open XML) sobre
+  o `archive` (licença **MIT**), para o zip. O `excel` (MIT) estava parado
+  desde 2024 e não congela a primeira linha; o `syncfusion_flutter_xlsio`
+  tem licença comercial. Os textos vão na tabela de textos compartilhados,
+  nunca como fórmula: uma observação que comece com "=" aparece como texto.
+  Compartilhar: `share_plus` (**BSD-3**).
+- **Testes:** `test/relatorio_test.dart` gera o arquivo a partir de um banco
+  com um dia de exemplo e o **abre com o pacote `excel`** (leitor
+  independente, só nos testes) para conferir as abas, os cabeçalhos e
+  alguns valores, e lê o XML para conferir a linha congelada, as larguras e
+  que nenhum texto virou fórmula. `test/exportar_relatorio_test.dart` testa a
+  tela (o aviso antes de compartilhar, cancelar, o limite de 31 dias, as
+  entradas pelo Histórico e pelos Ajustes) e os goldens. Arquivo de exemplo:
+  [`docs/exemplos/puzzleband_relatorio_C01_2026-11-25.xlsx`](exemplos/puzzleband_relatorio_C01_2026-11-25.xlsx),
+  gerado com `flutter test test/relatorio_test.dart --dart-define=GERAR_EXEMPLO=true`.
 
 ## Configuração (`env.json`)
 
@@ -664,8 +768,11 @@ mobile/
 │   ├── models/models.dart      # parse validado de estado, alertas e histórico
 │   ├── models/resumo.dart      # contagens por dia/mês/7 dias pela avaliação do cuidador; lista por dia
 │   ├── models/sinais.dart      # leituras dos últimos 5 min (todas as métricas), faixas de eixo e trechos de nível
+│   ├── models/metricas.dart    # métricas dos episódios (antes/durante/recuperação) e o resumo de cada minuto
 │   ├── services/
-│   │   ├── banco.dart (+ .g.dart)   # banco SQLite local (drift): tabelas, consultas, retenção
+│   │   ├── banco.dart (+ .g.dart)   # banco SQLite local (drift): tabelas, consultas, retenção ("Guardar histórico por")
+│   │   ├── relatorio.dart           # relatório em Excel: período, dados do banco e as três abas
+│   │   ├── planilha_xlsx.dart       # gravador .xlsx (zip com o archive)
 │   │   ├── banco_no_celular.dart    # onde fica o arquivo do banco (files/banco/)
 │   │   ├── historico_local.dart     # histórico das telas lido do banco (dia, mês, 7 dias, páginas)
 │   │   ├── importacao_antiga.dart   # importação única do shared_preferences para o banco
@@ -679,7 +786,7 @@ mobile/
 │   │   ├── preferencias_locais.dart # nome da criança e aparência (shared_preferences) e lembretes (banco)
 │   │   └── aviso_de_lembrete.dart   # aviso agendado do lembrete (canal "Lembretes")
 │   ├── theme/                  # tema único: cores (claro/escuro), tipografia, medidas, movimento
-│   ├── screens/                # configurar alertas, início, detalhe do episódio, gráficos, histórico, ajustes
+│   ├── screens/                # configurar alertas, início, detalhe do episódio, gráficos, histórico, exportar relatório, ajustes
 │   ├── widgets/                # faixa de estado, cartões do episódio (completo e resumido), calendário, selo da avaliação, painel do dia, lembretes, nível, gatilho, cabeçalho...
 │   └── utils/                  # datas, horas, durações; relógio das telas
 ├── drift_schemas/              # esquema do banco por versão (migrações)
@@ -706,7 +813,8 @@ dorme, o ping do MQTT (a cada 60 s) atrasa e o servidor derruba a conexão,
 e aí nenhum alerta chega. Por isso o consumo é contínuo e maior que o de um
 app parado: a CPU não entra em sono profundo enquanto o monitoramento estiver
 ligado. O tráfego, ao contrário, é pequeno (o ping, os alertas, o
-histórico e o status; não o estado de 1 mensagem por segundo). O consumo
+histórico, o status e o resumo de cada minuto, ~0,65 MB/dia; não o estado de
+1 mensagem por segundo, que daria ~34 MB/dia). O consumo
 real precisa ser medido no piloto (Configurações → Bateria); quem não
 precisar dos alertas com o app fechado pode desligar a opção nos Ajustes. Antes,
 `INTERNET` só existia no manifesto de debug, então um APK de release não teria
@@ -747,7 +855,8 @@ rede.
   credencial pode fazer. A solução definitiva é a autenticação por usuário
   (tokens emitidos por um backend).
 - O histórico do app guarda os episódios que chegaram **desde a instalação
-  (ou o último reset)**, até 1 ano. O que a pulseira publicou antes de o app
+  (ou o último reset)**, pelo período de "Guardar histórico por" (1 ano por
+  padrão). O que a pulseira publicou antes de o app
   ser instalado só aparece se ainda estiver entre os 50 que ela publica. Ver
   [Armazenamento](#armazenamento) (inclui o banco sem criptografia e o
   SQLCipher como trabalho futuro).

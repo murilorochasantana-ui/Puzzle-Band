@@ -4,13 +4,15 @@
 //     automatica;
 //   - Last Will "offline" (retain) em puzzleband/<id>/app/status e "online"
 //     (retain) a cada conexao - o site mostra "App do cuidador: conectado";
-//   - assina estado, alertas, historico e status (da pulseira);
+//   - assina estado, alertas, historico, status e resumo_minuto (da pulseira);
 //   - publica ack ("Estou ciente") e avaliacao (confirmar/descartar gatilho);
 //   - guarda os ultimos 5 min de leituras do estado (todas as metricas) para
 //     o grafico ao vivo;
 //   - grava os episodios do historico no banco local (HistoricoLocal ->
 //     banco.dart), acumulando alem dos 50 que a pulseira publica e mostrando
 //     tudo sem conexao; so aceita historico com origem "pulseira";
+//   - grava o resumo de cada minuto (resumo_minuto) no banco, se esta
+//     conexao e a que notifica (gravaResumos);
 //   - assina comando: a ordem "resetar" do terminal (npm run resetar) apaga
 //     os dados locais uma vez por id, confirma em comando/resposta e avisa a
 //     tela (avisos -> SnackBar). O mesmo apagarDadosLocais serve ao botao
@@ -23,8 +25,10 @@
 // alertas e publica a presenca do app (online + Last Will); a conexao das
 // telas entra sem Last Will e nao notifica. Sem o servico, as telas voltam
 // a fazer as duas coisas na hora (definirServicoRodando). O servico assina
-// so alertas, historico e status (sem o estado de 1 mensagem/s e sem o
-// comando de reset, que continua com o app aberto). Cada conexao tem a sua
+// so alertas, historico, status e resumo_minuto (sem o estado de 1
+// mensagem/s e sem o comando de reset, que continua com o app aberto). O
+// resumo de cada minuto segue a mesma regra de quem notifica: so um dos dois
+// grava (gravaResumos). Cada conexao tem a sua
 // ligacao com o mesmo banco (WAL); quem grava o que esta em banco.dart.
 
 import 'dart:async';
@@ -38,6 +42,7 @@ import 'package:mqtt_client/mqtt_server_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import '../models/metricas.dart';
 import '../models/models.dart';
 import '../models/sinais.dart';
 import 'banco.dart';
@@ -79,7 +84,11 @@ class MqttService extends ChangeNotifier {
     this.papel = PapelDaConexao.app,
   })  : _topics = Topics(config),
         _registro = RegistroDeNotificacoes(banco: banco, alertasSonoros: alertasSonorosDoDisco(prefs)),
-        historicoLocal = HistoricoLocal(banco, paraTelas: papel == PapelDaConexao.app) {
+        historicoLocal = HistoricoLocal(
+          banco,
+          paraTelas: papel == PapelDaConexao.app,
+          guardarHistorico: guardarHistoricoDoDisco(prefs, reler: papel == PapelDaConexao.servico),
+        ) {
     historicoLocal.addListener(_avisar);
   }
 
@@ -178,6 +187,10 @@ class MqttService extends ChangeNotifier {
   /// servico (quemNotifica).
   bool get notificaAlertas =>
       papel == PapelDaConexao.servico || quemNotifica(servicoRodando: _servicoRodando) == QuemNotifica.app;
+
+  /// Esta conexao grava o resumo de cada minuto (resumo_minuto)? A mesma
+  /// regra de quem notifica: o servico quando esta rodando, senao o app.
+  bool get gravaResumos => notificaAlertas;
 
   /// Esta conexao publica a presenca do app ("online" + Last Will "offline")?
   /// A mesma regra: um so dono, para fechar as telas nao marcar "offline"
@@ -379,6 +392,7 @@ class MqttService extends ChangeNotifier {
       client.subscribe(_topics.alertas, MqttQos.atLeastOnce);
       client.subscribe(_topics.historico, MqttQos.atLeastOnce);
       client.subscribe(_topics.status, MqttQos.atLeastOnce);
+      client.subscribe(_topics.resumoMinuto, MqttQos.atLeastOnce);
       if (papel == PapelDaConexao.app) client.subscribe(_topics.comando, MqttQos.atLeastOnce);
       _aoConectar();
     } else {
@@ -487,6 +501,7 @@ class MqttService extends ChangeNotifier {
     if (topico == _topics.alertas) return _tratarAlerta(texto);
     if (topico == _topics.historico) return _tratarHistorico(texto);
     if (topico == _topics.comando) return _tratarComando(texto);
+    if (topico == _topics.resumoMinuto) return _tratarResumoMinuto(texto);
     if (topico == _topics.status) {
       final online = parseOnline(texto);
       if (online == null) return false;
@@ -553,6 +568,16 @@ class MqttService extends ChangeNotifier {
     // vazia nao apaga nada (so o reset apaga)
     unawaited(historicoLocal.receberDaPulseira(lista, DateTime.now()));
     return true;
+  }
+
+  /// Resumo de minutos da pulseira: so quem notifica grava (a outra
+  /// conexao recebe e descarta). Nada muda na tela.
+  bool _tratarResumoMinuto(String texto) {
+    if (!gravaResumos) return false;
+    final minutos = parseResumoMinuto(texto);
+    if (minutos == null || minutos.isEmpty) return false;
+    unawaited(historicoLocal.receberResumos(minutos, DateTime.now()));
+    return false;
   }
 
   /// Para os testes esperarem as gravacoes no banco.

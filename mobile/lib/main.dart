@@ -13,6 +13,7 @@ import 'screens/configuracoes_screen.dart';
 import 'screens/configurar_alertas_screen.dart';
 import 'services/app_scope.dart';
 import 'services/aviso_de_lembrete.dart';
+import 'services/banco.dart' show GuardarHistorico;
 import 'services/banco_no_celular.dart';
 import 'services/configuracao_de_alertas.dart';
 import 'services/importacao_antiga.dart';
@@ -39,12 +40,16 @@ Future<void> main() async {
 
   // Banco local (historico, lembretes, notificados; docs/app.md,
   // "Armazenamento"). Na primeira abertura depois da atualizacao, importa o
-  // que estava no shared_preferences (uma vez) e aplica a retencao (1 ano /
-  // 5.000 episodios). O servico em primeiro plano abre a sua conexao.
+  // que estava no shared_preferences (uma vez) e aplica a retencao (a opcao
+  // "Guardar historico por", padrao 1 ano / 5.000 episodios, e 90 dias do
+  // resumo de cada minuto). O servico em primeiro plano abre a sua conexao.
   final banco = await abrirBancoDoApp();
   try {
     await importarDoSharedPreferences(banco, prefs);
-    await banco.aplicarRetencao(DateTime.now());
+    await banco.aplicarRetencao(
+      DateTime.now(),
+      guardar: GuardarHistorico.fromCodigo(prefs.getString(GuardarHistorico.chave)),
+    );
   } catch (e) {
     debugPrint('Falha ao preparar o banco local: $e');
   }

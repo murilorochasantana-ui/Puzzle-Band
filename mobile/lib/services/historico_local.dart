@@ -18,16 +18,22 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../models/metricas.dart';
 import '../models/models.dart';
 import '../models/resumo.dart';
 import '../utils/relogio.dart';
 import 'banco.dart';
 
 class HistoricoLocal extends ChangeNotifier {
-  HistoricoLocal(this.banco, {this.paraTelas = true});
+  HistoricoLocal(this.banco, {this.paraTelas = true, Future<GuardarHistorico> Function()? guardarHistorico})
+      : _guardarHistorico = guardarHistorico ?? (() async => GuardarHistorico.padrao);
 
   final BancoPuzzleBand banco;
   final bool paraTelas;
+
+  /// Opcao "Guardar historico por" (Ajustes), lida a cada lista recebida: um
+  /// episodio fora da retencao nao entra.
+  final Future<GuardarHistorico> Function() _guardarHistorico;
 
   /// Episodios por pagina na lista do Historico.
   static const tamanhoDaPagina = 50;
@@ -161,10 +167,21 @@ class HistoricoLocal extends ChangeNotifier {
   Future<void> receberDaPulseira(List<Episodio> lista, DateTime agora) {
     _listaRecebidaEm = agora;
     return _emOrdem(() async {
-      await banco.gravarDaPulseira(lista, agora);
+      await banco.gravarDaPulseira(lista, agora, guardar: await _guardarHistorico());
       await _recarregarAgora();
     });
   }
+
+  /// Resumos de minuto da pulseira (resumo_minuto): upsert pelo minuto. So
+  /// quem notifica chama (MqttService.gravaResumos). Nada muda na tela.
+  Future<void> receberResumos(List<ResumoDoMinuto> minutos, DateTime agora) =>
+      _emOrdem(() => banco.gravarResumos(minutos, agora));
+
+  /// Mudou a opcao "Guardar historico por": aplica a retencao na hora.
+  Future<void> aplicarRetencao(GuardarHistorico guardar, DateTime agora) => _emOrdem(() async {
+        await banco.aplicarRetencao(agora, guardar: guardar);
+        await _recarregarAgora();
+      });
 
   /// Avaliacao feita neste app: aparece na hora e fica gravada como pendente
   /// de confirmacao (ver Episodios.avaliacaoLocal).

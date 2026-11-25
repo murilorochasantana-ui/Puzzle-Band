@@ -195,13 +195,13 @@ void main() {
     test('no maximo 5.000: os mais antigos saem', () async {
       final inicio = DateTime(2026, 1, 1);
       await banco.transaction(() async {
-        for (var i = 0; i < BancoPuzzleBand.maxEpisodios + 3; i++) {
+        for (var i = 0; i < GuardarHistorico.umAno.maxEpisodios! + 3; i++) {
           await banco.importarEpisodio(ep('ep_$i', inicio.add(Duration(minutes: i))), agora);
         }
       });
       expect(await banco.aplicarRetencao(agora), 3);
       final r = await banco.resumo();
-      expect(r.total, BancoPuzzleBand.maxEpisodios);
+      expect(r.total, GuardarHistorico.umAno.maxEpisodios!);
       expect(r.primeiro, inicio.add(const Duration(minutes: 3)));
     });
   });

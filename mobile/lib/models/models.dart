@@ -4,6 +4,8 @@
 
 import 'dart:convert';
 
+import 'metricas.dart';
+
 // ---------------------------------------------------------------------------
 // Utilitarios de JSON
 // ---------------------------------------------------------------------------
@@ -255,6 +257,7 @@ class Episodio {
     this.avaliacaoEm,
     this.vistoEm,
     this.naPulseira = true,
+    this.metricas,
   });
 
   final String id;
@@ -277,6 +280,12 @@ class Episodio {
   /// recentes). Fora dela, ele so existe no banco do app: avaliar grava so
   /// no celular (MqttService.enviarAvaliacao). Nao vai nas mensagens.
   final bool naPulseira;
+
+  /// Medias dos sinais antes, durante e na recuperacao (campo opcional
+  /// `metricas`, calculado na pulseira). null em episodio antigo e nos
+  /// episodios lidos do banco para as telas (as metricas ficam na tabela
+  /// episodio_metricas e so o relatorio as le).
+  final MetricasDoEpisodio? metricas;
 
   bool get emAndamento => encerramento == null;
 
@@ -303,6 +312,7 @@ class Episodio {
       avaliacaoOrigem: _str(m['avaliacao_origem']),
       avaliacaoEm: _date(m['avaliacao_em']),
       vistoEm: _date(m['visto_pelo_cuidador_em']),
+      metricas: MetricasDoEpisodio.fromJson(m['metricas']),
     );
   }
 
@@ -322,6 +332,7 @@ class Episodio {
         'avaliacao_origem': avaliacaoOrigem,
         'avaliacao_em': _iso(avaliacaoEm),
         'visto_pelo_cuidador_em': _iso(vistoEm),
+        if (metricas != null) 'metricas': metricas!.toJson(),
       };
 
   /// Copia com a avaliacao feita neste app (antes de a pulseira confirmar).
@@ -342,6 +353,7 @@ class Episodio {
         avaliacaoEm: quando,
         vistoEm: vistoEm,
         naPulseira: naPulseira,
+        metricas: metricas,
       );
 }
 

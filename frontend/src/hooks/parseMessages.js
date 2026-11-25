@@ -13,6 +13,7 @@
 
 import { EVALUATIONS, OBSERVATION_MAX_LENGTH } from '../model/episodes.js';
 import { CONTROL_LIMITS } from '../model/simulate.js';
+import { METRIC_SIGNALS, parseMetrics } from '../model/metricas.js';
 
 // Origem de quem publica. A pulseira poe "pulseira" em estado, alertas e
 // historico; o painel do site poe "site" em avaliacao e controle; o app poe
@@ -152,6 +153,36 @@ function parseHistoryEntry(raw) {
     avaliacao_origem: optionalString(raw.avaliacao_origem),
     avaliacao_em: optionalTimestamp(raw.avaliacao_em),
     visto_pelo_cuidador_em: optionalTimestamp(raw.visto_pelo_cuidador_em),
+    metricas: parseMetrics(raw.metricas), // opcional (episodio antigo: null)
+  };
+}
+
+// puzzleband/<id>/resumo_minuto (pulseira, QoS 1, sem retain): um ou mais
+// minutos fechados. Minuto sem horario valido e pulado.
+function parseMinuteEntry(raw) {
+  if (!isObject(raw) || !optionalTimestamp(raw.minuto)) return null;
+  const entry = {
+    minuto: raw.minuto,
+    nivel_maximo: optionalTier(raw.nivel_maximo) ?? 'baixo_risco',
+    n_leituras: Number.isInteger(raw.n_leituras) && raw.n_leituras >= 0 ? raw.n_leituras : 0,
+  };
+  for (const s of METRIC_SIGNALS) {
+    const v = raw[s];
+    entry[s] = isObject(v) && optionalNumber(v.media) !== null
+      ? { media: v.media, n: Number.isInteger(v.n) && v.n >= 0 ? v.n : 0 }
+      : null;
+  }
+  return entry;
+}
+
+export function parseMinuteSummary(text) {
+  const data = parseObject(text);
+  if (!data || data.origem !== BAND_ORIGIN || !Array.isArray(data.minutos)) return null;
+  return {
+    timestamp: optionalTimestamp(data.timestamp),
+    crianca: optionalString(data.crianca),
+    motivo: optionalString(data.motivo),
+    minutos: data.minutos.map(parseMinuteEntry).filter(Boolean),
   };
 }
 

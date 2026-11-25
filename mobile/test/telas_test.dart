@@ -12,6 +12,7 @@ import 'package:puzzleband/models/resumo.dart';
 import 'package:puzzleband/models/sinais.dart';
 import 'package:puzzleband/screens/graficos_screen.dart';
 import 'package:puzzleband/screens/configurar_alertas_screen.dart';
+import 'package:puzzleband/screens/exportar_relatorio_screen.dart';
 import 'package:puzzleband/services/app_scope.dart';
 import 'package:puzzleband/services/banco.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
@@ -1186,6 +1187,13 @@ void main() {
         await t.pumpAndSettle();
       },
       'ajustes': (t, e) async => mostrar(t, await painelEPulseiraOffline(), aba: 3, escuro: e, altura: 1100),
+      'ajustes (dados deste aparelho)': (t, e) async {
+        await mostrar(t, await calmo(), aba: 3, escuro: e, altura: 1650);
+      },
+      'exportar relatório (período)': (t, e) async {
+        await mostrar(t, await calmo(), tela: const ExportarRelatorioScreen(), escuro: e, altura: 1000);
+        await tocarNoMeio(t, find.text('Período'));
+      },
     };
 
     for (final escuro in [false, true]) {
@@ -1204,6 +1212,10 @@ void main() {
     testWidgets('fonte do sistema em 1,3x: nenhuma tela corta nem sobrepõe texto, em todos os estados', (tester) async {
       // Um texto cortado/sobreposto (RenderFlex overflow) vira excecao.
       await mostrar(tester, await calmo(), tela: const ConfigurarAlertasScreen(), escala: 1.3);
+      expect(tester.takeException(), isNull);
+      await mostrar(tester, await calmo(), tela: const ExportarRelatorioScreen(), escala: 1.3);
+      expect(tester.takeException(), isNull);
+      await tocarNoMeio(tester, find.text('Período'));
       expect(tester.takeException(), isNull);
       for (final cenario in [calmo, atencao, possivelCrise, semConexao, conectando, painelEPulseiraOffline, erroDeConfiguracao, semDadosAinda]) {
         for (final aba in [0, 1, 2, 3]) {

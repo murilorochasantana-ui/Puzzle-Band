@@ -29,9 +29,9 @@ flowchart LR
     SITE["Site = painel do desenvolvedor (opcional)<br/>frontend/ · usuário dashboard"]
     RES["Terminal: npm run resetar<br/>simulator/resetar.js · usuário simulador"]
 
-    PUL -- "leituras · status<br/>estado · alertas · historico" --> B
-    B -- "ack · avaliacao · controle · comando" --> PUL
-    B -- "estado · alertas · historico · status · comando" --> APP
+    PUL -- "leituras · status<br/>estado · alertas · historico<br/>resumo_minuto" --> B
+    B -- "ack · avaliacao · controle · comando<br/>app/status" --> PUL
+    B -- "estado · alertas · historico · status<br/>comando · resumo_minuto" --> APP
     APP -- "avaliacao · ack · app/status<br/>comando/resposta" --> B
     B -- "leituras · status · app/status<br/>estado · alertas · historico · comando" --> SITE
     SITE -- "controle · avaliacao" --> B
@@ -87,9 +87,10 @@ aberto em algum navegador. Agora o processamento fica na própria pulseira
 | `puzzleband/<id>/avaliacao` | app e site ("Confirmar gatilho" / "Descartar") | pulseira | 1 | não | Ação do cuidador não pode se perder. Sem retain, para não ser reaplicada a cada reconexão da pulseira. |
 | `puzzleband/<id>/ack` | app ("Estou ciente") | pulseira | 1 | não | Mesmo motivo da avaliação. |
 | `puzzleband/<id>/controle` | site ("Controle da pulseira") | pulseira, só no modo controle | 1 | não | Comando de desenvolvimento. Sem retain: a pulseira começa calma e o site reenvia os valores quando ela fica online. |
-| `puzzleband/<id>/app/status` | app: `online` ao conectar (e a cada 60 s), `offline` ao sair ou como Last Will | site | 1 | sim | Indicador "App do cuidador: conectado/desconectado" no site. |
+| `puzzleband/<id>/app/status` | app: `online` ao conectar (e a cada 60 s), `offline` ao sair ou como Last Will | site; pulseira (desde 11/2026) | 1 | sim | Indicador "App do cuidador: conectado/desconectado" no site. A pulseira usa a volta para `online` para reenviar os resumos de minuto que o app perdeu. |
 | `puzzleband/<id>/comando` | só o terminal (`npm run resetar`, usuário `simulador`) | pulseira, app, site | 1 | sim | A ordem de reset não pode se perder, e quem estiver desligado (o app fechado no celular, a pulseira em outro computador) recebe ao conectar. Cada um aplica **uma vez por `id`**, então a ordem retida não é reaplicada a cada conexão. |
 | `puzzleband/<id>/comando/resposta` | app, ao aplicar uma ordem | terminal (`npm run resetar`, espera até 30 s) | 1 | não | Confirmação "App limpo". Sem retain: só interessa a quem está esperando agora. |
+| `puzzleband/<id>/resumo_minuto` | pulseira: um por minuto fechado; e o reenvio quando o app volta a ficar online | app (telas e serviço; só quem notifica grava) | 1 | não | Novo (11/2026), para o relatório em Excel. Cada minuto conta para as médias do dia e a cobertura, então não pode se perder: QoS 1 e reenvio (ver [`resumo_minuto`](#resumo_minuto-pulseira--app)). Sem retain: o retain guardaria só o último minuto, e o app grava por upsert pelo minuto, então repetir não duplica. |
 
 `status` e `app/status` são texto puro (`online` / `offline`). Os demais são
 JSON em UTF-8. Um payload **vazio** com retain apaga a mensagem retida no
@@ -189,7 +190,30 @@ atenção). A volta ao calmo não gera alerta. O `gatilho` é o objeto completo 
 ```
 
 São os mesmos campos do histórico da pulseira ([historico.md](historico.md)),
-com o gatilho resumido e sem `ultima_leitura`. `encerramento: null` quer dizer
+com o gatilho resumido e sem `ultima_leitura`.
+
+**Campo novo, opcional: `metricas`** (11/2026). Médias dos sinais antes,
+durante e na recuperação de cada episódio, calculadas na pulseira
+(`frontend/src/model/metricas.js`). Foi só **acrescentado** no fim de cada
+episódio: os outros campos não mudaram, e quem não conhece o campo (versões
+antigas do app e do site) o ignora. Episódio gravado antes disso vem com
+`"metricas": null` e continua válido. Exemplo (cortado):
+
+```json
+"metricas": {
+  "antes":       { "n_leituras": 120, "bpm": { "media": 88.6, "n": 120 }, "hrv_ms": { "media": 52.4, "n": 120 }, "...": "..." },
+  "durante":     { "n_leituras": 187, "bpm": { "media": 128.3, "min": 86.6, "max": 142, "n": 187 }, "...": "..." },
+  "recuperacao": { "n_leituras": 30,  "bpm": { "media": 97.5, "n": 30 }, "...": "..." }
+}
+```
+
+- Sinais: `bpm`, `hrv_ms` (VFC), `eda_uS`, `gyro_mag_dps` (movimento),
+  `luz_lux` e `ruido_db`: os mesmos nomes das leituras.
+- `n_leituras`: quantas leituras entraram na janela; `n` de cada sinal:
+  quantas tinham valor válido. Sinal sem nenhum valor na janela = `null`.
+- `min` e `max` só no `durante`. Valores com 2 casas.
+- As janelas e as regras estão em
+  [historico.md](historico.md#métricas-por-episódio). `encerramento: null` quer dizer
 que o episódio está em andamento. `total` é quantos episódios a pulseira
 guarda (pode ser mais que os 50 enviados). O gatilho completo, com os sinais de
 ruído e luz, fica só no arquivo da pulseira (`simulator/data/historico_<id>.json`).
@@ -205,6 +229,80 @@ a mostrar dias com crises. A lista vazia (`"episodios": []`) da pulseira
 esvazia o painel; o app, desde 11/2026, guarda os episódios num banco local
 e **não** os apaga com a lista vazia (só com a ordem de reset). O formato da
 mensagem não mudou ([app.md](app.md#armazenamento)).
+
+### `resumo_minuto` (pulseira → app)
+
+Novo (11/2026). Resumo de cada minuto de sinal, calculado na pulseira a
+partir das próprias leituras (`frontend/src/model/resumoMinuto.js`), para o
+relatório em Excel do app (médias do dia e por hora, cobertura do
+monitoramento).
+
+```json
+{
+  "origem": "pulseira",
+  "timestamp": "2026-11-25T17:32:00.105Z",
+  "crianca": "C01",
+  "motivo": "minuto",
+  "minutos": [
+    {
+      "minuto": "2026-11-25T17:31:00.000Z",
+      "nivel_maximo": "atencao",
+      "n_leituras": 60,
+      "bpm": { "media": 101.37, "n": 60 },
+      "hrv_ms": { "media": 41.2, "n": 60 },
+      "eda_uS": { "media": 4.83, "n": 60 },
+      "gyro_mag_dps": { "media": 22.4, "n": 60 },
+      "luz_lux": { "media": 312.5, "n": 60 },
+      "ruido_db": { "media": 71.06, "n": 60 }
+    }
+  ]
+}
+```
+
+- `minuto`: início do minuto, em UTC, pelo horário **da leitura** (não pelo
+  relógio de quem recebe). A primeira leitura de um minuto novo fecha o
+  anterior; ao desligar, a pulseira publica o minuto parcial.
+- `nivel_maximo`: o maior nível do modelo no minuto. `n_leituras`: leituras
+  no minuto (60 com a pulseira ligada o minuto todo). Por sinal: média e
+  quantas leituras válidas; sem nenhuma = `null`.
+- `motivo`: `minuto` (o minuto que acabou de fechar) ou `reenvio`.
+- **Quem grava no app:** as duas conexões (telas e serviço) assinam, mas só
+  quem notifica grava (a regra de `quemNotifica`: o serviço quando está
+  rodando, senão o app). Upsert pelo minuto: o valor da pulseira substitui o
+  anterior, então um minuto repetido ou reenviado não conta duas vezes.
+
+**Por que não assinar `estado` no serviço.** O serviço em primeiro plano
+teria de receber o `estado` (1 mensagem/s, ~350 bytes) o dia inteiro: cerca
+de 34 MB/dia de dados móveis com o overhead do MQTT e do TLS. O resumo por
+minuto dá o mesmo para o relatório com uma mensagem por minuto.
+
+**Tráfego estimado** (medido com o simulador): ~385 bytes por mensagem, ou
+~450 bytes com o overhead do MQTT e do TLS. São ~0,65 MB/dia com a pulseira
+ligada 24 h. Um reenvio de 24 h são 4 mensagens de ~50 KB (~200 KB).
+
+**Celular sem internet (reenvio).** Foi conferido se o broker poderia
+guardar os minutos do app desconectado (sessão persistente, *clean start*
+falso). No **EMQX Cloud Serverless** a sessão do MQTT 3.x (a do app,
+`mqtt_client`) expira em **2 h** e a fila de mensagens de uma sessão
+desconectada tem no máximo **1.000** mensagens, os dois sem ajuste ([Quotas
+and Limits](https://docs.emqx.com/en/cloud/latest/create/restriction.html),
+consultado em 25/11/2026). Isso não cobre 24 h. Por isso:
+
+- a pulseira guarda na memória os resumos das **últimas 24 h** (1.440
+  minutos; numa pulseira real, ~150 KB de RAM ou flash);
+- assina `app/status` e, quando o app **volta** a ficar `online`, reenvia os
+  minutos que ele pode ter perdido, em mensagens de até 360 minutos
+  (~50 KB; o limite do Serverless é 1 MB por mensagem e 10 publicações/s por
+  cliente);
+- "pode ter perdido" = desde o `offline` do app (o Last Will chega até ~90 s
+  depois da queda, então começa 5 min antes) ou desde o primeiro minuto que
+  a própria pulseira não conseguiu publicar (sem conexão). Um `offline`
+  retido visto ao conectar (não se sabe desde quando) reenvia tudo o que há
+  na memória. O `online` repetido a cada 60 s não reenvia nada;
+- a ordem de reset apaga os resumos guardados.
+
+Limitação: se a pulseira for reiniciada com o app offline, os minutos de
+antes do reinício se perdem (a memória de 24 h não vai para o arquivo).
 
 ### `avaliacao` (app e site → pulseira)
 
@@ -317,12 +415,14 @@ Os testes ficam em `frontend/src/hooks/messages.test.js`,
    `alertas`. Ela só assina `historico` na partida, sem arquivo local, e
    cancela a assinatura assim que recebe a mensagem retida (ou depois de 5 s).
    O site não assina `controle` nem `avaliacao`. O app não assina
-   `avaliacao`, `ack`, `app/status` nem `comando/resposta`. O terminal
+   `avaliacao`, `ack`, `app/status` nem `comando/resposta`. A pulseira
+   assina `app/status` (para o reenvio dos resumos de minuto), que só o app
+   publica (a pulseira só apaga o retido, no reset). O terminal
    publica `comando` e assina só `comando/resposta` (e, antes de apagar,
    lê os retidos `status`, `historico` e `comando`). Ninguém usa curingas
    (`+`, `#`) nas assinaturas.
-2. **Um só dono por tópico.** Só a pulseira publica `estado`, `alertas` e
-   `historico`. O site deixou de publicá-los, e o app e a recuperação da
+2. **Um só dono por tópico.** Só a pulseira publica `estado`, `alertas`,
+   `historico` e `resumo_minuto`. O site deixou de publicá-los, e o app e a recuperação da
    pulseira descartam um `historico` sem `"origem": "pulseira"`. A
    exceção é o terminal (`npm run resetar`), que usa o usuário da pulseira
    para apagar os retidos e publicar a lista vazia com a pulseira
@@ -424,7 +524,7 @@ mensagens:
 
 | Cliente | Transporte | Sessão | Keepalive | Last Will | Reconexão |
 |---|---|---|---|---|---|
-| Pulseira (`simulator/index.js` + `simulator/borda.js`) | `mqtts://…:8883` | limpa | 15 s | `status` = `offline` (retain) | a cada 3 s; continua processando offline e republica o histórico ao reconectar |
+| Pulseira (`simulator/index.js` + `simulator/borda.js`) | `mqtts://…:8883` | limpa | 15 s | `status` = `offline` (retain) | a cada 3 s; continua processando offline, republica o histórico ao reconectar e reenvia os resumos de minuto que o app perdeu |
 | Site (`frontend/src/hooks/useBandLink.js`) | `wss://…:8084/mqtt` | limpa | padrão do mqtt.js (60 s) | não tem | a cada 3 s; só publica conectado |
 | App (`mobile/lib/services/mqtt_service.dart`) | `mqtts://…:8883` | limpa | 60 s | `app/status` = `offline` (retain, QoS 1) | automática; se a 1ª conexão falhar, tenta de novo em 2, 5, 10, 20 e 30 s |
 | Terminal (`simulator/resetar.js`) | `mqtts://…:8883`, MQTT 5 | limpa | padrão do mqtt.js (60 s) | não tem | não tem: roda uma vez e encerra |
@@ -436,7 +536,10 @@ mensagens:
   broker derruba a sessão antiga em vez de manter duas. O app também
   republica `online` a cada 60 s, o que corrige um `offline` atrasado de uma
   conexão antiga.
-- Sessão limpa em todos: as assinaturas são refeitas a cada conexão. Os
+- Sessão limpa em todos: as assinaturas são refeitas a cada conexão. A
+  sessão persistente foi avaliada para o `resumo_minuto` e descartada (no
+  EMQX Serverless ela dura só 2 h; ver
+  [`resumo_minuto`](#resumo_minuto-pulseira--app)). Os
   tópicos com retain (`estado`, `historico`, `status`, `app/status`,
   `comando`) entregam o último valor logo após a assinatura.
 - A pulseira só publica `estado` e `alertas` com o broker conectado: estado
@@ -460,6 +563,8 @@ para a criança `C01`:
 | allow | publish | `puzzleband/C01/estado` |
 | allow | publish | `puzzleband/C01/alertas` |
 | allow | publish | `puzzleband/C01/historico` |
+| allow | publish | `puzzleband/C01/resumo_minuto` (novo, 11/2026) |
+| allow | subscribe | `puzzleband/C01/app/status` (novo, 11/2026: reenvio dos resumos de minuto quando o app volta) |
 | allow | subscribe | `puzzleband/C01/ack` |
 | allow | subscribe | `puzzleband/C01/avaliacao` |
 | allow | subscribe | `puzzleband/C01/controle` |
@@ -495,6 +600,7 @@ para a criança `C01`:
 | allow | subscribe | `puzzleband/C01/historico` |
 | allow | subscribe | `puzzleband/C01/status` |
 | allow | subscribe | `puzzleband/C01/comando` |
+| allow | subscribe | `puzzleband/C01/resumo_minuto` (novo, 11/2026) |
 | allow | publish | `puzzleband/C01/avaliacao` |
 | allow | publish | `puzzleband/C01/ack` |
 | allow | publish | `puzzleband/C01/app/status` |
@@ -513,6 +619,12 @@ Observações:
   `controle` e `historico`. O `dashboard` perdeu o publish de `estado`,
   `alertas` e `historico`: agora só publica `controle` e `avaliacao`, e assina
   `estado`, `alertas` e `historico` para mostrar.
+- **O que mudou com o relatório em Excel (11/2026).** O `simulador`
+  ganhou publish em `resumo_minuto` e subscribe em `app/status`; o `app`
+  ganhou subscribe em `resumo_minuto`. **Acrescente essas três regras no
+  EMQX antes de usar a versão nova**: sem elas, o broker recusa a
+  publicação (a pulseira segue funcionando, mas o relatório fica sem as
+  médias por minuto) e a assinatura do app volta recusada.
 - **O que mudou com a ordem de reset (`npm run resetar`).**
   - **Só o `simulador` publica em `comando`.** O `app` e o `dashboard` só
     assinam: com a senha deles, que pode ser extraída do APK ou do

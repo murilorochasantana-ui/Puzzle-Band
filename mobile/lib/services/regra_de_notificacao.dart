@@ -36,6 +36,18 @@ enum QuemNotifica { app, servico }
 QuemNotifica quemNotifica({required bool servicoRodando}) =>
     servicoRodando ? QuemNotifica.servico : QuemNotifica.app;
 
+/// "Guardar historico por" (Ajustes). O servico relê do disco (as telas
+/// podem ter mudado a opcao); as telas leem a copia delas, que e a que muda.
+Future<GuardarHistorico> Function() guardarHistoricoDoDisco(SharedPreferences prefs, {required bool reler}) =>
+    () async {
+      if (reler) {
+        try {
+          await prefs.reload();
+        } catch (_) {}
+      }
+      return GuardarHistorico.fromCodigo(prefs.getString(GuardarHistorico.chave));
+    };
+
 /// "Alertas sonoros", relida do disco (o outro lado pode ter mudado).
 Future<bool> Function() alertasSonorosDoDisco(SharedPreferences prefs) => () async {
       try {
