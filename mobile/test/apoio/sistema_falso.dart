@@ -1,6 +1,9 @@
 // Sistema Android falso para os testes: o que esta concedido, o fabricante
 // e o servico em primeiro plano sao campos; as chamadas ficam registradas.
+import 'dart:io';
+
 import 'package:puzzleband/services/configuracao_de_alertas.dart';
+import 'package:puzzleband/services/documentos_android.dart';
 import 'package:puzzleband/services/mqtt_service.dart';
 import 'package:puzzleband/services/sistema_android.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -102,4 +105,36 @@ Future<ConfiguracaoDeAlertas> configuracaoDe(
   final c = ConfiguracaoDeAlertas(prefs: prefs, sistema: sistema, nomeCrianca: () => nome, mqtt: mqtt);
   await c.atualizar();
   return c;
+}
+
+/// O que a janela "Salvar como" falsa faz: salva, o tutor cancela ou da erro.
+enum ResultadoDoSalvar { salva, cancela, erro }
+
+/// "Salvar no celular" e "Abrir" falsos (lib/services/documentos_android.dart):
+/// as chamadas ficam registradas.
+class DocumentosFalsos implements DocumentosDoSistema {
+  DocumentosFalsos({this.resultado = ResultadoDoSalvar.salva, this.temAppDePlanilhas = true});
+
+  ResultadoDoSalvar resultado;
+  bool temAppDePlanilhas;
+  final salvos = <(String caminho, String nome, String tipo, bool existia)>[];
+  final abertos = <String>[];
+
+  static const uriSalva = 'content://com.android.externalstorage.documents/document/primary%3ADownload%2Frelatorio.xlsx';
+
+  @override
+  Future<String?> salvarComo(File arquivo, {required String nome, required String tipo}) async {
+    salvos.add((arquivo.path, nome, tipo, arquivo.existsSync()));
+    return switch (resultado) {
+      ResultadoDoSalvar.salva => uriSalva,
+      ResultadoDoSalvar.cancela => null,
+      ResultadoDoSalvar.erro => throw const FileSystemException('sem espaco'),
+    };
+  }
+
+  @override
+  Future<bool> abrir(String uri, {required String tipo}) async {
+    abertos.add(uri);
+    return temAppDePlanilhas;
+  }
 }

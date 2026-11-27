@@ -1090,10 +1090,50 @@ um leitor independente (pacote `excel`, só nos testes) e um exemplo em
   subscribe `app/status`; `app` subscribe `resumo_minuto` (não feito: é no
   console do broker).
 
+### Salvar no celular (25/11/2026, sem commit)
+
+Pedido: na tela "Exportar relatório", além de compartilhar, salvar o
+arquivo no celular. Aprovado com três cuidados no Kotlin (resposta na thread
+principal; um pedido por vez, o segundo com erro; Activity recriada com a
+janela aberta não trava e volta a "Relatório pronto").
+
+- **Fluxo:** "Gerar relatório" → cartão "Relatório pronto" com **Salvar no
+  celular** (principal) e **Compartilhar** (secundário); o aviso de dados de
+  saúde antes de cada um. Salvar: janela "Salvar como" do sistema (SAF,
+  `ACTION_CREATE_DOCUMENT`, nome preenchido, Download sugerida) → "Relatório
+  salvo" com "Abrir" (sem app: aviso em português). Cancelar: nada. Arquivo
+  descartado ao trocar o período e ao sair da tela.
+- **Código:** `MainActivity.kt` (`salvarDocumento`, `abrirDocumento`; cópia
+  numa thread e resposta via `Handler(Looper.getMainLooper())`; `ocupado`
+  para o 2º pedido; `onDestroy` responde a pendente como cancelado e
+  `onSaveInstanceState` guarda o caminho; a Activity nova termina a cópia e
+  mostra o Toast no `onResume`), `lib/services/documentos_android.dart`
+  (interface + canal), tela. Sem permissão, sem pacote novo, manifesto
+  intacto.
+- **Testes:** `exportar_relatorio_test.dart` 17 (antes 9) com
+  `DocumentosFalsos`; `flutter analyze` sem avisos; `flutter test` 285.
+  Goldens: atualizados `exportar_relatorio`, `escuro_exportar_relatorio_periodo`,
+  `exportar_relatorio_aviso`; novos `exportar_relatorio_pronto`,
+  `exportar_relatorio_salvo`.
+- **Emulador (API 37), APK de release:** salvar em Download OK (arquivo
+  íntegro no openpyxl); "Abrir" sem app de planilhas → aviso; cancelar sem
+  erro e sem arquivo; **girar com a janela aberta: a Activity não é
+  recriada** (`configChanges` no manifesto; mesmo processo) e o salvar
+  funciona; **"Não manter atividades": `MainActivity` DESTROYED com estado
+  salvo; o salvar terminou (arquivo íntegro), sem travar;** o Dart reinicia
+  no Início (o motor do Flutter vai junto com a Activity), então "voltar a
+  Relatório pronto" só vale quando o motor sobrevive. O Toast não aparecia
+  (resultado chega antes do `onResume`); corrigido para mostrar no
+  `onResume`, conferido. O 2º pedido simultâneo (`ocupado`) não foi
+  disparado no emulador (a tela bloqueia o toque duplo).
+- **Emulador:** as opções do desenvolvedor foram ligadas para o teste e
+  desligadas no fim; isso desligou o adb, recuperado com um cold boot (sem
+  apagar dados). Ficaram em Download os 4 arquivos de teste.
+
 ## Próximo passo
 
-Relatório em Excel: implementado e testado, sem commit (revisão do usuário:
-goldens novos, exemplo .xlsx no Excel/Planilhas/LibreOffice, ACL no EMQX).
+Relatório em Excel: commitado (`29be97c`). Salvar no celular: implementado e
+testado, sem commit (revisão dos goldens).
 
 Banco SQLite no app: implementado e testado, sem commit (revisão do
 usuário). App em segundo plano: implementado e testado, sem commit (revisão do

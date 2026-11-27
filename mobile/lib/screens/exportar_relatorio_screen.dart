@@ -6,6 +6,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../models/resumo.dart';
 import '../services/app_scope.dart';
+import '../services/documentos_android.dart';
 import '../services/relatorio.dart';
 import '../theme/app_theme.dart';
 import '../utils/formatters.dart';
@@ -35,16 +36,27 @@ Future<Directory> pastaDosRelatorios() async =>
 /// Aviso mostrado antes de compartilhar (texto pedido no projeto).
 const avisoDeDadosDeSaude = 'Este arquivo contém dados de saúde da criança. Compartilhe só com quem cuida dela.';
 
+/// Depois de salvar, sem app que abra planilhas no celular.
+const semAppDePlanilhas = 'Para abrir o relatório, instale um app de planilhas, como o Planilhas Google ou o Excel.';
+
 enum _Modo { umDia, periodo }
 
 /// "Exportar relatorio" (Historico e Ajustes): escolhe um dia (padrao:
-/// hoje) ou um periodo de ate 31 dias, gera o .xlsx (services/relatorio.dart)
-/// e, depois do aviso de dados de saude, abre o menu de compartilhar.
+/// hoje) ou um periodo de ate 31 dias e gera o .xlsx
+/// (services/relatorio.dart). Pronto, o tutor salva no celular (janela
+/// "Salvar como" do Android) ou compartilha; o aviso de dados de saude vem
+/// antes dos dois.
 class ExportarRelatorioScreen extends StatefulWidget {
-  const ExportarRelatorioScreen({super.key, this.compartilhar = compartilharNoAndroid, this.pasta = pastaDosRelatorios});
+  const ExportarRelatorioScreen({
+    super.key,
+    this.compartilhar = compartilharNoAndroid,
+    this.pasta = pastaDosRelatorios,
+    this.documentos = const DocumentosAndroid(),
+  });
 
   final Compartilhar compartilhar;
   final Future<Directory> Function() pasta;
+  final DocumentosDoSistema documentos;
 
   static Future<void> abrir(BuildContext context) =>
       Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const ExportarRelatorioScreen()));
@@ -60,7 +72,37 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
   late DateTime _de = DateTime(_hoje.year, _hoje.month, _hoje.day - 6);
   late DateTime _ate = _hoje;
   bool _gerando = false;
+  bool _ocupado = false; // salvando ou compartilhando
   String? _erro;
+
+  /// Relatorio gerado (no cache do app), pronto para salvar ou compartilhar.
+  File? _arquivo;
+  PeriodoDoRelatorio? _periodoDoArquivo;
+
+  @override
+  void dispose() {
+    _descartarArquivo();
+    super.dispose();
+  }
+
+  /// O arquivo nao fica parado no celular: sai ao trocar o periodo e ao sair
+  /// da tela (o proximo relatorio tambem limpa a pasta).
+  void _descartarArquivo() {
+    final arquivo = _arquivo;
+    _arquivo = null;
+    _periodoDoArquivo = null;
+    if (arquivo == null) return;
+    try {
+      if (arquivo.existsSync()) arquivo.deleteSync();
+    } catch (_) {}
+  }
+
+  /// Mudou o dia ou o periodo: o relatorio pronto deixa de valer.
+  void _mudar(VoidCallback mudanca) => setState(() {
+        mudanca();
+        _erro = null;
+        _descartarArquivo();
+      });
 
   /// Dias do calendario de [_de] a [_ate] (em UTC: dia com mudanca de
   /// horario continua contando 1).
@@ -96,34 +138,88 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
       if (mounted) setState(() => _erro = 'Não foi possível gerar o arquivo. Tente de novo.');
     }
     if (!mounted) return;
-    setState(() => _gerando = false);
-    if (arquivo == null) return;
+    setState(() {
+      _gerando = false;
+      if (arquivo != null) {
+        _arquivo = arquivo;
+        _periodoDoArquivo = _periodo;
+      }
+    });
+  }
 
-    final compartilhar = await showDialog<bool>(
+  /// O aviso de dados de saude, antes de salvar e antes de compartilhar.
+  Future<bool> _confirmarAviso(String acao) async {
+    final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         icon: const Icon(Icons.health_and_safety_outlined),
-        title: const Text('Antes de compartilhar'),
+        title: Text('Antes de ${acao.toLowerCase()}'),
         content: const Text(avisoDeDadosDeSaude),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Compartilhar')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: Text(acao)),
         ],
       ),
     );
-    if (compartilhar != true) {
-      // nao compartilhou: o arquivo nao fica parado no celular
-      try {
-        await arquivo.delete();
-      } catch (_) {}
-      return;
-    }
+    return ok == true && mounted;
+  }
+
+  /// "Salvar no celular": aviso -> janela "Salvar como" do Android -> "Relatorio
+  /// salvo" com "Abrir". Cancelar a janela nao mostra nada.
+  Future<void> _salvar() async {
+    final arquivo = _arquivo;
+    if (arquivo == null || _ocupado) return;
+    final confirmou = await _confirmarAviso('Salvar');
+    if (!confirmou || !mounted) return;
+    final mensageiro = ScaffoldMessenger.of(context);
+    setState(() {
+      _ocupado = true;
+      _erro = null;
+    });
+    String? uri;
     try {
-      await widget.compartilhar(arquivo, 'Puzzle Band: relatório de ${_descricao(_periodo)}');
+      uri = await widget.documentos.salvarComo(arquivo, nome: arquivo.uri.pathSegments.last, tipo: tipoXlsx);
+    } catch (e) {
+      debugPrint('Falha ao salvar o relatorio: $e');
+      if (mounted) setState(() => _erro = 'Não foi possível salvar o arquivo. Tente de novo.');
+    }
+    if (!mounted) return;
+    setState(() => _ocupado = false);
+    if (uri == null) return; // cancelou a janela (ou ja havia uma aberta)
+    final salvo = uri;
+    mensageiro
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: const Text('Relatório salvo'),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(label: 'Abrir', onPressed: () => _abrirSalvo(mensageiro, salvo)),
+      ));
+  }
+
+  Future<void> _abrirSalvo(ScaffoldMessengerState mensageiro, String uri) async {
+    final abriu = await widget.documentos.abrir(uri, tipo: tipoXlsx);
+    if (abriu) return;
+    mensageiro
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text(semAppDePlanilhas), duration: Duration(seconds: 8)));
+  }
+
+  /// "Compartilhar": aviso -> menu de compartilhar do Android.
+  Future<void> _compartilhar() async {
+    final arquivo = _arquivo;
+    final periodo = _periodoDoArquivo;
+    if (arquivo == null || periodo == null || _ocupado || !await _confirmarAviso('Compartilhar')) return;
+    setState(() {
+      _ocupado = true;
+      _erro = null;
+    });
+    try {
+      await widget.compartilhar(arquivo, 'Puzzle Band: relatório de ${_descricao(periodo)}');
     } catch (e) {
       debugPrint('Falha ao compartilhar o relatorio: $e');
       if (mounted) setState(() => _erro = 'Não foi possível abrir o menu de compartilhar.');
     }
+    if (mounted) setState(() => _ocupado = false);
   }
 
   String _descricao(PeriodoDoRelatorio p) => p.umDia
@@ -132,7 +228,7 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
 
   String _rotuloDoDia(DateTime d) => '${diaPorExtenso(d)} de ${d.year}';
 
-  void _atalho(DateTime de, DateTime ate) => setState(() {
+  void _atalho(DateTime de, DateTime ate) => _mudar(() {
         _modo = _Modo.periodo;
         _de = de;
         _ate = ate;
@@ -166,7 +262,7 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                       ButtonSegment(value: _Modo.periodo, label: Text('Período'), icon: Icon(Icons.date_range_outlined)),
                     ],
                     selected: {_modo},
-                    onSelectionChanged: (s) => setState(() => _modo = s.single),
+                    onSelectionChanged: (s) => _mudar(() => _modo = s.single),
                   ),
                   const SizedBox(height: Espaco.m),
                   Secao(
@@ -179,7 +275,7 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                             rotulo: 'Dia',
                             valor: _dia,
                             hoje: _hoje,
-                            onMudar: (d) => setState(() => _dia = d),
+                            onMudar: (d) => _mudar(() => _dia = d),
                           )
                         else ...[
                           _SeletorDeDia(
@@ -187,7 +283,7 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                             rotulo: 'De',
                             valor: _de,
                             hoje: _hoje,
-                            onMudar: (d) => setState(() => _de = d),
+                            onMudar: (d) => _mudar(() => _de = d),
                           ),
                           const Divider(indent: Espaco.l, endIndent: Espaco.l),
                           _SeletorDeDia(
@@ -195,7 +291,7 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                             rotulo: 'Até',
                             valor: _ate,
                             hoje: _hoje,
-                            onMudar: (d) => setState(() => _ate = d),
+                            onMudar: (d) => _mudar(() => _ate = d),
                           ),
                         ],
                       ],
@@ -208,14 +304,14 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                     children: [
                       ActionChip(
                         label: const Text('Hoje'),
-                        onPressed: () => setState(() {
+                        onPressed: () => _mudar(() {
                           _modo = _Modo.umDia;
                           _dia = _hoje;
                         }),
                       ),
                       ActionChip(
                         label: const Text('Ontem'),
-                        onPressed: () => setState(() {
+                        onPressed: () => _mudar(() {
                           _modo = _Modo.umDia;
                           _dia = DateTime(_hoje.year, _hoje.month, _hoje.day - 1);
                         }),
@@ -248,24 +344,32 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
                         const SizedBox(height: Espaco.s),
                         _Linha(
                           icone: Icons.lock_outline_rounded,
-                          texto: 'O arquivo é gerado neste celular e só sai dele se você compartilhar.',
+                          texto: 'O arquivo é gerado neste celular. Salve numa pasta (como Downloads) ou compartilhe.',
                         ),
                       ],
                     ),
                   ),
                   const SizedBox(height: Espaco.l),
-                  FilledButton.icon(
-                    key: const ValueKey('gerar-relatorio'),
-                    onPressed: _gerando || problema != null ? null : _gerar,
-                    icon: _gerando
-                        ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
-                        : const Icon(Icons.ios_share_rounded),
-                    label: Text(_gerando
-                        ? 'Gerando…'
-                        : dias == 1
-                            ? 'Gerar e compartilhar'
-                            : 'Gerar e compartilhar ($dias dias)'),
-                  ),
+                  if (_arquivo case final arquivo?)
+                    _RelatorioPronto(
+                      nome: arquivo.uri.pathSegments.last,
+                      ocupado: _ocupado,
+                      onSalvar: _salvar,
+                      onCompartilhar: _compartilhar,
+                    )
+                  else
+                    FilledButton.icon(
+                      key: const ValueKey('gerar-relatorio'),
+                      onPressed: _gerando || problema != null ? null : _gerar,
+                      icon: _gerando
+                          ? const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2.5))
+                          : const Icon(Icons.table_chart_outlined),
+                      label: Text(_gerando
+                          ? 'Gerando…'
+                          : dias == 1
+                              ? 'Gerar relatório'
+                              : 'Gerar relatório ($dias dias)'),
+                    ),
                   if (_erro != null) ...[
                     const SizedBox(height: Espaco.s),
                     Semantics(
@@ -278,6 +382,56 @@ class _ExportarRelatorioScreenState extends State<ExportarRelatorioScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// "Relatorio pronto": o nome do arquivo e os dois botoes (salvar e
+/// compartilhar; o aviso vem antes de cada um).
+class _RelatorioPronto extends StatelessWidget {
+  const _RelatorioPronto({required this.nome, required this.ocupado, required this.onSalvar, required this.onCompartilhar});
+
+  final String nome;
+  final bool ocupado;
+  final VoidCallback onSalvar;
+  final VoidCallback onCompartilhar;
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = Theme.of(context).textTheme;
+    final cores = CoresApp.of(context);
+    return Secao(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Semantics(
+            liveRegion: true,
+            child: Row(
+              children: [
+                Icon(Icons.check_circle_outline_rounded, color: cores.primaria),
+                const SizedBox(width: Espaco.s),
+                Expanded(child: Text('Relatório pronto', style: texto.titleMedium)),
+              ],
+            ),
+          ),
+          const SizedBox(height: Espaco.xs),
+          Text(nome, style: texto.bodySmall!.copyWith(color: cores.tintaSuave)),
+          const SizedBox(height: Espaco.m),
+          FilledButton.icon(
+            key: const ValueKey('salvar-relatorio'),
+            onPressed: ocupado ? null : onSalvar,
+            icon: const Icon(Icons.download_rounded),
+            label: const Text('Salvar no celular'),
+          ),
+          const SizedBox(height: Espaco.s),
+          OutlinedButton.icon(
+            key: const ValueKey('compartilhar-relatorio'),
+            onPressed: ocupado ? null : onCompartilhar,
+            icon: const Icon(Icons.share_outlined),
+            label: const Text('Compartilhar'),
+          ),
+        ],
       ),
     );
   }

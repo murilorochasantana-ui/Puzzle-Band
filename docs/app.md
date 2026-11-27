@@ -571,8 +571,10 @@ pela pulseira.
 
 O cuidador exporta um relatório para levar à consulta ou à escola.
 Código: `lib/services/relatorio.dart` (o que vai em cada aba),
-`lib/services/planilha_xlsx.dart` (o gravador `.xlsx`) e
-`lib/screens/exportar_relatorio_screen.dart` (a tela).
+`lib/services/planilha_xlsx.dart` (o gravador `.xlsx`),
+`lib/screens/exportar_relatorio_screen.dart` (a tela) e
+`lib/services/documentos_android.dart` + `MainActivity.kt` ("Salvar como" e
+"Abrir").
 
 - **Onde fica:** o botão **Exportar relatório** no topo do Histórico e o
   item **Exportar relatório** em Ajustes → Dados deste aparelho.
@@ -585,11 +587,61 @@ Código: `lib/services/relatorio.dart` (o que vai em cada aba),
   ou `puzzleband_relatorio_<CHILD_ID>_<início>_a_<fim>.xlsx` (período), com
   os horários no **fuso do celular**. Um episódio que passa da meia-noite
   conta no dia em que começou.
-- **Compartilhar:** depois de gerar, aparece o aviso "Este arquivo contém
-  dados de saúde da criança. Compartilhe só com quem cuida dela." Só com
-  **Compartilhar** abre o menu do Android (WhatsApp, e-mail, Drive), pelo
-  `share_plus`. **Cancelar** apaga o arquivo. O arquivo fica no cache do app
-  e o relatório seguinte apaga o anterior.
+- **Gerar, depois salvar ou compartilhar:** **Gerar relatório** monta o
+  arquivo e mostra o cartão "Relatório pronto" com dois botões:
+  **Salvar no celular** (principal) e **Compartilhar** (secundário). Antes de
+  cada um aparece o aviso "Este arquivo contém dados de saúde da criança.
+  Compartilhe só com quem cuida dela.", e o botão do aviso diz "Salvar" ou
+  "Compartilhar". **Cancelar** no aviso não faz nada.
+- **Salvar no celular:** abre a janela **"Salvar como" do próprio Android**
+  (Storage Access Framework, `ACTION_CREATE_DOCUMENT`, tipo
+  `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) com o
+  nome do arquivo já preenchido e a pasta **Download** sugerida (Android 8+,
+  `EXTRA_INITIAL_URI`; se o sistema ignorar, abre na última pasta usada). O
+  tutor escolhe a pasta e o app copia o arquivo para lá. **Sem permissão de
+  armazenamento** e sem pacote novo: quem grava na pasta escolhida é a
+  janela do sistema, que dá ao app acesso só àquele arquivo. Depois de
+  salvar, aparece **"Relatório salvo"** com **Abrir**, que abre o arquivo no
+  app de planilhas instalado. Se não houver nenhum: "Para abrir o relatório,
+  instale um app de planilhas, como o Planilhas Google ou o Excel."
+  **Cancelar a janela "Salvar como" não faz nada** (sem mensagem de erro), e
+  o tutor pode tocar de novo.
+- **Compartilhar:** abre o menu do Android (WhatsApp, e-mail, Drive) pelo
+  `share_plus`.
+- **Onde o arquivo fica antes:** no cache do app (`cache/relatorios/`),
+  enquanto a tela estiver aberta. Sai ao trocar o dia ou o período (é
+  preciso gerar de novo), ao sair da tela e no relatório seguinte.
+- **Lado nativo (`MainActivity.kt`, canal `br.unimar.puzzleband/sistema`):**
+  `salvarDocumento` e `abrirDocumento`.
+  - A cópia para a pasta escolhida roda em outra thread, e a resposta ao Dart
+    volta na thread principal (`Handler(Looper.getMainLooper())`).
+  - Só um "Salvar como" por vez: um segundo pedido com outro aberto recebe
+    erro `ocupado` (o Dart ignora) e o primeiro continua. Toda chamada recebe
+    resposta.
+  - **Activity recriada com a janela aberta** (falta de memória, ou "Não
+    manter atividades" nas opções do desenvolvedor): no `onDestroy` a
+    chamada pendente é respondida como "cancelado", e o caminho do arquivo
+    fica no estado salvo (`onSaveInstanceState`). Quando o tutor escolhe a
+    pasta, a nova Activity termina a cópia e mostra um aviso do sistema
+    (Toast) "Relatório salvo" quando volta para a frente (o resultado chega
+    antes do `onResume`, e o Android descarta um Toast de app que ainda não
+    está na frente). Como o motor do Flutter vai embora junto com a
+    Activity, o app reabre no Início, não na tela de exportar; o arquivo fica
+    salvo. Se a cópia não for possível, o documento vazio criado pela janela
+    é apagado. Girar o celular **não** recria a Activity (o manifesto declara
+    `configChanges` com `orientation|screenSize`): a janela gira sozinha e o
+    salvar continua normal.
+  - Conferido no emulador (Android 17, API 37): a janela abre na pasta
+    Download com o nome preenchido; salvar mostra "Relatório salvo" e o
+    arquivo abre no openpyxl; "Abrir" sem app de planilhas mostra o aviso;
+    cancelar (Voltar) não mostra nada e não cria arquivo; girar a tela com a
+    janela aberta não recria a Activity (mesmo processo) e o salvar
+    funciona; com "Não manter atividades" a `MainActivity` fica
+    `DESTROYED` com o estado salvo, o salvar termina (arquivo íntegro), o
+    app não trava e o Toast aparece.
+  - `abrirDocumento` usa `ACTION_VIEW` com permissão de leitura para o app
+    que abrir; sem app compatível, devolve `false` (sem `<queries>` no
+    manifesto: usa `try/catch` em vez de consultar os apps instalados).
 
 Três abas, com os cabeçalhos em português e as unidades, a **primeira linha
 congelada** e larguras de coluna legíveis. Datas e durações vão como valores
@@ -621,8 +673,13 @@ sem casas, VFC, movimento e ruído com 1, EDA com 2):
   independente, só nos testes) para conferir as abas, os cabeçalhos e
   alguns valores, e lê o XML para conferir a linha congelada, as larguras e
   que nenhum texto virou fórmula. `test/exportar_relatorio_test.dart` testa a
-  tela (o aviso antes de compartilhar, cancelar, o limite de 31 dias, as
-  entradas pelo Histórico e pelos Ajustes) e os goldens. Arquivo de exemplo:
+  tela com o sistema falso (`DocumentosFalsos` em `test/apoio/sistema_falso.dart`):
+  os dois botões só depois de gerar, o aviso antes de cada um, "Relatório
+  salvo" e "Abrir", sem app de planilhas, cancelar a janela sem erro (e
+  tocar de novo), erro na cópia, cancelar o aviso, o arquivo descartado ao
+  trocar o dia e ao sair, o limite de 31 dias, as entradas pelo Histórico e
+  pelos Ajustes e os goldens. O lado Kotlin só roda no celular ou no
+  emulador. Arquivo de exemplo:
   [`docs/exemplos/puzzleband_relatorio_C01_2026-11-25.xlsx`](exemplos/puzzleband_relatorio_C01_2026-11-25.xlsx),
   gerado com `flutter test test/relatorio_test.dart --dart-define=GERAR_EXEMPLO=true`.
 
@@ -719,6 +776,28 @@ flutter test --update-goldens test/goldens_test.dart   # só depois de mudar o v
 As imagens das telas ficam em `test/goldens/` (estados, tema escuro e fonte
 1,3×). Elas foram geradas no Windows; em outro sistema, gere de novo antes
 de comparar.
+
+### Testar o relatório no celular
+
+1. Instale o APK de release (`adb install -r build/app/outputs/flutter-apk/app-release.apk`
+   ou copie o arquivo para o celular) e abra o app conectado ao broker.
+2. No computador: `cd simulator` e `npm run crise-ruido` (3 ciclos com
+   pausa calma; o 2º ciclo já tem os 120 s do "antes"). Espere o "Possível
+   crise" e mais 1 minuto calmo depois que o episódio fechar; Ctrl+C.
+3. **Salvar em Downloads:** Histórico → **Exportar relatório** → Hoje →
+   **Gerar relatório** → **Salvar no celular** → aviso → **Salvar**. Na
+   janela do sistema, confira que está em **Download** (senão, escolha pelo
+   menu ☰) e que o nome é `puzzleband_relatorio_<CHILD_ID>_<data>.xlsx`;
+   toque em **Salvar**.
+4. **Abrir pelo SnackBar:** em "Relatório salvo", toque em **Abrir**. Com um
+   app de planilhas (Planilhas Google, Excel, WPS), o arquivo abre nele; sem
+   nenhum, aparece "Para abrir o relatório, instale um app de planilhas…".
+5. **Abrir pelo app Files:** abra o app **Files** (Arquivos) do Android →
+   **Downloads** → toque no arquivo. Confira as três abas, a primeira linha
+   congelada e, em "Episódios", as médias antes, durante, pico e
+   recuperação.
+6. Opcional: **Compartilhar** (aviso → menu do Android) e cancelar a janela
+   "Salvar como" (Voltar: nada acontece).
 
 ### Testar os alertas com o app fechado (emulador ou celular)
 
